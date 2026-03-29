@@ -1,0 +1,28 @@
+# Local secrets and env — never commit
+.env
+.env.*
+
+# Go
+/bin/
+/dist/
+*.exe
+*.test
+*.out
+coverage.out
+vendor/
+
+# SQLite / runtime data
+*.db
+*.sqlite
+*.sqlite3
+.data/
+
+# LinkedIn / session material (paths may be overridden in .env)
+cookies.txt
+linkedin.cookies
+
+# IDE / OS
+.idea/
+*.iml
+.vscode/
+.DS_Store

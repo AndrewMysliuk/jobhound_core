@@ -1,0 +1,54 @@
+---
+description: Project Development Guidelines
+globs: ["**/*"]
+alwaysApply: true
+---
+
+# jobhound_core Development Guidelines
+
+Spec-driven workflow via `.specify` and `/speckit.*` commands. Update this file when plans change (or run the Specify update script when wired).
+
+## Active Technologies
+
+- Go 1.24 — standard library first; `net/http` / `html` / `encoding/json` for Tier-1 API and static fetchers
+- `github.com/PuerkitoBio/goquery` for HTML sources (Tier 2)
+- `github.com/go-rod/rod` + session cookies file for LinkedIn (Tier 3)
+- PostgreSQL + GORM + migrations — jobs, history, profile, dedup
+- Temporal — workflows/activities for manual runs and scheduled events
+- Claude API for scoring; Telegram Bot API for delivery
+- Local: Docker Compose (Postgres + Temporal); production: GCP (see `specs/000-epic-overview`)
+
+## Project Structure
+
+```text
+cmd/agent/              # wiring: compose app.Pipeline from adapters
+config/
+internal/domain/        # Job, ScoredJob, pure types
+internal/ports/         # Collector, Filter, Scorer, Dedup, Notifier, SessionProvider
+internal/app/           # orchestration only (e.g. Pipeline.Run); no service→service
+internal/adapters/      # noop + future source-specific collectors, Telegram, GORM repos
+```
+
+**Layers**: handlers / `cmd` → `app` (orchestration) → `ports` (interfaces). Domain services (when added) take **repository ports only**, not other services, to avoid import cycles. Cross-cutting composition stays in `cmd` or `app`.
+
+## Commands
+
+- `make build` — compile `./cmd/agent` to `bin/agent`
+- `make run` — build and run agent
+- `make test` — `go test ./...`
+- `make fmt` / `make vet` / `make tidy`
+
+## Code Style
+
+- Go 1.24 conventions; boundary interfaces live in `internal/ports`; implementations under `internal/adapters` or `internal/<feature>/storage`
+- No secrets or real `.env` in git — see `make help` for documented env variable names
+- Table-driven tests where behavior branches; keep `main` thin
+
+## Recent Changes
+
+- 2026-03-29: `specs/` epic index (`000`–`012`) + constitution v1.1 (Postgres, Temporal, three-stage pipeline)
+- 2026-03-29: Initial skeleton — `model.Job`, pipeline interfaces, `config` placeholder, Spec Kit + Cursor rules
+- 2026-03-29: `internal` layout — `domain`, `ports`, `app`, `adapters/noop` (orchestration vs repo-only services)
+
+<!-- MANUAL ADDITIONS START -->
+<!-- MANUAL ADDITIONS END -->
