@@ -3,7 +3,7 @@
 **Feature**: `002-postgres-gorm-migrations`  
 **Consumers**: `cmd/agent`, `cmd/migrate` (if present), local Compose
 
-**Canonical names**: any code that opens PostgreSQL or runs migrations must use the variable names below exactly as written (DSN parsing, `os.Getenv`, Compose docs, and Makefile help stay aligned with this file).
+**Canonical names**: any code that opens PostgreSQL or runs migrations must use the variable names below exactly as written (Compose docs and Makefile help stay aligned with this file). Go code should read them via **`internal/config`** (`EnvDatabaseURL`, `LoadDatabaseFromEnv`, `MigrateDSNFromEnv`, pool env constants) — not ad-hoc `os.Getenv` in `internal/platform/pgsql` or other feature packages.
 
 ## Application DSN
 
@@ -13,7 +13,7 @@
 
 ## Connection pool (optional)
 
-If unset, `internal/db` uses defaults: max open **25**, max idle **5**, conn max lifetime **1h**. Invalid numeric values fall back to defaults.
+If unset, **`internal/config`** applies defaults consumed by `internal/platform/pgsql`: max open **25**, max idle **5**, conn max lifetime **1h**. Invalid numeric values fall back to defaults.
 
 | Variable | Required | Description |
 |----------|----------|-------------|

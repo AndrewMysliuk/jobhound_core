@@ -1,11 +1,13 @@
 # jobhound_core — personal job aggregator (collect → filter → score → storage → bot)
 
-.PHONY: help build build-migrate run test test-integration fmt vet tidy migrate-up migrate-down migrate-version
+.PHONY: help build build-worker build-migrate run run-worker test test-integration fmt vet tidy migrate-up migrate-down migrate-version
 
 help:
-	@echo "Targets: build | build-migrate | run | test | test-integration | fmt | vet | tidy"
+	@echo "Targets: build | build-worker | build-migrate | run | run-worker | test | test-integration | fmt | vet | tidy"
+	@echo "  build / build-worker — bin/agent (+ bin/worker for build); worker-only: make build-worker"
+	@echo "  run-worker         — build and run Temporal worker (JOBHOUND_TEMPORAL_ADDRESS, e.g. docker compose up)"
 	@echo "  test              — go test ./... (integration tests need -tags=integration, see test-integration)"
-	@echo "  test-integration  — go test -tags=integration ./... (needs JOBHOUND_DATABASE_URL + Postgres, e.g. Compose)"
+	@echo "  test-integration  — go test -tags=integration ./... (Postgres: JOBHOUND_DATABASE_URL; Temporal: JOBHOUND_TEMPORAL_ADDRESS + running worker)"
 	@echo "Migrations (require JOBHOUND_DATABASE_URL or JOBHOUND_MIGRATE_DATABASE_URL):"
 	@echo "  migrate-up       — build bin/migrate and apply all pending SQL migrations"
 	@echo "  migrate-down     — build bin/migrate and apply one down step"
@@ -18,9 +20,18 @@ help:
 	@echo "  JOBHOUND_DB_MAX_IDLE_CONNS         — optional pool: max idle conns"
 	@echo "  JOBHOUND_DB_CONN_MAX_LIFETIME_SEC  — optional pool: conn max lifetime (seconds)"
 	@echo "Full contract: specs/002-postgres-gorm-migrations/contracts/environment.md"
+	@echo ""
+	@echo "Environment (Temporal) — names only; see contract for semantics:"
+	@echo "  JOBHOUND_TEMPORAL_ADDRESS    — gRPC frontend host:port (required for worker / real client)"
+	@echo "  JOBHOUND_TEMPORAL_NAMESPACE  — optional; default namespace: default"
+	@echo "  JOBHOUND_TEMPORAL_TASK_QUEUE — optional; default jobhound"
+	@echo "Full contract: specs/003-temporal-orchestration/contracts/environment.md"
 
-build:
+build: build-worker
 	go build -o bin/agent ./cmd/agent
+
+build-worker:
+	go build -o bin/worker ./cmd/worker
 
 build-migrate:
 	go build -o bin/migrate ./cmd/migrate
@@ -37,10 +48,14 @@ migrate-version: build-migrate
 run: build
 	./bin/agent
 
+# Temporal worker: requires JOBHOUND_TEMPORAL_ADDRESS (e.g. localhost:7233 with docker compose up).
+run-worker: build-worker
+	./bin/worker
+
 test:
 	go test ./...
 
-# Docker-backed tests (build tag integration); see internal/db/migrations_integration_test.go.
+# Docker-backed tests (build tag integration); see internal/platform/pgsql/migrations_integration_test.go.
 test-integration:
 	go test -tags=integration ./...
 

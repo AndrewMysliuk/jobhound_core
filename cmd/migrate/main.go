@@ -7,14 +7,10 @@ import (
 	"path/filepath"
 	"strconv"
 
+	"github.com/andrewmysliuk/jobhound_core/internal/config"
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
-)
-
-const (
-	envMigrateURL  = "JOBHOUND_MIGRATE_DATABASE_URL"
-	envDatabaseURL = "JOBHOUND_DATABASE_URL"
 )
 
 func main() {
@@ -30,7 +26,7 @@ func run() error {
 		return usageError()
 	}
 
-	dsn, err := dsnFromEnv()
+	dsn, err := config.MigrateDSNFromEnv()
 	if err != nil {
 		return err
 	}
@@ -112,16 +108,6 @@ func indexArg(args []string, name string) int {
 	return -1
 }
 
-func dsnFromEnv() (string, error) {
-	if u := os.Getenv(envMigrateURL); u != "" {
-		return u, nil
-	}
-	if u := os.Getenv(envDatabaseURL); u != "" {
-		return u, nil
-	}
-	return "", fmt.Errorf("set %s or %s", envMigrateURL, envDatabaseURL)
-}
-
 func usageError() error {
 	return fmt.Errorf(`usage: migrate [-path DIR] <command> [args]
 
@@ -132,6 +118,7 @@ commands:
   force VERSION   set schema version (repair; use with care)
 
 environment (see specs/002-postgres-gorm-migrations/contracts/environment.md):
-  JOBHOUND_DATABASE_URL         — Postgres URL
-  JOBHOUND_MIGRATE_DATABASE_URL — optional override for migrate only`)
+  %s         — Postgres URL
+  %s — optional override for migrate only`,
+		config.EnvDatabaseURL, config.EnvMigrateDatabaseURL)
 }

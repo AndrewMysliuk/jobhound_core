@@ -32,6 +32,8 @@ Workflows coordinate activities (fetch, persist, score, notify). Retries, visibi
 
 Secrets and local paths live in `.env` (gitignored). The Makefile documents variable names only. Production targets **GCP** for runtime and secrets.
 
+**Single source of truth**: infrastructure and app settings that come from the environment are defined in **`internal/config`**: exported env **name** constants, typed structs (e.g. `Database`, `Temporal`), and loaders (`Load`, `LoadDatabaseFromEnv`, `LoadTemporalFromEnv`). **`cmd/*`** reads env and passes structs into `internal/*`. **Feature modules** (`internal/jobs`, `internal/pipeline`, …) must not call `os.Getenv` for shared knobs — add parsing and defaults in `internal/config` instead. **Temporal connection** (address, namespace, task queue) is config only; **workflow and activity code** live inside each feature module under `internal/<feature>/workflows/` (with `activities/` as needed), same idea as `omg-api` — not a single catch-all `internal/temporal` package.
+
 ## Stack (target)
 
 - Go 1.24
@@ -42,6 +44,8 @@ Secrets and local paths live in `.env` (gitignored). The Makefile documents vari
 - Local dev: **Docker Compose** (Postgres, Temporal stack) as specified in `specs/000-epic-overview`
 
 ## Internal layout
+
+**`internal/platform/`** holds **process infrastructure**, not product modules: shared wiring helpers (e.g. **`platform/pgsql`** — GORM open, pool from `config`, `GormGetter` for repositories). It is **not** a peer of `jobs` / `pipeline`; feature `storage/` packages depend on types from `platform` only for DB access shaped in `cmd`.
 
 Feature work lives in **modules** under `internal/<name>/`: each module is a self-contained unit; only expose what other packages need.
 
@@ -58,18 +62,19 @@ Optional subfolders inside a module (create only what the module uses), same ide
 | `mapper/` | Mapping between layers (e.g. DTO ↔ domain, external models ↔ internal). |
 | `mock/` | Test doubles for the module. |
 | `utils/` | Small helpers used only inside this module. |
+| `workflows/` | Temporal workflows for this module; `activities/` inside for activity implementations. Register from `cmd/worker` (and call `Register`/`New…` per module). |
 
-**`cmd/`** holds binaries and composition (wiring modules, config, process entrypoints). Purely technical trees (e.g. `internal/db`, migration helpers) are not required to mirror every subfolder above.
+**`cmd/`** holds binaries and composition (wiring modules, config, process entrypoints). **`internal/platform/`** and migration CLI are not required to mirror the feature-module subfolder table above.
 
 ## Testing
 
 - **Unit tests** live next to the code they cover: `*_test.go` in the same directory and the **same package** as the implementation (white-box). This avoids export hacks and matches Go stdlib practice.
 - **Black-box tests** (optional): same directory, `package foo_test`, import the package under test to assert only its exported API.
-- **Integration tests** (real Postgres, migrations, Temporal, etc.): use the build tag **`integration`** (`//go:build integration` at the top of the file). Keep them beside the package they exercise (e.g. `internal/db/…`) or, when a scenario spans modules, under **`tests/integration/`** with the same tag. Default `go test ./...` must stay fast and must not require Docker; use `make test-integration` or `go test -tags=integration ./...` for tagged tests.
+- **Integration tests** (real Postgres, migrations, Temporal, etc.): use the build tag **`integration`** (`//go:build integration` at the top of the file). Keep them beside the package they exercise (e.g. `internal/platform/pgsql/…`) or, when a scenario spans modules, under **`tests/integration/`** with the same tag. Default `go test ./...` must stay fast and must not require Docker; use `make test-integration` or `go test -tags=integration ./...` for tagged tests.
 
 ## Governance
 
 - Amend this file when architecture decisions change; keep it short and actionable.
 - Feature details and order of implementation: `specs/` (per-feature folders, same style as `omg-bo/specs`).
 
-**Version**: 1.3.0 | **Ratified**: 2026-03-29
+**Version**: 1.5.1 | **Ratified**: 2026-03-29

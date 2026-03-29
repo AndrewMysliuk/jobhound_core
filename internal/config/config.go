@@ -1,12 +1,11 @@
 package config
 
-// Config holds runtime settings loaded from env and optional files (wired in cmd/ later).
-// Secret values must live only in .env (not committed).
-// PostgreSQL is the system of record; DSNs use JOBHOUND_DATABASE_URL / JOBHOUND_MIGRATE_DATABASE_URL
-// (see specs/002-postgres-gorm-migrations/contracts/environment.md).
+// Config is the single place for env-backed application and infrastructure settings.
+// Use Load() in cmd/* and pass nested structs (e.g. Database) into internal packages;
+// do not scatter os.Getenv across feature modules — add fields and parsing here instead.
 type Config struct {
-	DatabaseURL         string
-	MigrateDatabaseURL  string // optional migrate-only DSN override
+	Database Database
+
 	AnthropicAPIKey     string
 	TelegramBotToken    string
 	TelegramChatID      string
@@ -14,4 +13,12 @@ type Config struct {
 	HTTPUserAgent       string
 	IncludeKeywords     []string
 	ExcludeKeywords     []string
+}
+
+// Load reads supported environment variables into Config.
+// For Temporal (worker / client), call LoadTemporalFromEnv separately — it enforces a required address.
+func Load() Config {
+	return Config{
+		Database: LoadDatabaseFromEnv(),
+	}
 }

@@ -17,7 +17,7 @@ Add **PostgreSQL** via **GORM**, **versioned SQL migrations** with **golang-migr
 **ORM**: GORM with Postgres driver; single lifecycle for `*gorm.DB`  
 **Migrations**: `github.com/golang-migrate/migrate/v4` + Postgres driver; SQL files under repo-root **`migrations/`** (see Resolved decisions)  
 **Testing**: `go test ./...`; add tests for migration application (or schema assertions) and DB ping / storage mapping where practical  
-**Layout**: `internal/.../storage/jobs/` (or `internal/storage/jobs/`) with `model.go`, `pgsql.go`, optional `contract.go`; small `internal/db` or `internal/storage/pgsql` for `Open` + `GormGetter`
+**Layout**: `internal/jobs/storage/` with `model.go`, `repository.go`, optional `contract.go`; shared **`internal/platform/pgsql`** for `Open` / `OpenFromEnv` + `GormGetter`
 
 ## Constitution check
 
@@ -85,12 +85,11 @@ migrations/
 ├── 000001_init_jobs.down.sql
 └── ...
 internal/
-├── db/                    # or internal/storage/pgsql/
-│   └── pgsql.go           # Open, pool options, GormGetter
-└── storage/jobs/          # or internal/jobs/storage/
+├── platform/pgsql/        # Open, pool from config, GormGetter (infrastructure)
+└── jobs/storage/
     ├── model.go
-    ├── pgsql.go
-    └── contract.go        # optional JobRepository iface
+    ├── repository.go
+    └── …                  # JobRepository impl; optional extra files
 cmd/
 ├── agent/
 └── migrate/               # optional thin CLI for golang-migrate

@@ -1,6 +1,6 @@
 //go:build integration
 
-package db
+package pgsql
 
 import (
 	"context"
@@ -11,6 +11,7 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/andrewmysliuk/jobhound_core/internal/config"
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
@@ -49,16 +50,16 @@ func TestMigrationsJobsSchema_integration(t *testing.T) {
 		t.Fatalf("second migrate up (idempotent): %v", err)
 	}
 
-	db, err := sql.Open("pgx", dsn)
+	sqlDB, err := sql.Open("pgx", dsn)
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = db.Close() })
-	if err := db.PingContext(ctx); err != nil {
+	t.Cleanup(func() { _ = sqlDB.Close() })
+	if err := sqlDB.PingContext(ctx); err != nil {
 		t.Fatal(err)
 	}
 
-	cols, err := fetchJobsColumns(db)
+	cols, err := fetchJobsColumns(sqlDB)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,10 +67,7 @@ func TestMigrationsJobsSchema_integration(t *testing.T) {
 }
 
 func dsnForIntegration() string {
-	if u := os.Getenv("JOBHOUND_MIGRATE_DATABASE_URL"); u != "" {
-		return u
-	}
-	return os.Getenv("JOBHOUND_DATABASE_URL")
+	return config.LoadDatabaseFromEnv().MigrationDSN()
 }
 
 func moduleRoot(t *testing.T) string {
@@ -96,8 +94,8 @@ type jobColumn struct {
 	nullable string
 }
 
-func fetchJobsColumns(db *sql.DB) ([]jobColumn, error) {
-	rows, err := db.Query(`
+func fetchJobsColumns(sqlDB *sql.DB) ([]jobColumn, error) {
+	rows, err := sqlDB.Query(`
 		SELECT column_name, data_type, is_nullable
 		FROM information_schema.columns
 		WHERE table_schema = 'public' AND table_name = 'jobs'

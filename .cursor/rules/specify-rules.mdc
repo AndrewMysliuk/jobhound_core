@@ -22,28 +22,31 @@ Spec-driven workflow via `.specify` and `/speckit.*` commands. Update this file 
 
 ```text
 cmd/agent/              # agent binary (wiring)
+cmd/worker/             # Temporal worker: dial from config, register each module’s workflows
 cmd/migrate/            # SQL migrations CLI
 internal/domain/        # shared domain types (e.g. Job)
-internal/config/        # config shape; secrets only from env (see Makefile help)
-internal/db/            # Postgres open, pool; integration-tagged migration tests
+internal/config/        # env keys + typed loaders (Database, Temporal, …); no os.Getenv in feature modules
+internal/platform/pgsql/ # GORM Postgres + pool from config; GormGetter for repos; integration migration tests
 internal/jobs/          # jobs module: contract, storage (GORM)
 internal/pipeline/      # collect/filter/score pipeline: contract, impl, mock
+internal/reference/     # optional: e.g. `workflows/` + `activities/` for bootstrap demos
 tests/integration/      # optional cross-module integration suites (same `integration` build tag)
 migrations/             # SQL migration files
 ```
 
-**Modules**: each feature area under `internal/<name>/` exposes contracts at the module root (`contract.go`, etc.); implementations in `impl/`, `storage/`, `handlers/` as needed. Compose processes in `cmd/`. See `.specify/memory/constitution.md` for the full module folder table.
+**Modules**: each feature area under `internal/<name>/` exposes contracts at the module root (`contract.go`, etc.); implementations in `impl/`, `storage/`, `handlers/` as needed. **Temporal**: per-module `workflows/` and `activities/` (same pattern as `omg-api` feature packages); **only** connection settings in `internal/config`. Compose processes in `cmd/`. See `.specify/memory/constitution.md` for the full module folder table.
 
 ## Testing
 
 - **Unit**: `*_test.go` next to the code, **same package** as the implementation (idiomatic Go).
-- **Integration**: `//go:build integration`; run `make test-integration` or `go test -tags=integration ./...` (needs env such as `JOBHOUND_DATABASE_URL` where applicable).
+- **Integration**: `//go:build integration`; run `make test-integration` or `go test -tags=integration ./...` (needs env such as `JOBHOUND_DATABASE_URL` for DB tests, `JOBHOUND_TEMPORAL_ADDRESS` + running worker for Temporal integration tests where applicable).
 - Do not rely on `export_test.go` or external `tests/unit/...` trees for ordinary package tests.
 
 ## Commands
 
-- `make build` — compile `./cmd/agent` to `bin/agent`
+- `make build` — compile `./cmd/agent` to `bin/agent` and `./cmd/worker` to `bin/worker`
 - `make run` — build and run agent
+- `make run-worker` — build and run Temporal worker (`JOBHOUND_TEMPORAL_ADDRESS` required)
 - `make test` — `go test ./...` (excludes `integration`-tagged tests)
 - `make test-integration` — `go test -tags=integration ./...`
 - `make fmt` / `make vet` / `make tidy`
@@ -52,13 +55,17 @@ migrations/             # SQL migration files
 
 - Go 1.24 conventions; interfaces on module boundaries in `internal/<feature>/contract.go` (or split files); persistence under `internal/<feature>/storage`
 - No secrets or real `.env` in git — see `make help` for documented env variable names
+- **Config**: all shared `JOBHOUND_*` (and other app) env names and parsing live in `internal/config`; `cmd/*` loads and passes structs into `internal/*`
 - Table-driven tests where behavior branches; keep `main` thin
 
 ## Recent Changes
 
 - 2026-03-29: Constitution v1.3 — testing policy (colocated unit tests; `integration` build tag; optional `tests/integration/`)
 - 2026-03-29: `specs/` epic index (`000`–`012`) + Postgres/Temporal architecture
-- 2026-03-29: Module layout under `internal/` (`jobs`, `pipeline`, `db`, `domain`) + `cmd/agent`, `cmd/migrate`
+- 2026-03-29: Module layout under `internal/` (`jobs`, `pipeline`, `db`, `domain`) + `cmd/agent`, `cmd/worker`, `cmd/migrate`
+- 2026-03-29: Constitution v1.4 — `internal/config` as single source for env-backed settings
+- 2026-03-29: Temporal layout — per-module `internal/<feature>/workflows/` + `activities/`; no global `internal/temporal`
+- 2026-03-29: Postgres bootstrap — `internal/platform/pgsql` (not a feature module; replaces `internal/db`)
 
 <!-- MANUAL ADDITIONS START -->
 <!-- MANUAL ADDITIONS END -->

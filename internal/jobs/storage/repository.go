@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/andrewmysliuk/jobhound_core/internal/db"
+	"github.com/andrewmysliuk/jobhound_core/internal/platform/pgsql"
 	"github.com/andrewmysliuk/jobhound_core/internal/domain"
 	"github.com/andrewmysliuk/jobhound_core/internal/jobs"
 	"gorm.io/gorm"
@@ -16,13 +16,13 @@ var ErrNotFound = errors.New("job not found")
 
 // Repository persists jobs via GORM (jobs.JobRepository). Ingest/list/query extras belong in 006+.
 type Repository struct {
-	get db.GormGetter
+	get pgsql.GormGetter
 }
 
 var _ jobs.JobRepository = (*Repository)(nil)
 
-// NewRepository wires job persistence. Pass db.NewGetter(gdb) from Open/OpenFromEnv.
-func NewRepository(get db.GormGetter) *Repository {
+// NewRepository wires job persistence. Pass pgsql.NewGetter(gdb) from pgsql.Open / OpenFromEnv.
+func NewRepository(get pgsql.GormGetter) *Repository {
 	return &Repository{get: get}
 }
 

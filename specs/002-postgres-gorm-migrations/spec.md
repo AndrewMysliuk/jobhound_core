@@ -16,7 +16,7 @@ Patterns follow the omg-api reference (dedicated storage packages, `GormGetter`,
 ## Connection and GORM lifecycle
 
 - DSN and pool settings come from **environment**; secrets and local `.env` stay out of git (variable names documented in Makefile / README as they land).
-- GORM is initialized in **one place** (`cmd` and/or a small `internal/...` package, e.g. `internal/storage/pgsql` or `internal/db`).
+- GORM is initialized in **one place** (`cmd` and/or **`internal/platform/pgsql`** — process infrastructure, not a domain module).
 - Repositories obtain `*gorm.DB` **like omg-api**: a type alias or **`GormGetter`** `func() *gorm.DB` passed into storage constructors and used as `dbGetter().WithContext(ctx)…`. This keeps a single connection lifecycle and simplifies tests.
 - Optional GORM open options in the same spirit as omg-api where useful: e.g. `TranslateError`, pool limits, timeouts — the exact list is fixed in the implementation plan.
 
