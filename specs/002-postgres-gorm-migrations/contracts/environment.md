@@ -3,11 +3,23 @@
 **Feature**: `002-postgres-gorm-migrations`  
 **Consumers**: `cmd/agent`, `cmd/migrate` (if present), local Compose
 
+**Canonical names**: any code that opens PostgreSQL or runs migrations must use the variable names below exactly as written (DSN parsing, `os.Getenv`, Compose docs, and Makefile help stay aligned with this file).
+
 ## Application DSN
 
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `JOBHOUND_DATABASE_URL` | Yes (for any DB-using command) | PostgreSQL connection URL, e.g. `postgres://USER:PASSWORD@localhost:5432/DBNAME?sslmode=disable` |
+
+## Connection pool (optional)
+
+If unset, `internal/db` uses defaults: max open **25**, max idle **5**, conn max lifetime **1h**. Invalid numeric values fall back to defaults.
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `JOBHOUND_DB_MAX_OPEN_CONNS` | No | `database/sql` `SetMaxOpenConns` (integer ≥ 1 recommended). |
+| `JOBHOUND_DB_MAX_IDLE_CONNS` | No | `SetMaxIdleConns` (integer ≥ 0). |
+| `JOBHOUND_DB_CONN_MAX_LIFETIME_SEC` | No | `SetConnMaxLifetime` in seconds (integer ≥ 1). |
 
 ## Migrate override (optional)
 

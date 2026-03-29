@@ -1,7 +1,7 @@
-// Package ports defines I/O boundaries for the ingest pipeline. Domain services
-// depend only on repository interfaces (e.g. Dedup); implementations live under
-// internal/adapters and internal/.../storage.
-package ports
+// Package pipeline defines the ingest pipeline’s public contracts: collectors, filters,
+// scoring, dedup, persistence hooks, and notification. Orchestration lives in pipeline/impl;
+// test doubles in pipeline/mock; job persistence in internal/jobs/storage.
+package pipeline
 
 import (
 	"context"

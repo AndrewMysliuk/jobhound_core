@@ -5,17 +5,17 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/andrewmysliuk/jobhound_core/internal/adapters/noop"
-	"github.com/andrewmysliuk/jobhound_core/internal/app"
+	"github.com/andrewmysliuk/jobhound_core/internal/pipeline/impl"
+	"github.com/andrewmysliuk/jobhound_core/internal/pipeline/mock"
 )
 
 func main() {
-	p := &app.Pipeline{
-		Collector: noop.Collector{},
-		Filter:    noop.Filter{},
-		Scorer:    noop.Scorer{},
-		Dedup:     noop.Dedup{},
-		Notify:    noop.Notifier{},
+	p := &impl.Pipeline{
+		Collector: mock.Collector{},
+		Filter:    mock.Filter{},
+		Scorer:    mock.Scorer{},
+		Dedup:     mock.Dedup{},
+		Notify:    mock.Notifier{},
 	}
 	if err := p.Run(context.Background()); err != nil {
 		fmt.Fprintln(os.Stderr, err)

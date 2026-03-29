@@ -21,34 +21,44 @@ Spec-driven workflow via `.specify` and `/speckit.*` commands. Update this file 
 ## Project Structure
 
 ```text
-cmd/agent/              # wiring: compose app.Pipeline from adapters
-config/
-internal/domain/        # Job, ScoredJob, pure types
-internal/ports/         # Collector, Filter, Scorer, Dedup, Notifier, SessionProvider
-internal/app/           # orchestration only (e.g. Pipeline.Run); no service→service
-internal/adapters/      # noop + future source-specific collectors, Telegram, GORM repos
+cmd/agent/              # agent binary (wiring)
+cmd/migrate/            # SQL migrations CLI
+internal/domain/        # shared domain types (e.g. Job)
+internal/config/        # config shape; secrets only from env (see Makefile help)
+internal/db/            # Postgres open, pool; integration-tagged migration tests
+internal/jobs/          # jobs module: contract, storage (GORM)
+internal/pipeline/      # collect/filter/score pipeline: contract, impl, mock
+tests/integration/      # optional cross-module integration suites (same `integration` build tag)
+migrations/             # SQL migration files
 ```
 
-**Layers**: handlers / `cmd` → `app` (orchestration) → `ports` (interfaces). Domain services (when added) take **repository ports only**, not other services, to avoid import cycles. Cross-cutting composition stays in `cmd` or `app`.
+**Modules**: each feature area under `internal/<name>/` exposes contracts at the module root (`contract.go`, etc.); implementations in `impl/`, `storage/`, `handlers/` as needed. Compose processes in `cmd/`. See `.specify/memory/constitution.md` for the full module folder table.
+
+## Testing
+
+- **Unit**: `*_test.go` next to the code, **same package** as the implementation (idiomatic Go).
+- **Integration**: `//go:build integration`; run `make test-integration` or `go test -tags=integration ./...` (needs env such as `JOBHOUND_DATABASE_URL` where applicable).
+- Do not rely on `export_test.go` or external `tests/unit/...` trees for ordinary package tests.
 
 ## Commands
 
 - `make build` — compile `./cmd/agent` to `bin/agent`
 - `make run` — build and run agent
-- `make test` — `go test ./...`
+- `make test` — `go test ./...` (excludes `integration`-tagged tests)
+- `make test-integration` — `go test -tags=integration ./...`
 - `make fmt` / `make vet` / `make tidy`
 
 ## Code Style
 
-- Go 1.24 conventions; boundary interfaces live in `internal/ports`; implementations under `internal/adapters` or `internal/<feature>/storage`
+- Go 1.24 conventions; interfaces on module boundaries in `internal/<feature>/contract.go` (or split files); persistence under `internal/<feature>/storage`
 - No secrets or real `.env` in git — see `make help` for documented env variable names
 - Table-driven tests where behavior branches; keep `main` thin
 
 ## Recent Changes
 
-- 2026-03-29: `specs/` epic index (`000`–`012`) + constitution v1.1 (Postgres, Temporal, three-stage pipeline)
-- 2026-03-29: Initial skeleton — `model.Job`, pipeline interfaces, `config` placeholder, Spec Kit + Cursor rules
-- 2026-03-29: `internal` layout — `domain`, `ports`, `app`, `adapters/noop` (orchestration vs repo-only services)
+- 2026-03-29: Constitution v1.3 — testing policy (colocated unit tests; `integration` build tag; optional `tests/integration/`)
+- 2026-03-29: `specs/` epic index (`000`–`012`) + Postgres/Temporal architecture
+- 2026-03-29: Module layout under `internal/` (`jobs`, `pipeline`, `db`, `domain`) + `cmd/agent`, `cmd/migrate`
 
 <!-- MANUAL ADDITIONS START -->
 <!-- MANUAL ADDITIONS END -->

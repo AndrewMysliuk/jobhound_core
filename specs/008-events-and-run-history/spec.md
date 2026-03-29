@@ -21,6 +21,10 @@
 
 - `003`, `006`, `007`; `004` for stages inside activities.
 
+## Implementation tasks
+
+Concrete backlog (including DB stub migrations deferred from `002` plan D3): see [`tasks.md`](./tasks.md).
+
 ## Local / Docker
 
 - Temporal + Postgres from Compose; worker executes schedules or external trigger (Cloud Scheduler later on GCP).

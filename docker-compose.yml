@@ -1,0 +1,24 @@
+# Local PostgreSQL for development (spec 002). DSN example:
+#   postgres://jobhound:jobhound@localhost:5432/jobhound?sslmode=disable
+# See specs/002-postgres-gorm-migrations/contracts/environment.md
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: jobhound
+      POSTGRES_PASSWORD: jobhound
+      POSTGRES_DB: jobhound
+    ports:
+      - "5432:5432"
+    volumes:
+      - jobhound_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U jobhound -d jobhound"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  jobhound_pgdata:
