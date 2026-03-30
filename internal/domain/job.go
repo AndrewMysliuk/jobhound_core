@@ -17,7 +17,13 @@ type Job struct {
 	Remote *bool
 	// CountryCode is ISO 3166-1 alpha-2 when known; empty string means unknown.
 	CountryCode string
-	UserID      *string // optional; nil/empty = unset (future multi-user scope)
+	// SalaryRaw is opaque compensation text from the board; empty if none (005 collectors).
+	SalaryRaw string
+	// Tags are skill/topic labels; nil or empty means none (persisted as JSON []).
+	Tags []string
+	// Position is nil when no MVP keyword group matched; otherwise a canonical label (005).
+	Position *string
+	UserID   *string // optional; nil/empty = unset (future multi-user scope)
 }
 
 // ScoredJob is the post–stage-3 shape handed to notification.

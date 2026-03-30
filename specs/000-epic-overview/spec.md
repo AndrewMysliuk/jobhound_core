@@ -2,7 +2,7 @@
 
 **Feature Branch**: `000-epic-overview`
 **Created**: 2026-03-29
-**Last Updated**: 2026-03-29
+**Last Updated**: 2026-03-30
 **Status**: Completed
 
 **Purpose**: Index of all planned features under `specs/`. Each numbered folder has its own brief `spec.md` for orientation; detailed requirements come later via Spec Kit per feature.
@@ -21,7 +21,7 @@ Personal job agent: ingest vacancies, **three narrowing stages** (role/time → 
 
 ## Testing stance
 
-- **Collectors**: deterministic tests with fixtures (`httptest`, golden HTML); optional targeted live checks outside default CI if needed.
+- **Collectors**: deterministic tests with fixtures (`httptest`, golden HTML); optional targeted live checks outside default CI if needed. Local **`cmd/agent`** debug HTTP (see **`specs/005-job-collectors/spec.md`**) exercises real sources with full `domain.Job` JSON and optional Working Nomads ES overrides.
 - **Workflows**: a small set of Temporal tests (e.g. mock activities) for critical paths — no fanaticism.
 - **Stages 1–3**: table-driven unit tests, no network.
 

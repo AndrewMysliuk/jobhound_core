@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"bytes"
 	"testing"
 	"time"
 
@@ -41,9 +42,28 @@ func timePtrEqual(a, b *time.Time) bool {
 	return a.Equal(*b)
 }
 
+func stringSliceEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
 func domainJobEqual(a, b domain.Job) bool {
 	if a.ID != b.ID || a.Source != b.Source || a.Title != b.Title || a.Company != b.Company ||
-		a.URL != b.URL || a.ApplyURL != b.ApplyURL || a.Description != b.Description {
+		a.URL != b.URL || a.ApplyURL != b.ApplyURL || a.Description != b.Description ||
+		a.SalaryRaw != b.SalaryRaw {
+		return false
+	}
+	if !stringSliceEqual(a.Tags, b.Tags) {
+		return false
+	}
+	if !strPtrEqual(a.Position, b.Position) {
 		return false
 	}
 	if !a.PostedAt.Equal(b.PostedAt) {
@@ -127,6 +147,11 @@ func TestNewJobModel(t *testing.T) {
 			wantCountry: "de",
 		},
 		{
+			name:        "salary tags position",
+			in:          domain.Job{SalaryRaw: "50-70k", Tags: []string{"rust"}, Position: strPtr("backend")},
+			wantCountry: "",
+		},
+		{
 			name:       "user_id nil stays nil",
 			in:         domain.Job{UserID: nil},
 			wantUserID: nil,
@@ -164,6 +189,15 @@ func TestNewJobModel(t *testing.T) {
 			}
 			if got.CountryCode != tc.wantCountry {
 				t.Fatalf("CountryCode: got %q want %q", got.CountryCode, tc.wantCountry)
+			}
+			if got.SalaryRaw != tc.in.SalaryRaw {
+				t.Fatalf("SalaryRaw: got %q want %q", got.SalaryRaw, tc.in.SalaryRaw)
+			}
+			if !bytes.Equal(got.Tags, encodeJobTags(tc.in.Tags)) {
+				t.Fatalf("Tags: got %s want %s", got.Tags, encodeJobTags(tc.in.Tags))
+			}
+			if !strPtrEqual(got.Position, tc.in.Position) {
+				t.Fatalf("Position: got %v want %v", got.Position, tc.in.Position)
 			}
 		})
 	}
@@ -289,6 +323,15 @@ func TestJobModel_roundTrip(t *testing.T) {
 			},
 			want: domain.Job{
 				ID: "j2", Remote: boolPtr(true), CountryCode: "US",
+			},
+		},
+		{
+			name: "salary tags position",
+			in: domain.Job{
+				ID: "j3", SalaryRaw: "€80k", Tags: []string{"go", "backend"}, Position: strPtr("backend"),
+			},
+			want: domain.Job{
+				ID: "j3", SalaryRaw: "€80k", Tags: []string{"go", "backend"}, Position: strPtr("backend"),
 			},
 		},
 	}

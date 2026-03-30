@@ -3,7 +3,7 @@
 **Feature Branch**: `005-job-collectors`  
 **Created**: 2026-03-29  
 **Last Updated**: 2026-03-30  
-**Status**: Draft
+**Status**: Implemented
 
 ## Goal
 
@@ -49,7 +49,50 @@ Persistence extension for **`jobs`**: **`contracts/jobs-table-extension.md`**.
 
 ## Temporary debug HTTP (before `011`)
 
-To manually verify collectors without the public API spec, a **local-only** debug server may live under **`cmd/*`** (e.g. flag-gated `GET /health`, `POST /debug/run-collector`). It is **not** the product HTTP API; **`specs/011-http-public-api`** remains the contract for public endpoints. Do not expose debug routes in production builds.
+To manually verify collectors without the public API spec, a **local-only** debug server lives under **`cmd/agent`**: flag **`-debug-http-addr`** or env **`JOBHOUND_DEBUG_HTTP_ADDR`** (see **`contracts/environment.md`**). It serves **`GET /health`** and **one POST route per MVP source** — `POST /debug/collectors/europe_remotely` and `POST /debug/collectors/working_nomads` — so each site can be exercised in isolation (e.g. Postman, curl). It is **not** the product HTTP API; **`specs/011-http-public-api`** remains the contract for public endpoints. Do not expose debug routes in production builds.
+
+**Implementation**: `internal/collectors/handlers/debughttp`.
+
+### JSON request body (single contract, both POST routes)
+
+Use **`Content-Type: application/json`**. Body is optional; max size ~512 KiB. **URL query parameters are not used** for collector debug (everything below is JSON keys).
+
+| Field | Type | Default | Meaning |
+|-------|------|---------|---------|
+| `limit` | int | `200` | Cap how many jobs appear in `jobs`. **`0`** = no cap (full collector run — can be large/slow). Maximum **`10000`**. Omitted key → default `200`. Invalid values → HTTP **400**. |
+
+**Europe Remotely**: full `Fetch` first when `limit` ≠ `0`; the handler then **truncates** the returned slice to `limit`. When truncation happens, **`upstream_fetched`** in the response is the pre-truncation count.
+
+**Working Nomads**: when the agent wires a concrete `*workingnomads.WorkingNomads`, `limit` maps to **`MaxFetchJobs`** on a **per-request copy** so pagination stops early.
+
+Additional fields (Working Nomads only; **ignored** on `europe_remotely`):
+
+| Field | Type | Meaning |
+|-------|------|---------|
+| `query` | object | Replaces default `match_all` (site `jobsapi/_search`). |
+| `sort` | array | Replaces default sort. |
+| `page_size` | int | ES `size` per page. |
+| `_source` | string array | ES `_source` field list; must include fields the normalizer needs. |
+
+Example:
+
+```json
+{
+  "limit": 50,
+  "query": { "match": { "title": "frontend" } },
+  "page_size": 25
+}
+```
+
+### JSON response (success)
+
+- **`ok`**, **`collector`** (source name), **`count`** — length of **`jobs`** in this response.
+- **`upstream_fetched`** — optional; set only when Europe Remotely (or another non–Working-Nomads path) returned more rows than JSON `limit` after a full fetch.
+- **`jobs`** — array of normalized vacancies: all MVP **`domain.Job`** fields exposed for debugging: `id`, `source`, `title`, `company`, `url`, `apply_url`, `description`, `posted_at` (RFC3339nano, UTC, if known), `remote`, `country_code`, `salary_raw`, `tags`, `position`, `user_id`. This is for human verification of **`contracts/domain-mapping-mvp.md`** mapping, not the public API schema.
+
+Working Nomads **`query` / `sort` / `page_size` / `_source`** are documented above as part of the **same** JSON object as `limit`. See **`resources/working-nomads.md`** for the site wire format; request field types and date examples: **`contracts/debug-http-collectors.md`**. **Pipeline** date/keyword rules remain **`specs/004-pipeline-stages`**; this body only exercises **site-side** filters.
+
+If the agent does not pass a concrete Working Nomads pointer (e.g. some tests), `query` / `sort` / `page_size` / `_source` are not applied; JSON **`limit`** still truncates after `Fetch` like Europe Remotely.
 
 ## Tests
 
@@ -93,6 +136,7 @@ Offline: **`httptest`** + bodies from **`contracts/test-fixtures.md`** (or copie
 - `contracts/test-fixtures.md` — fenced sample bodies
 - `contracts/sources-inventory.md`
 - `contracts/environment.md` — T3 env placeholder
+- `contracts/debug-http-collectors.md` — debug POST JSON types + date `query` examples
 - `resources/europe-remotely.md`, `resources/working-nomads.md`
 - `plan.md`, `tasks.md`, `research.md`, `checklists/requirements.md`
 - `specs/000-epic-overview/spec.md`, `.specify/memory/constitution.md`

@@ -12,7 +12,7 @@ import (
 func TestPipeline_Run_nilDependency(t *testing.T) {
 	p := &impl.Pipeline{
 		Collector: mock.Collector{},
-		Scorer: llmmock.Scorer{},
+		Scorer:    llmmock.Scorer{},
 		Dedup:     mock.Dedup{},
 		Notify:    nil,
 	}
@@ -24,7 +24,7 @@ func TestPipeline_Run_nilDependency(t *testing.T) {
 func TestPipeline_Run_noop(t *testing.T) {
 	p := &impl.Pipeline{
 		Collector: mock.Collector{},
-		Scorer: llmmock.Scorer{},
+		Scorer:    llmmock.Scorer{},
 		Dedup:     mock.Dedup{},
 		Notify:    mock.Notifier{},
 	}

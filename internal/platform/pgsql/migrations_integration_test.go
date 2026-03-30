@@ -134,6 +134,9 @@ func assertJobsSchema(t *testing.T, cols []jobColumn) {
 		"user_id":      {"text", "YES"},
 		"is_remote":    {"boolean", "YES"},
 		"country_code": {"text", "NO"},
+		"salary_raw":   {"text", "NO"},
+		"tags":         {"jsonb", "NO"},
+		"position":     {"text", "YES"},
 		"created_at":   {"timestamp with time zone", "NO"},
 		"updated_at":   {"timestamp with time zone", "NO"},
 	}

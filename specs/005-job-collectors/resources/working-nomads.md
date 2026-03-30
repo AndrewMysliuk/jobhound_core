@@ -63,6 +63,10 @@ Captured from browser **Network** (Copy as JSON / cURL). Field names below match
 
 **Headers**: match browser or minimal `Content-Type: application/json` + sensible `User-Agent`; record any required cookies/headers if behavior changes.
 
+### Local debug HTTP (`cmd/agent`)
+
+`POST /debug/collectors/working_nomads` (see **`../spec.md`**) uses **one JSON object**: **`limit`** (default `200`, `0` = full index) plus optional **`query`**, **`sort`**, **`page_size`**, **`_source`**. Overrides apply to a **one-shot copy** of `WorkingNomads` for that request. No URL query parameters.
+
 ---
 
 ## Response: `SearchResponse` (top level)

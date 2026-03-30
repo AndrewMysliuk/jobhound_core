@@ -1,0 +1,4 @@
+ALTER TABLE jobs
+    ADD COLUMN salary_raw TEXT NOT NULL DEFAULT '',
+    ADD COLUMN tags JSONB NOT NULL DEFAULT '[]'::jsonb,
+    ADD COLUMN position TEXT;

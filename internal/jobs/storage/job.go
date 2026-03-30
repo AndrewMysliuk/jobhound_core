@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/andrewmysliuk/jobhound_core/internal/domain"
@@ -19,6 +20,9 @@ type Job struct {
 	PostedAt    *time.Time `gorm:"column:posted_at"`
 	IsRemote    *bool      `gorm:"column:is_remote"`
 	CountryCode string     `gorm:"column:country_code;type:text;not null;default:''"`
+	SalaryRaw   string     `gorm:"column:salary_raw;type:text;not null;default:''"`
+	Tags        []byte     `gorm:"column:tags;type:jsonb;not null"`
+	Position    *string    `gorm:"column:position;type:text"`
 	UserID      *string    `gorm:"column:user_id;type:text"`
 	CreatedAt   time.Time  `gorm:"column:created_at;not null"`
 	UpdatedAt   time.Time  `gorm:"column:updated_at;not null"`
@@ -39,7 +43,10 @@ func NewJobModel(j domain.Job) Job {
 		Company:     j.Company,
 		URL:         j.URL,
 		Description: j.Description,
+		SalaryRaw:   j.SalaryRaw,
+		Position:    j.Position,
 	}
+	m.Tags = encodeJobTags(j.Tags)
 	if j.ApplyURL != "" {
 		u := j.ApplyURL
 		m.ApplyURL = &u
@@ -60,6 +67,31 @@ func NewJobModel(j domain.Job) Job {
 	return m
 }
 
+func encodeJobTags(tags []string) []byte {
+	if len(tags) == 0 {
+		return []byte("[]")
+	}
+	b, err := json.Marshal(tags)
+	if err != nil {
+		return []byte("[]")
+	}
+	return b
+}
+
+func decodeJobTags(b []byte) []string {
+	if len(b) == 0 {
+		return nil
+	}
+	var tags []string
+	if err := json.Unmarshal(b, &tags); err != nil {
+		return nil
+	}
+	if len(tags) == 0 {
+		return nil
+	}
+	return tags
+}
+
 // ToDomain maps this row to domain.Job (contracts/jobs-schema.md).
 func (m *Job) ToDomain() domain.Job {
 	j := domain.Job{
@@ -69,6 +101,9 @@ func (m *Job) ToDomain() domain.Job {
 		Company:     m.Company,
 		URL:         m.URL,
 		Description: m.Description,
+		SalaryRaw:   m.SalaryRaw,
+		Tags:        decodeJobTags(m.Tags),
+		Position:    m.Position,
 	}
 	if m.ApplyURL != nil {
 		j.ApplyURL = *m.ApplyURL

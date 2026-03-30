@@ -20,7 +20,7 @@ Target shape: **`domain.Job`** in `internal/domain/job.go`, plus **planned field
 | `Tags` | `[]string` | Skill/topic labels |
 | `Position` | `*string` | **Nil** = no MVP keyword match; non-nil = inferred label (see below) |
 
-**`Remote` (MVP):** use **`bool`**: **`true`** if the substring **`remote`** appears (case-insensitive) in any of: **`Title`**, normalized **plain-text `Description`**, or **tag strings** from the board (see per-source columns). Otherwise **`false`**.
+**`Remote` (MVP rule):** collectors set **`Job.Remote`** to non-nil **`true`** or **`false`**: **`true`** if the substring **`remote`** appears (case-insensitive) in any of: **`Title`**, normalized **plain-text `Description`**, or **tag strings** from the board (see per-source columns). Otherwise **`false`**. **`nil`** remains valid for legacy or unknown rows (see `004` broad filter); MVP sources always populate **`true`**/**`false`** per this rule.
 
 When these land, **`jobs`** storage needs matching columns — see **`jobs-table-extension.md`**.
 

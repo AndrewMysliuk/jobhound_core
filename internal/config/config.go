@@ -5,6 +5,10 @@ package config
 // do not scatter os.Getenv across feature modules — add fields and parsing here instead.
 type Config struct {
 	Database Database
+	// DataDir is the directory containing countries.json (see EnvDataDir). Empty means use "data" relative to the process working directory.
+	DataDir string
+	// DebugHTTPAddr enables cmd/agent local debug HTTP when non-empty (see EnvDebugHTTPAddr); flag -debug-http-addr overrides.
+	DebugHTTPAddr string
 
 	AnthropicAPIKey     string
 	AnthropicModel      string
@@ -25,6 +29,8 @@ func Load() Config {
 	}
 	return Config{
 		Database:        LoadDatabaseFromEnv(),
+		DataDir:         loadDataDirFromEnv(),
+		DebugHTTPAddr:   loadDebugHTTPAddrFromEnv(),
 		AnthropicAPIKey: LoadAnthropicAPIKeyFromEnv(),
 		AnthropicModel:  model,
 	}

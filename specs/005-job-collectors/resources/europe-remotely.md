@@ -31,6 +31,31 @@ Listing and detail often show **relative** English phrases (e.g. `Posted 12 hour
 
 Record a **real captured `admin-ajax.php` request body** (from DevTools → Copy as cURL / Copy request payload) in this file when available so implementers do not guess WordPress `action` / nonce fields.
 
+### Reference: `admin-ajax.php` request body (implementation-aligned)
+
+Until a DevTools capture is pasted here, the **MVP collector** uses **`application/x-www-form-urlencoded`** POST to `https://euremotejobs.com/wp-admin/admin-ajax.php` with:
+
+| Field               | Value / notes |
+| ------------------- | ------------- |
+| `action`            | `erj_ajax_search` (WordPress AJAX handler name observed in HTML/JS) |
+| `nonce`             | Rotating token from the listing page HTML (`DiscoverNonce` in code); **not** a secret — treat as short-lived CSRF-style field |
+| `website`           | Empty string in current wire |
+| `page`              | String page index, `1` on first batch, incremented while `has_more` is true |
+| `search_keywords`   | Optional; observed when using the site search UI (DevTools Form Data). Omitted in default collector/bootstrap (full listing). |
+| *(other keys)*      | Theme/plugin may add filters (e.g. date). Capture from DevTools; optional merge via debug `feed_form` in `contracts/debug-http-collectors.md`. |
+
+Example **shape** (nonce is illustrative; replace with a value from the live page):
+
+```http
+POST /wp-admin/admin-ajax.php HTTP/1.1
+Host: euremotejobs.com
+Content-Type: application/x-www-form-urlencoded
+
+action=erj_ajax_search&nonce=REPLACE_WITH_PAGE_NONCE&website=&page=1&search_keywords=vue
+```
+
+**Redact** cookies and any session identifiers if you paste a full cURL from DevTools.
+
 ---
 
 ## Interface: `FeedBatch` (one AJAX success)

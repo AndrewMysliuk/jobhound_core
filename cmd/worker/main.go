@@ -16,6 +16,7 @@ import (
 )
 
 func main() {
+	// Job fetch runs from cmd/agent via internal/collectors/bootstrap; this worker runs stage activities on workflow-supplied jobs.
 	cfg, err := config.LoadTemporalFromEnv()
 	if err != nil {
 		log.Printf("temporal worker: %v", err)

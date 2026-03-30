@@ -1,0 +1,4 @@
+ALTER TABLE jobs
+    DROP COLUMN IF EXISTS salary_raw,
+    DROP COLUMN IF EXISTS tags,
+    DROP COLUMN IF EXISTS position;

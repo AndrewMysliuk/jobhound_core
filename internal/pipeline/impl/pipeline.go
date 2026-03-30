@@ -24,8 +24,8 @@ type Pipeline struct {
 	Profile string
 
 	Scorer llm.Scorer
-	Dedup     pipeline.Dedup
-	Notify    pipeline.Notifier
+	Dedup  pipeline.Dedup
+	Notify pipeline.Notifier
 }
 
 // Run executes a single pipeline pass.
