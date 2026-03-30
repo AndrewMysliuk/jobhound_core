@@ -30,7 +30,7 @@ Workflows coordinate activities (fetch, persist, score, notify). Retries, visibi
 
 ### VI. Config without secrets in repo
 
-Secrets and local paths live in `.env` (gitignored). The Makefile documents variable names only. Production targets **GCP** for runtime and secrets.
+Secrets and local paths live in `.env` (gitignored). Variable **names** are documented in **`specs/*/contracts/environment.md`**, **README**, and **`internal/config`** (not duplicated in the Makefile). Production targets **GCP** for runtime and secrets.
 
 **Single source of truth**: infrastructure and app settings that come from the environment are defined in **`internal/config`**: exported env **name** constants, typed structs (e.g. `Database`, `Temporal`), and loaders (`Load`, `LoadDatabaseFromEnv`, `LoadTemporalFromEnv`). **`cmd/*`** reads env and passes structs into `internal/*`. **Feature modules** (`internal/jobs`, `internal/pipeline`, …) must not call `os.Getenv` for shared knobs — add parsing and defaults in `internal/config` instead. **Temporal connection** (address, namespace, task queue) is config only; **workflow and activity code** live inside each feature module under `internal/<feature>/workflows/` (with `activities/` as needed), same idea as `omg-api` — not a single catch-all `internal/temporal` package.
 

@@ -54,7 +54,7 @@ migrations/             # SQL migration files
 ## Code Style
 
 - Go 1.24 conventions; interfaces on module boundaries in `internal/<feature>/contract.go` (or split files); persistence under `internal/<feature>/storage`
-- No secrets or real `.env` in git — see `make help` for documented env variable names
+- No secrets or real `.env` in git — document `JOBHOUND_*` names in `specs/*/contracts/environment.md`, `README.md`, and `internal/config` (do not duplicate long env lists in the Makefile)
 - **Config**: all shared `JOBHOUND_*` (and other app) env names and parsing live in `internal/config`; `cmd/*` loads and passes structs into `internal/*`
 - Table-driven tests where behavior branches; keep `main` thin
 

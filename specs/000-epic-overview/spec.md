@@ -17,7 +17,7 @@ Personal job agent: ingest vacancies, **three narrowing stages** (role/time → 
 
 - **Docker Compose** brings up **PostgreSQL** and **Temporal** (and UI where useful) so the stack runs on a laptop without GCP.
 - Application services (API server, Temporal **worker**) run via `make` / `go run` against compose, or are added as compose services as the project matures.
-- Documented env vars (no secrets in git); see Makefile / `config` as implementations land.
+- Documented env vars (no secrets in git); see `specs/*/contracts/environment.md`, README, and `internal/config` as implementations land.
 
 ## Testing stance
 

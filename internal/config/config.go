@@ -19,6 +19,7 @@ type Config struct {
 // For Temporal (worker / client), call LoadTemporalFromEnv separately — it enforces a required address.
 func Load() Config {
 	return Config{
-		Database: LoadDatabaseFromEnv(),
+		Database:        LoadDatabaseFromEnv(),
+		AnthropicAPIKey: LoadAnthropicAPIKeyFromEnv(),
 	}
 }

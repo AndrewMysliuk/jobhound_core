@@ -32,11 +32,11 @@ make run
 make test
 ```
 
-`make help` lists targets and documented **environment variable names** for PostgreSQL and Temporal (values stay in `.env`, never committed).
+**Environment variable names** (no values in git): PostgreSQL and Temporal are documented in **`specs/*/contracts/environment.md`**; Go code reads them via **`internal/config`** (see `Env*` constants). Optional Anthropic key: `JOBHOUND_ANTHROPIC_API_KEY` in `internal/config/anthropic.go`.
 
 ## Database environment (contract)
 
-PostgreSQL DSN and optional migrate override are defined in **[`specs/002-postgres-gorm-migrations/contracts/environment.md`](specs/002-postgres-gorm-migrations/contracts/environment.md)** (`JOBHOUND_DATABASE_URL`, `JOBHOUND_MIGRATE_DATABASE_URL`). Implementations must match those names; `make help` echoes the same identifiers for quick reference.
+PostgreSQL DSN and optional migrate override are defined in **[`specs/002-postgres-gorm-migrations/contracts/environment.md`](specs/002-postgres-gorm-migrations/contracts/environment.md)** (`JOBHOUND_DATABASE_URL`, `JOBHOUND_MIGRATE_DATABASE_URL`). Implementations must match those names.
 
 ### Connecting from the host (default Compose)
 

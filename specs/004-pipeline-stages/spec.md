@@ -1,30 +1,97 @@
-# Feature: Pipeline stage services (pure domain)
+# Feature: Pipeline stage services (pure domain logic)
 
-**Feature Branch**: `004-pipeline-stages`
-**Created**: 2026-03-29
+**Feature Branch**: `004-pipeline-stages`  
+**Created**: 2026-03-29  
+**Last Updated**: 2026-03-30  
 **Status**: Draft
 
 ## Goal
 
-Implement **three stages** as **testable packages** without Temporal inside:
+Implement the **three narrowing stages** as **pure, testable packages** with no Temporal inside and **no network calls** in unit tests:
 
-1. Broad match: role / title / **time window** over normalized jobs.
-2. Keyword **include** / **exclude** (no LLM).
-3. **LLM** scoring using stored profile + job text; structured output (score, rationale, flags).
+1. **Broad filter (stage 1):** publication date window, role synonyms (title + description), remote-only when required, optional country allowlist.
+2. **Keywords (stage 2):** include / exclude over text, **no LLM**.
+3. **LLM scoring (stage 3):** user profile (for now a **single text block**) + vacancy text; structured output (at minimum score and rationale; extra fields as needed).
 
-## Scope
+Parsing HTML/API from sites and turning “human” dates into `PostedAt` is **out of scope for this feature**; see `005-job-collectors`.
 
-- Clear function/API boundaries for activities to call later.
-- Unit tests for edge cases (optional vs required stack mentions deferred to LLM prompt/schema in plan).
+## Behaviour: filter rejection vs error
+
+- **Fails filter rules** (date, remote, country, role, keywords, etc.) → vacancy **drops out of the stream**. This is **not** an error; this spec does **not** introduce per-vacancy status tracking.
+- **Execution failure** (invalid config, LLM call error, unparseable response, etc.) → **log**; do not conflate with “did not match criteria”. Policy for **abort whole run vs skip one vacancy** on stage 3 errors is a **separate decision** (can be pinned later).
+
+## Rule configuration
+
+- Stage parameters (date window, role synonyms, include/exclude, remote, countries, profile text for the LLM) are supplied **in the event / run context**, not as a single global app config.
+
+## Stage 1 — broad filter
+
+**Input:** normalized `domain.Job` values + run rules.
+
+**Date window (`PostedAt`):**
+
+- If rules specify **`from` / `to`** (timestamps), those are used.
+- If **not** set, default is a **rolling window** from **now − 7 days** to **now** (semantically “last 7 days”). Reference clock: **UTC only** (all date comparisons and “now” for the window use UTC).
+
+**Role synonyms:** array of strings (e.g. `frontend`, `frontend developer`, …). Match in **`Title` and `Description`** (case-insensitive; listings are mostly English, simple ASCII/Latin casefold is enough).
+
+**Remote:** rule flag meaning **only remote** vacancies. When enabled, keep rows where the vacancy can **explicitly** be treated as remote (domain field populated by the collector). If remote **cannot** be determined → vacancy **does not pass** (rejected).
+
+**Countries:** allowlist of country codes (e.g. ISO 3166-1 alpha-2). **Empty list** → **any** country (no country filter). Non-empty allowlist: pass only if the vacancy country is **known** and in the list; if country is **unknown** → **reject**.
+
+Per-site geo parsing is **out of scope**; `Job` may carry optional fields the collector fills when the site exposes them.
+
+## Stage 2 — keywords
+
+- Search fields: **`Title` and `Description`**.
+- **Include** and **exclude** lists are **both optional**; each is a **string array**.
+- **Ignore case** (same convention as stage 1 for English text).
+
+Semantics (all includes vs any include, any exclude rejects, etc.) must be defined unambiguously in code and tests; default: **all includes** must match if the list is non-empty, and **no exclude** may appear if the exclude list is non-empty.
+
+## Stage 3 — LLM
+
+- Input: user profile text (for now **one block**) + whatever job fields scoring needs.
+- LLM provider sits **behind an abstraction** (interface); concrete **Claude** wiring comes later.
+- Anthropic API key for real calls: environment **`JOBHOUND_ANTHROPIC_API_KEY`** (see `internal/config/anthropic.go`). Do **not** commit keys.
+- Minimum response contract: **numeric score** + **short rationale**; optional fields (flags, etc.) as needed; JSON shape can be refined separately.
+
+## Tests
+
+- Unit tests for edge cases per stage **without** real HTTP/API calls: LLM mocks and `Job` fixtures.
 
 ## Out of scope
 
-- HTTP transport; Telegram formatting; persistence side effects inside stage functions (callers handle).
+- HTTP, Telegram, persistence side effects **inside** stage functions (callers decide what to persist).
+- Site-specific parsers and normalizing dates like “5 days ago” → **`005-job-collectors`**.
 
 ## Dependencies
 
-- `001` domain types; profile shape may need `002` for loading from DB.
+- `001` — `domain.Job` and related types; extend fields (remote, country) in line with domain and `002` migrations when needed.
 
-## Local / Docker
+## Local development
 
-- None beyond Go; LLM tests use mocks or recorded responses.
+- Go only; stage 3 tests use mocks, no mandatory Claude API.
+
+## Acceptance criteria
+
+1. **Stage 1** implements date window (explicit `from`/`to` or default **last 7 days UTC**), role synonyms on **title + description**, optional **remote-only** and **country allowlist** per contract; filter drops are **not** errors.
+2. **Stage 2** implements include/exclude keywords on **title + description** with unambiguous semantics (**all** non-empty includes match; **any** exclude rejects) and tests.
+3. **Stage 3** exposes an **LLM scorer interface**; minimum output **score + rationale**; unit tests use **mocks** only — **no** real Anthropic calls in default `go test ./...`.
+4. Stage packages contain **no** Temporal SDK imports and **no** network I/O inside pure filter/keyword logic; LLM calls only behind the scorer implementation used in tests (mock) or wired with **`JOBHOUND_ANTHROPIC_API_KEY`** at composition time.
+5. Run **rules** (windows, lists, profile text) are supplied **per invocation**, not as the sole source from global app env (see `contracts/environment.md`).
+6. **`contracts/pipeline-stages.md`** and **`contracts/environment.md`** match implemented behaviour and env names in **`internal/config`**.
+
+## Planning artifacts
+
+- `plan.md` — phases, constitution check, resolved decisions
+- `research.md` — repo inventory and semantics notes
+- `tasks.md` — implementation checklist
+- `checklists/requirements.md` — spec quality checklist
+- `contracts/environment.md` — Anthropic-related env vars; rules from run context
+- `contracts/pipeline-stages.md` — stage behaviour, `Job` fields, LLM JSON minimum
+
+## Related
+
+- `specs/000-epic-overview/spec.md` — product context and feature order.
+- `specs/003-temporal-orchestration/spec.md` — orchestration (stages called from activities later).

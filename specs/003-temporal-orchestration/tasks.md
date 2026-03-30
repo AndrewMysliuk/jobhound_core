@@ -5,7 +5,7 @@
 
 ## A. Contracts & documentation
 
-1. [x] **Freeze Temporal env contract** — Definition of done: `contracts/environment.md` matches implemented var names; Makefile `help` lists Temporal-related names; README points to contracts and UI/gRPC ports.
+1. [x] **Freeze Temporal env contract** — Definition of done: `contracts/environment.md` matches implemented var names; README documents Temporal-related names; Makefile `help` is targets-only (not env dump).
 2. [x] **Freeze reference workflow contract** — Definition of done: `contracts/reference-workflow.md` matches registered workflow/activity names, queue, namespace, and input/output shapes in code.
 
 ## B. Local stack

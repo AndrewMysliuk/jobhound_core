@@ -5,7 +5,7 @@
 
 ## A. Contracts & documentation
 
-1. [x] **Freeze env contract** — Definition of done: `contracts/environment.md` matches implemented var names; Makefile `help` lists DSN + migrate-related names; README section points to contracts.
+1. [x] **Freeze env contract** — Definition of done: `contracts/environment.md` matches implemented var names; README lists DSN + migrate-related names; `internal/config` implements loaders (Makefile `help` is targets-only, not env dump).
 2. [x] **Freeze jobs table contract** — Definition of done: `contracts/jobs-schema.md` matches first migration and `domain.Job` mapping rules.
 
 ## B. Local stack

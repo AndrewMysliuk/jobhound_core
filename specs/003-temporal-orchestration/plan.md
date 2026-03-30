@@ -41,7 +41,7 @@ Add **Temporal** to local dev and the repo: **Docker Compose** services for **Te
 | 4 Internal package | Reference workflow + activity under `internal/reference/workflows/` (+ `activities/`); explicit timeouts/retries in code or spec-adjacent docs |
 | 5 Worker binary | `cmd/worker`: env-based config, register, run worker on `jobhound` |
 | 6 Client path | Start reference workflow for verification (test and/or dev-only `cmd` — per Resolved decisions) |
-| 7 Docs | README: UI URL, gRPC address from host, env vars; Makefile `help` aligns with `contracts/environment.md` |
+| 7 Docs | README: UI URL, gRPC address from host, env vars; README aligns with `contracts/environment.md` |
 | 8 Tests | In-memory Temporal test **or** integration-tagged test; must not require Docker for default `go test` |
 
 ## Resolved decisions

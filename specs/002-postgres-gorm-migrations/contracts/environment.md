@@ -3,7 +3,7 @@
 **Feature**: `002-postgres-gorm-migrations`  
 **Consumers**: `cmd/agent`, `cmd/migrate` (if present), local Compose
 
-**Canonical names**: any code that opens PostgreSQL or runs migrations must use the variable names below exactly as written (Compose docs and Makefile help stay aligned with this file). Go code should read them via **`internal/config`** (`EnvDatabaseURL`, `LoadDatabaseFromEnv`, `MigrateDSNFromEnv`, pool env constants) — not ad-hoc `os.Getenv` in `internal/platform/pgsql` or other feature packages.
+**Canonical names**: any code that opens PostgreSQL or runs migrations must use the variable names below exactly as written (Compose docs and README stay aligned with this file). Go code should read them via **`internal/config`** (`EnvDatabaseURL`, `LoadDatabaseFromEnv`, `MigrateDSNFromEnv`, pool env constants) — not ad-hoc `os.Getenv` in `internal/platform/pgsql` or other feature packages.
 
 ## Application DSN
 
@@ -33,4 +33,4 @@ Docker Compose should set `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` so
 
 ## Secrets
 
-Never commit real URLs or passwords. Document **names only** in Makefile / README per constitution.
+Never commit real URLs or passwords. Document **names only** in this contract and README per constitution.

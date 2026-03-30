@@ -3,29 +3,7 @@
 .PHONY: help build build-worker build-migrate run run-worker test test-integration fmt vet tidy migrate-up migrate-down migrate-version
 
 help:
-	@echo "Targets: build | build-worker | build-migrate | run | run-worker | test | test-integration | fmt | vet | tidy"
-	@echo "  build / build-worker — bin/agent (+ bin/worker for build); worker-only: make build-worker"
-	@echo "  run-worker         — build and run Temporal worker (JOBHOUND_TEMPORAL_ADDRESS, e.g. docker compose up)"
-	@echo "  test              — go test ./... (integration tests need -tags=integration, see test-integration)"
-	@echo "  test-integration  — go test -tags=integration ./... (Postgres: JOBHOUND_DATABASE_URL; Temporal: JOBHOUND_TEMPORAL_ADDRESS + running worker)"
-	@echo "Migrations (require JOBHOUND_DATABASE_URL or JOBHOUND_MIGRATE_DATABASE_URL):"
-	@echo "  migrate-up       — build bin/migrate and apply all pending SQL migrations"
-	@echo "  migrate-down     — build bin/migrate and apply one down step"
-	@echo "  migrate-version  — print current migration version"
-	@echo ""
-	@echo "Environment (PostgreSQL / migrations) — names only; see contract for semantics:"
-	@echo "  JOBHOUND_DATABASE_URL              — Postgres URL (required once DB is wired)"
-	@echo "  JOBHOUND_MIGRATE_DATABASE_URL      — optional migrate-only DSN override"
-	@echo "  JOBHOUND_DB_MAX_OPEN_CONNS         — optional pool: max open conns"
-	@echo "  JOBHOUND_DB_MAX_IDLE_CONNS         — optional pool: max idle conns"
-	@echo "  JOBHOUND_DB_CONN_MAX_LIFETIME_SEC  — optional pool: conn max lifetime (seconds)"
-	@echo "Full contract: specs/002-postgres-gorm-migrations/contracts/environment.md"
-	@echo ""
-	@echo "Environment (Temporal) — names only; see contract for semantics:"
-	@echo "  JOBHOUND_TEMPORAL_ADDRESS    — gRPC frontend host:port (required for worker / real client)"
-	@echo "  JOBHOUND_TEMPORAL_NAMESPACE  — optional; default namespace: default"
-	@echo "  JOBHOUND_TEMPORAL_TASK_QUEUE — optional; default jobhound"
-	@echo "Full contract: specs/003-temporal-orchestration/contracts/environment.md"
+	@echo "Targets: build | build-worker | build-migrate | run | run-worker | test | test-integration | fmt | vet | tidy | migrate-up | migrate-down | migrate-version"
 
 build: build-worker
 	go build -o bin/agent ./cmd/agent

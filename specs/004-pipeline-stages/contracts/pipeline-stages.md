@@ -1,0 +1,103 @@
+# Contract: pipeline stages (domain logic)
+
+**Feature**: `004-pipeline-stages`  
+**Purpose**: Freeze **behaviour** and **boundary types** for stage 1 (broad filter), stage 2 (keywords), and stage 3 (LLM scoring). **Orchestration** (Temporal, HTTP handlers) lives outside these packages.
+
+## Shared principles
+
+| Topic | Contract |
+|-------|----------|
+| Temporal | **No** `go.temporal.io` imports in stage implementation packages. |
+| Filter rejection | Jobs that **fail** filter rules are **omitted** from the filtered list — **not** represented as `error` from the filter function. |
+| Execution errors | Invalid configuration, LLM transport errors, **unparseable** LLM JSON → **`error`** from the relevant function; **callers** log and decide abort vs skip (see Stage 3). |
+| Clock | Stage 1 uses **UTC** for “now” and window bounds; tests use an **injectable** clock (`time.Now` func or small `Clock` interface). |
+| Text case | **Case-insensitive** matching for English-centric listings: **`strings.EqualFold`** or equivalent on the relevant field substrings unless implementation documents a different normalizer. |
+
+## `domain.Job` fields (stage-relevant)
+
+The following logical fields are **required** for spec compliance (exact Go field names follow implementation; migrate if persisted):
+
+| Field | Meaning |
+|-------|---------|
+| `Title`, `Description` | Used in stages 1–2 matching. |
+| `PostedAt` | `time.Time`; **zero value** means “unknown”. For stage 1, when a date window applies (explicit or default 7-day), **unknown posting date → job does not pass** (dropped), consistent with “narrowing” behaviour. |
+| Remote (e.g. `IsRemote *bool` or `Remote *bool`) | **nil/unknown** → cannot satisfy “remote only” → **reject** when remote-only rule is on. **true** → remote. **false** → not remote. |
+| Country (e.g. `CountryCode string`) | **Empty** → unknown location for country filter → **reject** when allowlist is non-empty. **Non-empty** → ISO 3166-1 alpha-2 (or agreed normalization), compared to allowlist. |
+
+## Stage 1 — broad filter
+
+**Input**: `[]domain.Job`, **`BroadFilterRules`** (name illustrative) including:
+
+| Rule | Semantics |
+|------|-----------|
+| `From`, `To` | Optional `time.Time` (UTC). If **both** unset → window is **`now−168h` .. `now`** (7 days) in UTC. If set → `PostedAt` must be within `[From, To]` inclusive (endpoints TBD as closed/open — **lock in implementation**). |
+| `RoleSynonyms` | **Empty** → no role-based narrowing. **Non-empty** → at least **one** string must appear in **`Title` or `Description`** (substring, case-insensitive). |
+| `RemoteOnly` | If true: keep only jobs with remote **known true**; unknown or false → drop. |
+| `CountryAllowlist` | Empty → **no** country filter. Non-empty → keep only if country **known** and in list. |
+
+**Output**: Subset of input jobs (order **preserved** unless documented otherwise).
+
+## Stage 2 — keywords
+
+**Input**: `[]domain.Job`, **`KeywordRules`**:
+
+| Rule | Semantics |
+|------|-----------|
+| `Include` | Optional string slice. If **non-empty**, **every** pattern must appear somewhere in **`Title` or `Description`** combined text (case-insensitive). If **empty**, no include constraint. |
+| `Exclude` | Optional string slice. If **non-empty**, **any** pattern appearing in that combined text → job **dropped**. |
+
+**Order of evaluation**: Apply **include** constraints first, then **exclude** (or document equivalent if both are checked in one pass — must match tests).
+
+**Output**: Subset of input jobs.
+
+## Stage 3 — LLM scoring
+
+**Input**:
+
+- **Profile text**: single string (user CV / preferences summary).
+- **Job**: `domain.Job` (and/or pruned struct) with fields the prompt needs.
+
+**Provider interface** (illustrative):
+
+```go
+// Illustrative — actual names live in internal/pipeline contract.go
+type LLMScorer interface {
+    Score(ctx context.Context, profile string, job domain.Job) (ScoredResult, error)
+}
+```
+
+**Output** (minimum):
+
+| Field | Type | Required |
+|-------|------|----------|
+| `Score` | numeric (e.g. `int` 0–100) | Yes |
+| `Reason` / `Rationale` | short string | Yes |
+
+Map into **`domain.ScoredJob`** or extend it if extra fields are added (flags, etc.).
+
+**Errors**: Return **`error`** for network failure, non-2xx, empty response, or JSON that does not match the agreed schema.
+
+**Policy**: Whether one failed score aborts the whole batch is **not** fixed here — the **batch scorer** API should document whether it stops on first error or continues; default recommendation: **return error** to caller for single-job failure if using `Score` per job.
+
+## JSON shape (LLM response)
+
+Minimum stable JSON for parsing (exact field names frozen at implementation):
+
+```json
+{
+  "score": 0,
+  "rationale": "short text"
+}
+```
+
+Optional keys may be added later; parser should **reject** missing required keys.
+
+## Versioning
+
+- Breaking changes to rules structs or JSON contract require updating this file, `plan.md`, and tests.
+
+## Change process
+
+1. Update this contract and `tasks.md`.  
+2. Update `domain.Job` / migrations if persisted fields change.  
+3. Update unit tests and any README “pipeline behaviour” section.

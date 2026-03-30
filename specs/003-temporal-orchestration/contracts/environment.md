@@ -3,7 +3,7 @@
 **Feature**: `003-temporal-orchestration`  
 **Consumers**: `cmd/worker`, Temporal **client** code (tests, optional dev entrypoint)
 
-**Canonical names**: any code that dials Temporal or runs the worker must use the variable names below exactly as written (Compose docs, Makefile help, and README stay aligned with this file). Go code should read them via **`internal/config`** (`EnvTemporalAddress`, `LoadTemporalFromEnv`, defaults `DefaultTemporalNamespace` / `DefaultTemporalTaskQueue`) — not ad-hoc `os.Getenv` in feature packages.
+**Canonical names**: any code that dials Temporal or runs the worker must use the variable names below exactly as written (Compose docs and README stay aligned with this file). Go code should read them via **`internal/config`** (`EnvTemporalAddress`, `LoadTemporalFromEnv`, defaults `DefaultTemporalNamespace` / `DefaultTemporalTaskQueue`) — not ad-hoc `os.Getenv` in feature packages.
 
 ## Connection
 
