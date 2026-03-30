@@ -9,6 +9,18 @@ import (
 
 func strPtr(s string) *string { return &s }
 
+func boolPtr(b bool) *bool { return &b }
+
+func boolPtrEqual(a, b *bool) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return *a == *b
+}
+
 func strPtrEqual(a, b *string) bool {
 	if a == nil && b == nil {
 		return true
@@ -37,6 +49,12 @@ func domainJobEqual(a, b domain.Job) bool {
 	if !a.PostedAt.Equal(b.PostedAt) {
 		return false
 	}
+	if !boolPtrEqual(a.Remote, b.Remote) {
+		return false
+	}
+	if a.CountryCode != b.CountryCode {
+		return false
+	}
 	switch {
 	case a.UserID == nil && b.UserID == nil:
 		return true
@@ -56,6 +74,8 @@ func TestNewJobModel(t *testing.T) {
 		in           domain.Job
 		wantApplyURL *string
 		wantPostedAt *time.Time
+		wantIsRemote *bool
+		wantCountry  string
 		wantUserID   *string
 	}{
 		{
@@ -63,6 +83,8 @@ func TestNewJobModel(t *testing.T) {
 			in:           domain.Job{},
 			wantApplyURL: nil,
 			wantPostedAt: nil,
+			wantIsRemote: nil,
+			wantCountry:  "",
 			wantUserID:   nil,
 		},
 		{
@@ -70,6 +92,8 @@ func TestNewJobModel(t *testing.T) {
 			in:           domain.Job{ApplyURL: "https://apply.example/1"},
 			wantApplyURL: strPtr("https://apply.example/1"),
 			wantPostedAt: nil,
+			wantIsRemote: nil,
+			wantCountry:  "",
 			wantUserID:   nil,
 		},
 		{
@@ -86,6 +110,21 @@ func TestNewJobModel(t *testing.T) {
 			name:         "posted_at non-zero is copied",
 			in:           domain.Job{PostedAt: posted},
 			wantPostedAt: &posted,
+		},
+		{
+			name:         "remote true",
+			in:           domain.Job{Remote: boolPtr(true)},
+			wantIsRemote: boolPtr(true),
+		},
+		{
+			name:         "remote false",
+			in:           domain.Job{Remote: boolPtr(false)},
+			wantIsRemote: boolPtr(false),
+		},
+		{
+			name:        "country code",
+			in:          domain.Job{CountryCode: "de"},
+			wantCountry: "de",
 		},
 		{
 			name:       "user_id nil stays nil",
@@ -119,6 +158,12 @@ func TestNewJobModel(t *testing.T) {
 			}
 			if !strPtrEqual(got.UserID, tc.wantUserID) {
 				t.Fatalf("UserID: got %v want %v", got.UserID, tc.wantUserID)
+			}
+			if !boolPtrEqual(got.IsRemote, tc.wantIsRemote) {
+				t.Fatalf("IsRemote: got %v want %v", got.IsRemote, tc.wantIsRemote)
+			}
+			if got.CountryCode != tc.wantCountry {
+				t.Fatalf("CountryCode: got %q want %q", got.CountryCode, tc.wantCountry)
 			}
 		})
 	}
@@ -236,6 +281,15 @@ func TestJobModel_roundTrip(t *testing.T) {
 			name: "user_id empty pointer normalized away",
 			in:   domain.Job{ID: "only", UserID: strPtr("")},
 			want: domain.Job{ID: "only", UserID: nil},
+		},
+		{
+			name: "remote and country",
+			in: domain.Job{
+				ID: "j2", Remote: boolPtr(true), CountryCode: "US",
+			},
+			want: domain.Job{
+				ID: "j2", Remote: boolPtr(true), CountryCode: "US",
+			},
 		},
 	}
 

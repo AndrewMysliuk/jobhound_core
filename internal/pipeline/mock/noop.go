@@ -13,16 +13,6 @@ func (Collector) Name() string { return "noop" }
 
 func (Collector) Fetch(context.Context) ([]domain.Job, error) { return nil, nil }
 
-// Filter passes jobs through unchanged.
-type Filter struct{}
-
-func (Filter) Apply(jobs []domain.Job) []domain.Job { return jobs }
-
-// Scorer returns an empty slice.
-type Scorer struct{}
-
-func (Scorer) Score(context.Context, []domain.Job) ([]domain.ScoredJob, error) { return nil, nil }
-
 // Dedup always reports not sent; MarkSent is a no-op.
 type Dedup struct{}
 

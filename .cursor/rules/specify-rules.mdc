@@ -28,13 +28,14 @@ internal/domain/        # shared domain types (e.g. Job)
 internal/config/        # env keys + typed loaders (Database, Temporal, …); no os.Getenv in feature modules
 internal/platform/pgsql/ # GORM Postgres + pool from config; GormGetter for repos; integration migration tests
 internal/jobs/          # jobs module: contract, storage (GORM)
-internal/pipeline/      # collect/filter/score pipeline: contract, impl, mock
+internal/llm/           # LLM contracts (Scorer), providers (anthropic/…), mock/, utils/
+internal/pipeline/      # collect/filter/score: contract, stage rule types, utils/ (stage impl), impl/, mock/
 internal/reference/     # optional: e.g. `workflows/` + `activities/` for bootstrap demos
 tests/integration/      # optional cross-module integration suites (same `integration` build tag)
 migrations/             # SQL migration files
 ```
 
-**Modules**: each feature area under `internal/<name>/` exposes contracts at the module root (`contract.go`, etc.); implementations in `impl/`, `storage/`, `handlers/` as needed. **Temporal**: per-module `workflows/` and `activities/` (same pattern as `omg-api` feature packages); **only** connection settings in `internal/config`. Compose processes in `cmd/`. See `.specify/memory/constitution.md` for the full module folder table.
+**Modules**: each feature area under `internal/<name>/` exposes contracts at the module root (`contract.go`, etc.); implementations in `impl/`, `storage/`, `handlers/` as needed. **Do not** dump bulk helpers or stage logic at the module root — use **`internal/<module>/utils/`** (see constitution: `internal/llm/utils`, `internal/pipeline/utils`). **Temporal**: per-module `workflows/` and `activities/` (same pattern as `omg-api` feature packages); **only** connection settings in `internal/config`. Compose processes in `cmd/`. See `.specify/memory/constitution.md` for the full module folder table.
 
 ## Testing
 
@@ -66,6 +67,7 @@ migrations/             # SQL migration files
 - 2026-03-29: Constitution v1.4 — `internal/config` as single source for env-backed settings
 - 2026-03-29: Temporal layout — per-module `internal/<feature>/workflows/` + `activities/`; no global `internal/temporal`
 - 2026-03-29: Postgres bootstrap — `internal/platform/pgsql` (not a feature module; replaces `internal/db`)
+- 2026-03-30: `internal/llm` + `utils/` subfolders — LLM parsing/helpers not at module root; `internal/pipeline/utils` for stage implementations
 
 <!-- MANUAL ADDITIONS START -->
 <!-- MANUAL ADDITIONS END -->

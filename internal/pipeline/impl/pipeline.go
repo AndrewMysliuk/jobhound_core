@@ -3,24 +3,34 @@ package impl
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/andrewmysliuk/jobhound_core/internal/domain"
+	"github.com/andrewmysliuk/jobhound_core/internal/llm"
 	"github.com/andrewmysliuk/jobhound_core/internal/pipeline"
+	pipeutils "github.com/andrewmysliuk/jobhound_core/internal/pipeline/utils"
 )
 
-// Pipeline wires pipeline contracts and runs one collect → filter → score → dedup → notify pass.
-// It is orchestration only: no domain “service calling service”; persistence goes through Dedup.
+// Pipeline wires pipeline contracts and runs one collect → stage 1 → stage 2 → stage 3 → dedup → notify pass.
+// It is orchestration only: no persistence or Telegram inside stage functions.
 type Pipeline struct {
 	Collector pipeline.Collector
-	Filter    pipeline.Filter
-	Scorer    pipeline.Scorer
+	// Clock is used for stage 1 default date window; nil means time.Now.
+	Clock func() time.Time
+	// BroadRules and KeywordRules are per-run (event) parameters.
+	BroadRules   pipeline.BroadFilterRules
+	KeywordRules pipeline.KeywordRules
+	// Profile is user CV / preferences text for stage 3.
+	Profile string
+
+	Scorer llm.Scorer
 	Dedup     pipeline.Dedup
 	Notify    pipeline.Notifier
 }
 
 // Run executes a single pipeline pass.
 func (p *Pipeline) Run(ctx context.Context) error {
-	if p.Collector == nil || p.Filter == nil || p.Scorer == nil || p.Dedup == nil || p.Notify == nil {
+	if p.Collector == nil || p.Scorer == nil || p.Dedup == nil || p.Notify == nil {
 		return fmt.Errorf("pipeline.impl.Pipeline: nil dependency")
 	}
 
@@ -29,8 +39,17 @@ func (p *Pipeline) Run(ctx context.Context) error {
 		return fmt.Errorf("collect %q: %w", p.Collector.Name(), err)
 	}
 
-	filtered := p.Filter.Apply(raw)
-	scored, err := p.Scorer.Score(ctx, filtered)
+	clock := p.Clock
+	if clock == nil {
+		clock = time.Now
+	}
+	stage1, err := pipeutils.ApplyBroadFilter(clock, p.BroadRules, raw)
+	if err != nil {
+		return fmt.Errorf("broad filter: %w", err)
+	}
+	stage2 := pipeutils.ApplyKeywordFilter(stage1, p.KeywordRules)
+
+	scored, err := pipeutils.ScoreJobs(ctx, p.Profile, stage2, p.Scorer)
 	if err != nil {
 		return fmt.Errorf("score: %w", err)
 	}

@@ -17,6 +17,8 @@ type Job struct {
 	ApplyURL    *string    `gorm:"column:apply_url;type:text"`
 	Description string     `gorm:"column:description;type:text;not null;default:''"`
 	PostedAt    *time.Time `gorm:"column:posted_at"`
+	IsRemote    *bool      `gorm:"column:is_remote"`
+	CountryCode string     `gorm:"column:country_code;type:text;not null;default:''"`
 	UserID      *string    `gorm:"column:user_id;type:text"`
 	CreatedAt   time.Time  `gorm:"column:created_at;not null"`
 	UpdatedAt   time.Time  `gorm:"column:updated_at;not null"`
@@ -46,6 +48,11 @@ func NewJobModel(j domain.Job) Job {
 		t := j.PostedAt
 		m.PostedAt = &t
 	}
+	if j.Remote != nil {
+		r := *j.Remote
+		m.IsRemote = &r
+	}
+	m.CountryCode = j.CountryCode
 	if j.UserID != nil && *j.UserID != "" {
 		u := *j.UserID
 		m.UserID = &u
@@ -69,6 +76,11 @@ func (m *Job) ToDomain() domain.Job {
 	if m.PostedAt != nil {
 		j.PostedAt = *m.PostedAt
 	}
+	if m.IsRemote != nil {
+		r := *m.IsRemote
+		j.Remote = &r
+	}
+	j.CountryCode = m.CountryCode
 	if m.UserID != nil && *m.UserID != "" {
 		u := *m.UserID
 		j.UserID = &u

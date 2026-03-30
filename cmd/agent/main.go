@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	llmmock "github.com/andrewmysliuk/jobhound_core/internal/llm/mock"
 	"github.com/andrewmysliuk/jobhound_core/internal/pipeline/impl"
 	"github.com/andrewmysliuk/jobhound_core/internal/pipeline/mock"
 )
@@ -12,8 +13,7 @@ import (
 func main() {
 	p := &impl.Pipeline{
 		Collector: mock.Collector{},
-		Filter:    mock.Filter{},
-		Scorer:    mock.Scorer{},
+		Scorer: llmmock.Scorer{},
 		Dedup:     mock.Dedup{},
 		Notify:    mock.Notifier{},
 	}

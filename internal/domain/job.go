@@ -13,7 +13,11 @@ type Job struct {
 	ApplyURL    string // optional external apply/ATS link; empty if unknown or same as listing
 	Description string
 	PostedAt    time.Time // zero if unknown
-	UserID      *string   // optional; nil/empty = unset (future multi-user scope)
+	// Remote is nil when the listing does not state remote status; true/false when known.
+	Remote *bool
+	// CountryCode is ISO 3166-1 alpha-2 when known; empty string means unknown.
+	CountryCode string
+	UserID      *string // optional; nil/empty = unset (future multi-user scope)
 }
 
 // ScoredJob is the post–stage-3 shape handed to notification.

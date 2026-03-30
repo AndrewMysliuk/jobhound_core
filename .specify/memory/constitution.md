@@ -61,8 +61,12 @@ Optional subfolders inside a module (create only what the module uses), same ide
 | `storage/` | Persistence and external clients: repository contracts and implementations. |
 | `mapper/` | Mapping between layers (e.g. DTO ↔ domain, external models ↔ internal). |
 | `mock/` | Test doubles for the module. |
-| `utils/` | Small helpers used only inside this module. |
+| `utils/` | Small helpers and **pure stage logic** used only inside this module (package name `utils`). **Do not** park this at the module root — root stays for `contract.go`, thin types, `impl/`, `mock/`, `workflows/`, etc. |
 | `workflows/` | Temporal workflows for this module; `activities/` inside for activity implementations. Register from `cmd/worker` (and call `Register`/`New…` per module). |
+
+**`internal/llm/`** is its own module: **`contract.go`** (e.g. `Scorer`), provider packages (`anthropic/`, …), **`mock/`**, and **`utils/`** for shared LLM response parsing / small helpers — **not** loose `*.go` helpers at `internal/llm` root.
+
+**`internal/pipeline/`**: stage rule **structs** (`BroadFilterRules`, `KeywordRules`, …) live at the module root next to `contract.go`; **implementations** of stages 1–3 batching live under **`internal/pipeline/utils/`** (`ApplyBroadFilter`, `ApplyKeywordFilter`, `ScoreJobs`).
 
 **`cmd/`** holds binaries and composition (wiring modules, config, process entrypoints). **`internal/platform/`** and migration CLI are not required to mirror the feature-module subfolder table above.
 
@@ -77,4 +81,4 @@ Optional subfolders inside a module (create only what the module uses), same ide
 - Amend this file when architecture decisions change; keep it short and actionable.
 - Feature details and order of implementation: `specs/` (per-feature folders, same style as `omg-bo/specs`).
 
-**Version**: 1.5.1 | **Ratified**: 2026-03-29
+**Version**: 1.5.2 | **Ratified**: 2026-03-29

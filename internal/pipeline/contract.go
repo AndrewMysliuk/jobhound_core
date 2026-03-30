@@ -1,6 +1,8 @@
-// Package pipeline defines the ingest pipeline’s public contracts: collectors, filters,
-// scoring, dedup, persistence hooks, and notification. Orchestration lives in pipeline/impl;
-// test doubles in pipeline/mock; job persistence in internal/jobs/storage.
+// Package pipeline defines the ingest pipeline’s public contracts: collectors, stage rule types
+// (BroadFilterRules, KeywordRules), stage-3 scoring via internal/llm.Scorer, dedup, persistence hooks, and notification.
+// Pure stage implementations (broad filter, keywords, ScoreJobs batching) live in internal/pipeline/utils.
+// Orchestration lives in pipeline/impl; LLM test doubles in internal/llm/mock; pipeline/mock for collectors/dedup/notify;
+// job persistence in internal/jobs/storage.
 package pipeline
 
 import (
@@ -13,16 +15,6 @@ import (
 type Collector interface {
 	Name() string
 	Fetch(ctx context.Context) ([]domain.Job, error)
-}
-
-// Filter performs keyword include/exclude without LLM (stage 2).
-type Filter interface {
-	Apply(jobs []domain.Job) []domain.Job
-}
-
-// Scorer runs LLM scoring on the post-filter pool (stage 3).
-type Scorer interface {
-	Score(ctx context.Context, jobs []domain.Job) ([]domain.ScoredJob, error)
 }
 
 // Dedup tracks job IDs already delivered (repository port; Postgres impl later).

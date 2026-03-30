@@ -7,6 +7,7 @@ type Config struct {
 	Database Database
 
 	AnthropicAPIKey     string
+	AnthropicModel      string
 	TelegramBotToken    string
 	TelegramChatID      string
 	LinkedInCookiesPath string
@@ -18,8 +19,13 @@ type Config struct {
 // Load reads supported environment variables into Config.
 // For Temporal (worker / client), call LoadTemporalFromEnv separately — it enforces a required address.
 func Load() Config {
+	model := LoadAnthropicModelFromEnv()
+	if model == "" {
+		model = DefaultAnthropicModel
+	}
 	return Config{
 		Database:        LoadDatabaseFromEnv(),
 		AnthropicAPIKey: LoadAnthropicAPIKeyFromEnv(),
+		AnthropicModel:  model,
 	}
 }

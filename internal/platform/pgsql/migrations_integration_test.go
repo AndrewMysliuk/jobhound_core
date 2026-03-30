@@ -123,17 +123,19 @@ func assertJobsSchema(t *testing.T, cols []jobColumn) {
 		dataType string
 		nullable string
 	}{
-		"id":          {"text", "NO"},
-		"source":      {"text", "NO"},
-		"title":       {"text", "NO"},
-		"company":     {"text", "NO"},
-		"url":         {"text", "NO"},
-		"apply_url":   {"text", "YES"},
-		"description": {"text", "NO"},
-		"posted_at":   {"timestamp with time zone", "YES"},
-		"user_id":     {"text", "YES"},
-		"created_at":  {"timestamp with time zone", "NO"},
-		"updated_at":  {"timestamp with time zone", "NO"},
+		"id":           {"text", "NO"},
+		"source":       {"text", "NO"},
+		"title":        {"text", "NO"},
+		"company":      {"text", "NO"},
+		"url":          {"text", "NO"},
+		"apply_url":    {"text", "YES"},
+		"description":  {"text", "NO"},
+		"posted_at":    {"timestamp with time zone", "YES"},
+		"user_id":      {"text", "YES"},
+		"is_remote":    {"boolean", "YES"},
+		"country_code": {"text", "NO"},
+		"created_at":   {"timestamp with time zone", "NO"},
+		"updated_at":   {"timestamp with time zone", "NO"},
 	}
 
 	if len(cols) != len(want) {

@@ -21,21 +21,21 @@ The following logical fields are **required** for spec compliance (exact Go fiel
 |-------|---------|
 | `Title`, `Description` | Used in stages 1–2 matching. |
 | `PostedAt` | `time.Time`; **zero value** means “unknown”. For stage 1, when a date window applies (explicit or default 7-day), **unknown posting date → job does not pass** (dropped), consistent with “narrowing” behaviour. |
-| Remote (e.g. `IsRemote *bool` or `Remote *bool`) | **nil/unknown** → cannot satisfy “remote only” → **reject** when remote-only rule is on. **true** → remote. **false** → not remote. |
-| Country (e.g. `CountryCode string`) | **Empty** → unknown location for country filter → **reject** when allowlist is non-empty. **Non-empty** → ISO 3166-1 alpha-2 (or agreed normalization), compared to allowlist. |
+| `Remote *bool` | **nil/unknown** → cannot satisfy “remote only” → **reject** when remote-only rule is on. **true** → remote. **false** → not remote. |
+| `CountryCode string` | **Empty** → unknown location for country filter → **reject** when allowlist is non-empty. **Non-empty** → ISO 3166-1 alpha-2, compared case-insensitively to allowlist. |
 
 ## Stage 1 — broad filter
 
-**Input**: `[]domain.Job`, **`BroadFilterRules`** (name illustrative) including:
+**Input**: `[]domain.Job`, **`BroadFilterRules`** (type in `internal/pipeline`; implementation `internal/pipeline/utils`):
 
 | Rule | Semantics |
 |------|-----------|
-| `From`, `To` | Optional `time.Time` (UTC). If **both** unset → window is **`now−168h` .. `now`** (7 days) in UTC. If set → `PostedAt` must be within `[From, To]` inclusive (endpoints TBD as closed/open — **lock in implementation**). |
-| `RoleSynonyms` | **Empty** → no role-based narrowing. **Non-empty** → at least **one** string must appear in **`Title` or `Description`** (substring, case-insensitive). |
+| `From`, `To` | Optional `*time.Time` (compared in **UTC**). If **both** unset → window is **`now−168h` .. `now`** (7 days) in UTC using an injectable clock. If **both** set → `PostedAt` must lie in the **closed interval** `[From, To]` in UTC (inclusive endpoints). Exactly one of `From`/`To` set → **invalid rules** (`ValidateBroadFilterRules` / `ApplyBroadFilter` returns `error`). |
+| `RoleSynonyms` | **Empty** → no role-based narrowing. **Non-empty** → at least **one** non-empty synonym must appear as a substring in **`Title` or `Description`** (case-insensitive). |
 | `RemoteOnly` | If true: keep only jobs with remote **known true**; unknown or false → drop. |
 | `CountryAllowlist` | Empty → **no** country filter. Non-empty → keep only if country **known** and in list. |
 
-**Output**: Subset of input jobs (order **preserved** unless documented otherwise).
+**API**: `pipeline/utils.ApplyBroadFilter` — `ApplyBroadFilter(clock func() time.Time, rules BroadFilterRules, jobs []domain.Job) ([]domain.Job, error)`; `clock` may be nil → `time.Now`. **Output**: Subset of input jobs (order **preserved**).
 
 ## Stage 2 — keywords
 
@@ -60,9 +60,9 @@ The following logical fields are **required** for spec compliance (exact Go fiel
 **Provider interface** (illustrative):
 
 ```go
-// Illustrative — actual names live in internal/pipeline contract.go
-type LLMScorer interface {
-    Score(ctx context.Context, profile string, job domain.Job) (ScoredResult, error)
+// Illustrative — actual interface is internal/llm.Scorer (contract.go)
+type Scorer interface {
+    Score(ctx context.Context, profile string, job domain.Job) (domain.ScoredJob, error)
 }
 ```
 

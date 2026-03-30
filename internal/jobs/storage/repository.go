@@ -5,9 +5,9 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/andrewmysliuk/jobhound_core/internal/platform/pgsql"
 	"github.com/andrewmysliuk/jobhound_core/internal/domain"
 	"github.com/andrewmysliuk/jobhound_core/internal/jobs"
+	"github.com/andrewmysliuk/jobhound_core/internal/platform/pgsql"
 	"gorm.io/gorm"
 )
 

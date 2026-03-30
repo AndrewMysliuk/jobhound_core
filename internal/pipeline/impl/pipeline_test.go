@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	llmmock "github.com/andrewmysliuk/jobhound_core/internal/llm/mock"
 	"github.com/andrewmysliuk/jobhound_core/internal/pipeline/impl"
 	"github.com/andrewmysliuk/jobhound_core/internal/pipeline/mock"
 )
@@ -11,8 +12,7 @@ import (
 func TestPipeline_Run_nilDependency(t *testing.T) {
 	p := &impl.Pipeline{
 		Collector: mock.Collector{},
-		Filter:    mock.Filter{},
-		Scorer:    mock.Scorer{},
+		Scorer: llmmock.Scorer{},
 		Dedup:     mock.Dedup{},
 		Notify:    nil,
 	}
@@ -24,8 +24,7 @@ func TestPipeline_Run_nilDependency(t *testing.T) {
 func TestPipeline_Run_noop(t *testing.T) {
 	p := &impl.Pipeline{
 		Collector: mock.Collector{},
-		Filter:    mock.Filter{},
-		Scorer:    mock.Scorer{},
+		Scorer: llmmock.Scorer{},
 		Dedup:     mock.Dedup{},
 		Notify:    mock.Notifier{},
 	}

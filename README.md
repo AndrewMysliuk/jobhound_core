@@ -14,7 +14,8 @@ Go 1.24, PostgreSQL + GORM, Temporal, Claude API for scoring, Telegram Bot API f
 - `internal/domain` — shared domain types (e.g. Job)
 - `internal/platform/pgsql` — GORM Postgres open + pool from config; integration-tagged migration tests (infrastructure, not a domain module)
 - `internal/jobs` — jobs module: contract, GORM storage
-- `internal/pipeline` — collect / filter / score pipeline: contract, `impl/`, `mock/`
+- `internal/llm` — LLM scoring contract (`Scorer`), providers (`anthropic/`), `mock/`, `utils/` (e.g. response JSON parsing)
+- `internal/pipeline` — collect / filter / score: contract, stage rule types, `utils/` (stage implementations), `impl/`, `mock/`
 - `internal/config` — configuration shape (secrets from `.env` only)
 - `tests/integration/` — optional cross-module integration suites (`integration` build tag)
 - `migrations/` — SQL migration files
@@ -32,7 +33,7 @@ make run
 make test
 ```
 
-**Environment variable names** (no values in git): PostgreSQL and Temporal are documented in **`specs/*/contracts/environment.md`**; Go code reads them via **`internal/config`** (see `Env*` constants). Optional Anthropic key: `JOBHOUND_ANTHROPIC_API_KEY` in `internal/config/anthropic.go`.
+**Environment variable names** (no values in git): PostgreSQL and Temporal are documented in **`specs/*/contracts/environment.md`**; Go code reads them via **`internal/config`** (see `Env*` constants). Optional Anthropic key for real LLM scoring: **`JOBHOUND_ANTHROPIC_API_KEY`** — names and wiring are frozen in [`specs/004-pipeline-stages/contracts/environment.md`](specs/004-pipeline-stages/contracts/environment.md) and `internal/config/anthropic.go`.
 
 ## Database environment (contract)
 
