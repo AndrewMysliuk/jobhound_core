@@ -60,10 +60,10 @@ type WorkingNomads struct {
 	MaxFetchJobs int
 }
 
-// Name implements pipeline.Collector.
+// Name implements collectors.Collector.
 func (*WorkingNomads) Name() string { return SourceName }
 
-// Fetch implements pipeline.Collector.
+// Fetch implements collectors.Collector.
 func (c *WorkingNomads) Fetch(ctx context.Context) ([]domain.Job, error) {
 	client := c.HTTPClient
 	if client == nil {

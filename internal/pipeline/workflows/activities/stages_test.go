@@ -8,6 +8,7 @@ import (
 	"github.com/andrewmysliuk/jobhound_core/internal/domain"
 	llmmock "github.com/andrewmysliuk/jobhound_core/internal/llm/mock"
 	"github.com/andrewmysliuk/jobhound_core/internal/pipeline"
+	pipelineschema "github.com/andrewmysliuk/jobhound_core/internal/pipeline/schema"
 	"github.com/stretchr/testify/require"
 )
 
@@ -28,7 +29,7 @@ func TestActivities_RunPipelineStages(t *testing.T) {
 		Clock:  func() time.Time { return now },
 		Scorer: llmmock.Scorer{},
 	}
-	out, err := a.RunPipelineStages(context.Background(), PipelineStagesInput{
+	out, err := a.RunPipelineStages(context.Background(), pipelineschema.PipelineStagesInput{
 		Jobs: jobs,
 		BroadRules: pipeline.BroadFilterRules{
 			RoleSynonyms:     []string{"go"},

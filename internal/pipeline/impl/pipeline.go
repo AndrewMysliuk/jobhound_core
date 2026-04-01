@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors"
 	"github.com/andrewmysliuk/jobhound_core/internal/domain"
 	"github.com/andrewmysliuk/jobhound_core/internal/llm"
 	"github.com/andrewmysliuk/jobhound_core/internal/pipeline"
@@ -14,7 +15,7 @@ import (
 // Pipeline wires pipeline contracts and runs one collect → stage 1 → stage 2 → stage 3 → dedup → notify pass.
 // It is orchestration only: no persistence or Telegram inside stage functions.
 type Pipeline struct {
-	Collector pipeline.Collector
+	Collector collectors.Collector
 	// Clock is used for stage 1 default date window; nil means time.Now.
 	Clock func() time.Time
 	// BroadRules and KeywordRules are per-run (event) parameters.

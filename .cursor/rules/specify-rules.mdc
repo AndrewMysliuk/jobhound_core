@@ -21,21 +21,39 @@ Spec-driven workflow via `.specify` and `/speckit.*` commands. Update this file 
 ## Project Structure
 
 ```text
-cmd/agent/              # agent binary (wiring)
-cmd/worker/             # Temporal worker: dial from config, register each module’s workflows
+cmd/agent/              # agent binary (composition + long-running agent; not the future public API binary)
+cmd/worker/             # Temporal worker: config dial, register each module’s workflows
 cmd/migrate/            # SQL migrations CLI
+cmd/retention/          # retention CLI (when used)
+# cmd/api/              # add when product HTTP API exists; thin composition like omg-bo cmd/api (Group → NewHTTPHandler)
 internal/domain/        # shared domain types (e.g. Job)
-internal/config/        # env keys + typed loaders (Database, Temporal, …); no os.Getenv in feature modules
-internal/platform/pgsql/ # GORM Postgres + pool from config; GormGetter for repos; integration migration tests
-internal/jobs/          # jobs module: contract, storage (GORM)
-internal/llm/           # LLM contracts (Scorer), providers (anthropic/…), mock/, utils/
-internal/pipeline/      # collect/filter/score: contract, stage rule types, utils/ (stage impl), impl/, mock/
-internal/reference/     # optional: e.g. `workflows/` + `activities/` for bootstrap demos
-tests/integration/      # optional cross-module integration suites (same `integration` build tag)
+internal/config/        # env keys + typed loaders only; feature code must not os.Getenv shared knobs
+internal/platform/pgsql/ # GORM Postgres + pool; GormGetter; integration migration tests
+internal/collectors/    # Collector contract + sources + schema/ (module DTOs at collectors root, not under handlers/)
+internal/collectors/handlers/debughttp/  # dev-only HTTP (omg-bo-style handler layout)
+internal/jobs/          # jobs module: contract, schema/, impl/, storage/, workflows/ as needed
+internal/llm/           # contract, providers, mock/, utils/ — no loose helpers at module root
+internal/pipeline/      # contract, stage types at root; stage impl in utils/; impl/ if needed
+internal/reference/     # optional demos
+tests/integration/      # optional; `integration` build tag
 migrations/             # SQL migration files
 ```
 
-**Modules**: each feature area under `internal/<name>/` exposes contracts at the module root (`contract.go`, etc.); implementations in `impl/`, `storage/`, `handlers/` as needed. **Do not** dump bulk helpers or stage logic at the module root — use **`internal/<module>/utils/`** (see constitution: `internal/llm/utils`, `internal/pipeline/utils`). **Temporal**: per-module `workflows/` and `activities/` (same pattern as `omg-api` feature packages); **only** connection settings in `internal/config`. Compose processes in `cmd/`. See `.specify/memory/constitution.md` for the full module folder table.
+**Collectors `schema/`**: module-local DTOs (**`internal/collectors/schema/`** only — same level as `contract.go`, `handlers/`, `bootstrap/`). Do **not** nest `schema/` under `handlers/debughttp` or other adapters.
+
+**Debug HTTP today**: `internal/collectors/handlers/debughttp/` is **not** the product API. Layout matches **omg-bo** handlers (stdlib `net/http` instead of Gin): **`handler.go`** with **`NewHTTPHandler(...)`** and **`registerRoutes()`**; **one `.go` file per route**; shared **`helpers.go`** / **`response.go`**. JSON request types for debug POST live in **`internal/collectors/schema/`** (imported by handlers). Wire from composition roots like omg-bo → handlers: **`cmd/agent`** → **`debughttp.NewHTTPHandler(...)`**. When **`cmd/api`** exists, product routes live there with the same pattern. One-line package comment on `debughttp` stating dev-only.
+
+**Module layout (non-negotiable for feature code)**:
+
+- **`contract.go`** (module root) — exported interfaces only.
+- **`impl/`** — application service / use cases (folder name is **`impl`**, not `service`). Wire depends on `contract` + `storage` + other modules’ contracts.
+- **`storage/`** — persistence only; this name only (**no** `repository/`).
+- **`schema/`** — request/response DTOs, handler/workflow payload types, module-local errors (same role as `omg-bo/internal/<feature>/schema`; no shared “global schema” repo — keep types inside the module).
+- **`handlers/`** — **omg-bo style**: one file per route/handler, plus **`handler.go`** with `registerRoutes()` (or equivalent) so the full route list is obvious at a glance; shared `helpers.go` / `response.go` only when small.
+- **`workflows/`** — **omg-api style**: type embedding the worker registrar, `New...` constructor that **explicitly** calls `RegisterWorkflow` for each workflow (readable inventory); `activities/` for activity structs and methods.
+- **`utils/`** — small shared helpers for that module only; **not** fat domain logic (that belongs in `impl/` or `pipeline/utils/` as already specified).
+
+**Modules**: do not park bulk helpers at the module root. **Temporal** connection lives in `internal/config`; workflow/activity code under `internal/<feature>/workflows/`. See `.specify/memory/constitution.md` for the folder table.
 
 ## Testing
 
@@ -54,13 +72,17 @@ migrations/             # SQL migration files
 
 ## Code Style
 
-- Go 1.24 conventions; interfaces on module boundaries in `internal/<feature>/contract.go` (or split files); persistence under `internal/<feature>/storage`
+- Go 1.24 conventions; interfaces on module boundaries in `internal/<feature>/contract.go` (or split files); persistence only under `internal/<feature>/storage`
 - No secrets or real `.env` in git — document `JOBHOUND_*` names in `specs/*/contracts/environment.md`, `README.md`, and `internal/config` (do not duplicate long env lists in the Makefile)
 - **Config**: all shared `JOBHOUND_*` (and other app) env names and parsing live in `internal/config`; `cmd/*` loads and passes structs into `internal/*`
-- Table-driven tests where behavior branches; keep `main` thin
+- Table-driven tests where behavior branches; keep `main` / `cmd` **thin** — composition only, no business rules
+- **Comments**: prefer clear names and structure over comment walls. Do not add large banner comments or redundant docblocks on every method; document **non-obvious** invariants, edge cases, or public API where `godoc` matters. If the code is obvious, leave it uncommented
 
 ## Recent Changes
 
+- 2026-04-01: `internal/collectors/schema/` at module root (not under `handlers/`); debughttp imports it; `cmd/agent` uses `NewHTTPHandler`
+- 2026-04-01: `internal/collectors/handlers/debughttp` split like omg-bo — `handler.go` + `registerRoutes` + per-route files; `cmd/agent` uses `NewHTTPHandler`
+- 2026-04-01: Module conventions aligned with omg-bo/omg-api — `handlers/` (registry + one file per route), `schema/` inside module, `impl/` + `storage/` only, workflows with explicit `RegisterWorkflow` in `New`; debug HTTP documented under `collectors/handlers`; comment minimalism
 - 2026-03-29: Constitution v1.3 — testing policy (colocated unit tests; `integration` build tag; optional `tests/integration/`)
 - 2026-03-29: `specs/` epic index (`000`–`012`) + Postgres/Temporal architecture
 - 2026-03-29: Module layout under `internal/` (`jobs`, `pipeline`, `db`, `domain`) + `cmd/agent`, `cmd/worker`, `cmd/migrate`
@@ -68,6 +90,3 @@ migrations/             # SQL migration files
 - 2026-03-29: Temporal layout — per-module `internal/<feature>/workflows/` + `activities/`; no global `internal/temporal`
 - 2026-03-29: Postgres bootstrap — `internal/platform/pgsql` (not a feature module; replaces `internal/db`)
 - 2026-03-30: `internal/llm` + `utils/` subfolders — LLM parsing/helpers not at module root; `internal/pipeline/utils` for stage implementations
-
-<!-- MANUAL ADDITIONS START -->
-<!-- MANUAL ADDITIONS END -->

@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors"
 	"github.com/andrewmysliuk/jobhound_core/internal/domain"
 	"github.com/andrewmysliuk/jobhound_core/internal/ingest"
+	ingestschema "github.com/andrewmysliuk/jobhound_core/internal/ingest/schema"
 	"github.com/andrewmysliuk/jobhound_core/internal/jobs"
 	"github.com/andrewmysliuk/jobhound_core/internal/pipeline"
 	pipeutils "github.com/andrewmysliuk/jobhound_core/internal/pipeline/utils"
@@ -16,27 +18,12 @@ import (
 // RunIngestSourceActivityName is the registered Temporal activity for per-source ingest (006).
 const RunIngestSourceActivityName = "RunIngestSourceActivity"
 
-// IngestSourceInput selects a normalized source id and optional cooldown bypass.
-type IngestSourceInput struct {
-	SourceID        string
-	ExplicitRefresh bool
-}
-
-// IngestSourceOutput summarizes ingest work for observability.
-type IngestSourceOutput struct {
-	JobsWritten       int
-	JobsSkipped       int
-	JobsFilteredOut   int
-	UsedIncremental   bool
-	WatermarkAdvanced bool
-}
-
 // IngestActivities runs collector fetch + job upsert behind Redis lock/cooldown (006).
 type IngestActivities struct {
 	Redis                  *ingest.RedisCoordinator
 	Jobs                   jobs.JobRepository
 	Watermarks             ingest.WatermarkStore
-	Collectors             map[string]pipeline.Collector
+	Collectors             map[string]collectors.Collector
 	DefaultExplicitRefresh bool
 	// BroadRules are 004 stage-1 rules applied before persisting (007: PASSED_STAGE_1 only after broad stage 1 passes).
 	BroadRules pipeline.BroadFilterRules
@@ -46,7 +33,7 @@ type IngestActivities struct {
 
 // RunIngestSource acquires the ingest lock, fetches via the 005 collector, applies broad stage 1 (004),
 // upserts passing jobs via SaveIngest (007 PASSED_STAGE_1), updates watermark when incremental, sets cooldown.
-func (a *IngestActivities) RunIngestSource(ctx context.Context, in IngestSourceInput) (*IngestSourceOutput, error) {
+func (a *IngestActivities) RunIngestSource(ctx context.Context, in ingestschema.IngestSourceInput) (*ingestschema.IngestSourceOutput, error) {
 	if a == nil || a.Redis == nil {
 		return nil, ingest.ErrNilRedisClient
 	}
@@ -75,7 +62,7 @@ func (a *IngestActivities) RunIngestSource(ctx context.Context, in IngestSourceI
 	var list []domain.Job
 	var usedIncr bool
 	var nextCursor string
-	if inc, ok := col.(pipeline.IncrementalCollector); ok {
+	if inc, ok := col.(collectors.IncrementalCollector); ok {
 		usedIncr = true
 		cur, err := a.Watermarks.GetCursor(ctx, id)
 		if err != nil {
@@ -97,7 +84,7 @@ func (a *IngestActivities) RunIngestSource(ctx context.Context, in IngestSourceI
 		return nil, fmt.Errorf("ingest activity: broad filter: %w", err)
 	}
 
-	out := &IngestSourceOutput{
+	out := &ingestschema.IngestSourceOutput{
 		UsedIncremental: usedIncr,
 		JobsFilteredOut: len(list) - len(filtered),
 	}

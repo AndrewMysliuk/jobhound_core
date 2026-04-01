@@ -7,8 +7,10 @@ import (
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors"
 	"github.com/andrewmysliuk/jobhound_core/internal/domain"
 	"github.com/andrewmysliuk/jobhound_core/internal/ingest"
+	ingestschema "github.com/andrewmysliuk/jobhound_core/internal/ingest/schema"
 	"github.com/andrewmysliuk/jobhound_core/internal/jobs"
 	"github.com/andrewmysliuk/jobhound_core/internal/pipeline"
 	"github.com/andrewmysliuk/jobhound_core/internal/platform/pgsql"
@@ -87,14 +89,14 @@ func TestRunIngestSource_incrementalWatermark(t *testing.T) {
 		Redis:      ingest.NewRedisCoordinator(rdb),
 		Jobs:       &memJobs{},
 		Watermarks: ingest.NewGormWatermarkStore(pgsql.NewGetter(db)),
-		Collectors: map[string]pipeline.Collector{
+		Collectors: map[string]collectors.Collector{
 			ingest.NormalizeSourceID(src): stubIncrCollector{name: src},
 		},
 		BroadRules: pipeline.BroadFilterRules{},
 		Clock:      func() time.Time { return fixedNow },
 	}
 
-	out, err := acts.RunIngestSource(ctx, IngestSourceInput{SourceID: src, ExplicitRefresh: false})
+	out, err := acts.RunIngestSource(ctx, ingestschema.IngestSourceInput{SourceID: src, ExplicitRefresh: false})
 	require.NoError(t, err)
 	require.True(t, out.UsedIncremental)
 	require.True(t, out.WatermarkAdvanced)
@@ -104,7 +106,7 @@ func TestRunIngestSource_incrementalWatermark(t *testing.T) {
 	require.NoError(t, db.Raw(`SELECT cursor FROM ingest_watermarks WHERE source_id = ?`, ingest.NormalizeSourceID(src)).Scan(&cur).Error)
 	require.Equal(t, "v2", cur)
 
-	out2, err := acts.RunIngestSource(ctx, IngestSourceInput{SourceID: src, ExplicitRefresh: true})
+	out2, err := acts.RunIngestSource(ctx, ingestschema.IngestSourceInput{SourceID: src, ExplicitRefresh: true})
 	require.NoError(t, err)
 	require.NoError(t, db.Raw(`SELECT cursor FROM ingest_watermarks WHERE source_id = ?`, ingest.NormalizeSourceID(src)).Scan(&cur).Error)
 	require.Equal(t, "v3", cur)
@@ -159,14 +161,14 @@ func TestRunIngestSource_broadFilterSkipsNonPassing(t *testing.T) {
 		Redis:      ingest.NewRedisCoordinator(rdb),
 		Jobs:       mj,
 		Watermarks: ingest.NewGormWatermarkStore(pgsql.NewGetter(db)),
-		Collectors: map[string]pipeline.Collector{
+		Collectors: map[string]collectors.Collector{
 			ingest.NormalizeSourceID(src): stubMultiCollector{name: src},
 		},
 		BroadRules: pipeline.BroadFilterRules{},
 		Clock:      func() time.Time { return fixedNow },
 	}
 
-	out, err := acts.RunIngestSource(ctx, IngestSourceInput{SourceID: src, ExplicitRefresh: true})
+	out, err := acts.RunIngestSource(ctx, ingestschema.IngestSourceInput{SourceID: src, ExplicitRefresh: true})
 	require.NoError(t, err)
 	require.Equal(t, 1, out.JobsFilteredOut)
 	require.Equal(t, 1, out.JobsWritten)

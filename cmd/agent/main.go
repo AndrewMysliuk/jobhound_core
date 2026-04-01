@@ -1,3 +1,4 @@
+// Command agent runs the MVP pipeline or optional local debug HTTP for collectors (composition only).
 package main
 
 import (
@@ -12,13 +13,13 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/bootstrap"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/europeremotely"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/handlers/debughttp"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/workingnomads"
 	"github.com/andrewmysliuk/jobhound_core/internal/config"
 	llmmock "github.com/andrewmysliuk/jobhound_core/internal/llm/mock"
-	"github.com/andrewmysliuk/jobhound_core/internal/pipeline"
 	"github.com/andrewmysliuk/jobhound_core/internal/pipeline/impl"
 	"github.com/andrewmysliuk/jobhound_core/internal/pipeline/mock"
 )
@@ -72,10 +73,10 @@ func main() {
 	fmt.Fprintln(os.Stderr, "jobhound_core: noop pipeline run ok")
 }
 
-func runDebugHTTPServer(addr string, europeRemotely, workingNomads pipeline.Collector, workingNomadsConcrete *workingnomads.WorkingNomads, europeRemotelyConcrete *europeremotely.EuropeRemotely) error {
+func runDebugHTTPServer(addr string, europeRemotely, workingNomads collectors.Collector, workingNomadsConcrete *workingnomads.WorkingNomads, europeRemotelyConcrete *europeremotely.EuropeRemotely) error {
 	srv := &http.Server{
 		Addr:    addr,
-		Handler: debughttp.NewMux(europeRemotely, workingNomads, workingNomadsConcrete, europeRemotelyConcrete),
+		Handler: debughttp.NewHTTPHandler(europeRemotely, workingNomads, workingNomadsConcrete, europeRemotelyConcrete),
 	}
 
 	errCh := make(chan error, 1)

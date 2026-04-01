@@ -46,10 +46,10 @@ type EuropeRemotely struct {
 	OnDateWarn func(raw string)
 }
 
-// Name implements pipeline.Collector.
+// Name implements collectors.Collector.
 func (*EuropeRemotely) Name() string { return SourceName }
 
-// Fetch implements pipeline.Collector.
+// Fetch implements collectors.Collector.
 func (c *EuropeRemotely) Fetch(ctx context.Context) ([]domain.Job, error) {
 	if strings.TrimSpace(c.FeedURL) == "" {
 		return nil, fmt.Errorf("europe remotely: empty FeedURL")

@@ -3,6 +3,7 @@ package ingest_workflows
 import (
 	"time"
 
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors"
 	"github.com/andrewmysliuk/jobhound_core/internal/ingest"
 	ingest_activities "github.com/andrewmysliuk/jobhound_core/internal/ingest/workflows/activities"
 	"github.com/andrewmysliuk/jobhound_core/internal/jobs"
@@ -17,7 +18,7 @@ type WorkerDeps struct {
 	Redis                  *ingest.RedisCoordinator
 	Jobs                   jobs.JobRepository
 	Watermarks             ingest.WatermarkStore
-	Collectors             map[string]pipeline.Collector
+	Collectors             map[string]collectors.Collector
 	DefaultExplicitRefresh bool
 	// BroadRules: 004 stage-1 filter before SaveIngest (zero value = default 7-day UTC window per ApplyBroadFilter).
 	BroadRules pipeline.BroadFilterRules

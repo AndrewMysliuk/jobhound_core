@@ -32,7 +32,9 @@ Workflows coordinate activities (fetch, persist, score, notify). Retries, visibi
 
 Secrets and local paths live in `.env` (gitignored). Variable **names** are documented in **`specs/*/contracts/environment.md`**, **README**, and **`internal/config`** (not duplicated in the Makefile). Production targets **GCP** for runtime and secrets.
 
-**Single source of truth**: infrastructure and app settings that come from the environment are defined in **`internal/config`**: exported env **name** constants, typed structs (e.g. `Database`, `Temporal`), and loaders (`Load`, `LoadDatabaseFromEnv`, `LoadTemporalFromEnv`). **`cmd/*`** reads env and passes structs into `internal/*`. **Feature modules** (`internal/jobs`, `internal/pipeline`, …) must not call `os.Getenv` for shared knobs — add parsing and defaults in `internal/config` instead. **Temporal connection** (address, namespace, task queue) is config only; **workflow and activity code** live inside each feature module under `internal/<feature>/workflows/` (with `activities/` as needed), same idea as `omg-api` — not a single catch-all `internal/temporal` package.
+**Single source of truth**: infrastructure and app settings that come from the environment are defined in **`internal/config`**: exported env **name** constants, typed structs (e.g. `Database`, `Temporal`), and loaders (`Load`, `LoadDatabaseFromEnv`, `LoadTemporalFromEnv`). **`cmd/*`** reads env and passes structs into `internal/*`. **Feature modules** (`internal/jobs`, `internal/pipeline`, …) must not call `os.Getenv` for shared knobs — add parsing and defaults in `internal/config` instead. **Temporal connection** (address, namespace, task queue) is config only; **workflow and activity code** live inside each feature module under `internal/<feature>/workflows/` (with `activities/` as needed), same idea as `omg-api` — not a single catch-all `internal/temporal` package. Workflow registration: constructor **`New...`** on a workflows type must **list every** `RegisterWorkflow` call so the inventory is obvious (same pattern as `omg-api` feature workflows).
+
+**Product HTTP** may later live under **`cmd/api/`** with thin composition (deps → route `Group` → `handlers.NewHTTPHandler`), like `omg-bo/cmd/api`. Until then, **`internal/collectors/handlers/debughttp/`** is **development-only** debug HTTP for collectors — not the public API; same **omg-bo handler layout** (`handler.go` + `registerRoutes()` + one file per route, `helpers`/`response` as needed). **Collectors** module DTOs (**e.g. debug POST JSON**) belong in **`internal/collectors/schema/`** at the **module root**, not under `handlers/`. Implemented with **`net/http`** and **`debughttp.NewHTTPHandler`** wired from **`cmd/agent`**; short package comment stating dev-only.
 
 ## Stack (target)
 
@@ -51,24 +53,26 @@ Feature work lives in **modules** under `internal/<name>/`: each module is a sel
 
 At the module root, **`contract.go`** (or the same role split across files) holds interfaces and the module’s public surface.
 
-Optional subfolders inside a module (create only what the module uses), same idea as `omg-bo/internal`:
+Optional subfolders inside a module (create only what the module uses). Naming matches **`omg-bo`** / **`omg-api`** expectations:
 
 | Folder | Role |
 |--------|------|
-| `handlers/` | Inbound adapters for this module (HTTP, CLI, etc.). |
-| `impl/` | Service / use-case implementation. |
-| `schema/` | Request/response DTOs, errors, pagination, and similar boundary types. |
-| `storage/` | Persistence and external clients: repository contracts and implementations. |
-| `mapper/` | Mapping between layers (e.g. DTO ↔ domain, external models ↔ internal). |
+| `handlers/` | Inbound adapters (HTTP, etc.). **omg-bo style**: `handler.go` with `registerRoutes()` (or equivalent) listing all routes; **one file per handler/route**; small shared `helpers.go` / `response.go` only if needed. |
+| `impl/` | Application **service** / use cases. Folder name is **`impl`** (not `service`). |
+| `schema/` | Module-local DTOs: requests, responses, workflow/handler payloads, exported errors. No separate global schema repo — types stay in the module. |
+| `storage/` | Persistence only. **Use this name only** — do not introduce parallel `repository/` packages. |
+| `mapper/` | Optional mapping between layers (e.g. DTO ↔ domain). Prefer storage `ToModel` / `ToDomain` until mapping outgrows that. |
 | `mock/` | Test doubles for the module. |
-| `utils/` | Small helpers and **pure stage logic** used only inside this module (package name `utils`). **Do not** park this at the module root — root stays for `contract.go`, thin types, `impl/`, `mock/`, `workflows/`, etc. |
-| `workflows/` | Temporal workflows for this module; `activities/` inside for activity implementations. Register from `cmd/worker` (and call `Register`/`New…` per module). |
+| `utils/` | Small helpers used only inside this module (package name `utils`). **Do not** park bulk logic at the module root — root stays for `contract.go`, thin types, `impl/`, `mock/`, `workflows/`, etc. |
+| `workflows/` | Temporal workflows; `activities/` inside. **`New...`** constructor registers every workflow explicitly (`RegisterWorkflow` per workflow). Wire from `cmd/worker`. |
 
 **`internal/llm/`** is its own module: **`contract.go`** (e.g. `Scorer`), provider packages (`anthropic/`, …), **`mock/`**, and **`utils/`** for shared LLM response parsing / small helpers — **not** loose `*.go` helpers at `internal/llm` root.
 
 **`internal/pipeline/`**: stage rule **structs** (`BroadFilterRules`, `KeywordRules`, …) live at the module root next to `contract.go`; **implementations** of stages 1–3 batching live under **`internal/pipeline/utils/`** (`ApplyBroadFilter`, `ApplyKeywordFilter`, `ScoreJobs`).
 
-**`cmd/`** holds binaries and composition (wiring modules, config, process entrypoints). **`internal/platform/`** and migration CLI are not required to mirror the feature-module subfolder table above.
+**`cmd/`** holds binaries and **composition only** (construct deps, register workflows, mount HTTP groups). Business rules belong in `internal/<module>/impl`, not in `cmd`. **`internal/platform/`** and the migrate CLI do not mirror the full feature-module table.
+
+**Documentation in code**: prefer readable names and layout over long comments. Reserve comments for non-obvious behavior, invariants, and exported APIs that need `godoc`. Avoid banner blocks and redundant per-method commentary.
 
 ## Testing
 
@@ -81,4 +85,4 @@ Optional subfolders inside a module (create only what the module uses), same ide
 - Amend this file when architecture decisions change; keep it short and actionable.
 - Feature details and order of implementation: `specs/` (per-feature folders, same style as `omg-bo/specs`).
 
-**Version**: 1.5.2 | **Ratified**: 2026-03-29
+**Version**: 1.6.2 | **Ratified**: 2026-03-29 | **Amended**: 2026-04-01 (collectors/schema at module root; debughttp layout; handlers/schema/impl/storage/workflows/cmd + comment policy)

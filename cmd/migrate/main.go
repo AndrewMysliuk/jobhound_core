@@ -1,3 +1,4 @@
+// Command migrate applies SQL migrations (golang-migrate) using JOBHOUND_DATABASE_URL.
 package main
 
 import (

@@ -1,3 +1,4 @@
+// Command worker runs the Temporal worker: registers ingest, jobs, pipeline, and reference workflows/activities.
 package main
 
 import (
@@ -7,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/bootstrap"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/europeremotely"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/workingnomads"
@@ -18,7 +20,6 @@ import (
 	"github.com/andrewmysliuk/jobhound_core/internal/llm"
 	"github.com/andrewmysliuk/jobhound_core/internal/llm/anthropic"
 	llmmock "github.com/andrewmysliuk/jobhound_core/internal/llm/mock"
-	"github.com/andrewmysliuk/jobhound_core/internal/pipeline"
 	pipelinestorage "github.com/andrewmysliuk/jobhound_core/internal/pipeline/storage"
 	pipeline_workflows "github.com/andrewmysliuk/jobhound_core/internal/pipeline/workflows"
 	"github.com/andrewmysliuk/jobhound_core/internal/platform/pgsql"
@@ -63,7 +64,7 @@ func main() {
 	var (
 		ingestRedis           *ingest.RedisCoordinator
 		ingestWatermarks      ingest.WatermarkStore
-		ingestCollectors      map[string]pipeline.Collector
+		ingestCollectors      map[string]collectors.Collector
 		ingestExplicitRefresh bool
 	)
 	if strings.TrimSpace(appCfg.Database.URL) != "" {
@@ -95,7 +96,7 @@ func main() {
 				log.Printf("temporal worker: collectors: %v", err)
 				os.Exit(1)
 			}
-			ingestCollectors = map[string]pipeline.Collector{
+			ingestCollectors = map[string]collectors.Collector{
 				ingest.NormalizeSourceID(europeremotely.SourceName): er,
 				ingest.NormalizeSourceID(workingnomads.SourceName):  wn,
 			}

@@ -3,6 +3,7 @@ package mock
 import (
 	"context"
 
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors"
 	"github.com/andrewmysliuk/jobhound_core/internal/domain"
 )
 
@@ -25,7 +26,12 @@ type Notifier struct{}
 
 func (Notifier) Send(context.Context, []domain.ScoredJob) error { return nil }
 
-// SessionProvider returns an empty path.
+// SessionProvider returns an empty path (collectors.SessionProvider test double).
 type SessionProvider struct{}
 
 func (SessionProvider) CookieFilePath() string { return "" }
+
+var (
+	_ collectors.Collector       = Collector{}
+	_ collectors.SessionProvider = SessionProvider{}
+)

@@ -7,8 +7,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors"
 	"github.com/andrewmysliuk/jobhound_core/internal/domain"
-	"github.com/andrewmysliuk/jobhound_core/internal/pipeline"
 )
 
 type stubCollector struct {
@@ -26,7 +26,7 @@ func (s stubCollector) Fetch(context.Context) ([]domain.Job, error) {
 func TestAll_Fetch_mergesAndContinuesOnError(t *testing.T) {
 	var logged []string
 	a := &All{
-		Collectors: []pipeline.Collector{
+		Collectors: []collectors.Collector{
 			stubCollector{name: "bad", err: errors.New("boom")},
 			stubCollector{name: "good", jobs: []domain.Job{{Title: "A"}, {Title: "B"}}},
 		},
@@ -43,7 +43,7 @@ func TestAll_Fetch_mergesAndContinuesOnError(t *testing.T) {
 
 func TestAll_Fetch_allFail(t *testing.T) {
 	a := &All{
-		Collectors: []pipeline.Collector{
+		Collectors: []collectors.Collector{
 			stubCollector{name: "a", err: errors.New("e1")},
 			stubCollector{name: "b", err: errors.New("e2")},
 		},

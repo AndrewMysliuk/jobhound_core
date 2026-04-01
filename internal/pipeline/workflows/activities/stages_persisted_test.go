@@ -10,6 +10,7 @@ import (
 	"github.com/andrewmysliuk/jobhound_core/internal/ingest"
 	"github.com/andrewmysliuk/jobhound_core/internal/jobs/storage"
 	"github.com/andrewmysliuk/jobhound_core/internal/pipeline"
+	pipelineschema "github.com/andrewmysliuk/jobhound_core/internal/pipeline/schema"
 	pipelinestorage "github.com/andrewmysliuk/jobhound_core/internal/pipeline/storage"
 	pipeutils "github.com/andrewmysliuk/jobhound_core/internal/pipeline/utils"
 	"github.com/andrewmysliuk/jobhound_core/internal/platform/pgsql"
@@ -113,7 +114,7 @@ func TestRunPersistedPipelineStages_persistsStage2AndScoresCappedBatch(t *testin
 		}
 	}
 
-	out, err := a.RunPersistedPipelineStages(ctx, PersistedPipelineStagesInput{
+	out, err := a.RunPersistedPipelineStages(ctx, pipelineschema.PersistedPipelineStagesInput{
 		PipelineRunID:      runID,
 		BroadFilterKeyHash: broadHash,
 		Jobs:               jobs,
@@ -173,7 +174,7 @@ func TestRunPersistedPipelineStages_stage3RejectScore(t *testing.T) {
 		Jobs:   jobRepo,
 	}
 
-	_, err = a.RunPersistedPipelineStages(ctx, PersistedPipelineStagesInput{
+	_, err = a.RunPersistedPipelineStages(ctx, pipelineschema.PersistedPipelineStagesInput{
 		PipelineRunID: runID,
 		Jobs: []domain.Job{{
 			ID: "a", Title: "Go", Description: "backend",

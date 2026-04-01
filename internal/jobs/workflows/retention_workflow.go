@@ -3,6 +3,7 @@ package jobs_workflows
 import (
 	"time"
 
+	jobsschema "github.com/andrewmysliuk/jobhound_core/internal/jobs/schema"
 	jobs_activities "github.com/andrewmysliuk/jobhound_core/internal/jobs/workflows/activities"
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
@@ -12,7 +13,7 @@ import (
 const JobRetentionWorkflowName = "JobRetentionWorkflow"
 
 // JobRetentionWorkflow runs the retention activity (same semantics as cmd/retention run).
-func JobRetentionWorkflow(ctx workflow.Context) (*jobs_activities.JobRetentionOutput, error) {
+func JobRetentionWorkflow(ctx workflow.Context) (*jobsschema.JobRetentionOutput, error) {
 	ctx = workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
 		StartToCloseTimeout:    15 * time.Minute,
 		ScheduleToCloseTimeout: 20 * time.Minute,
@@ -22,7 +23,7 @@ func JobRetentionWorkflow(ctx workflow.Context) (*jobs_activities.JobRetentionOu
 			BackoffCoefficient: 2,
 		},
 	})
-	var out jobs_activities.JobRetentionOutput
+	var out jobsschema.JobRetentionOutput
 	if err := workflow.ExecuteActivity(ctx, jobs_activities.RunJobRetentionActivityName).Get(ctx, &out); err != nil {
 		return nil, err
 	}

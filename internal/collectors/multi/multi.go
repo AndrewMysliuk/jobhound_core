@@ -1,4 +1,4 @@
-// Package multi combines several pipeline.Collector implementations into one Fetch
+// Package multi combines several collectors.Collector implementations into one Fetch
 // while isolating per-source failures (contracts/collector.md).
 package multi
 
@@ -8,22 +8,22 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors"
 	"github.com/andrewmysliuk/jobhound_core/internal/domain"
-	"github.com/andrewmysliuk/jobhound_core/internal/pipeline"
 )
 
 // All runs each collector in order, merges successful job lists, and does not abort
 // the batch when one source returns an error (unless every source fails).
 type All struct {
-	Collectors []pipeline.Collector
+	Collectors []collectors.Collector
 	// OnSourceError is called for each failed Fetch after others have still run. Optional.
 	OnSourceError func(sourceName string, err error)
 }
 
-// Name implements pipeline.Collector.
+// Name implements collectors.Collector.
 func (*All) Name() string { return "mvp_sources" }
 
-// Fetch implements pipeline.Collector.
+// Fetch implements collectors.Collector.
 func (a *All) Fetch(ctx context.Context) ([]domain.Job, error) {
 	if a == nil {
 		return nil, fmt.Errorf("multi.All: nil receiver")
