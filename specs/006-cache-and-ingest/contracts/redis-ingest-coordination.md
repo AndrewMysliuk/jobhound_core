@@ -18,9 +18,9 @@ No other Redis keys are required for ingest in v1. **No** Redis-backed search-re
 
 ---
 
-## 2. TTL defaults (code constants)
+## 2. TTL defaults and optional config
 
-Values are **defaults** in code (e.g. `internal/config` or ingest package); **not** environment variables in v1 unless a later epic adds optional overrides under `JOBHOUND_*` via `internal/config` only.
+**Defaults** live as constants in the **`ingest`** package (**600** / **3600** s). **`internal/config`** may expose optional **`JOBHOUND_*`** overrides (see `environment.md`); when unset or invalid, defaults apply. The worker passes effective seconds into `ingest.NewRedisCoordinatorWithTTL`.
 
 | Constant (illustrative name) | Seconds | Role |
 |------------------------------|---------|------|

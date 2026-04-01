@@ -5,9 +5,11 @@
 
 ## Cap **N**
 
-**Not an environment variable in v1.** The maximum number of `(job, pipeline_run)` pairs in **`PASSED_STAGE_2`** that may enter stage 3 **per pipeline-run execution** is a **named constant** in code (initial value **5**). See **`plan.md`** (Resolved decision D3) and **`contracts/pipeline-run-job-status.md`**.
+The maximum number of `(job, pipeline_run)` pairs in **`PASSED_STAGE_2`** that may enter stage 3 **per pipeline-run execution** is **5** by default via the exported constant **`MaxStage3JobsPerPipelineRunExecution`** in **`internal/pipeline/utils`** (see **`plan.md`** D3 and **`contracts/pipeline-run-job-status.md`**). Selection rules are unchanged when **N** is overridden from the environment.
 
-If future work moves **N** to `JOBHOUND_*`, add the name and loader only under **`internal/config`** and update this file — do not read env in feature modules ad hoc.
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `JOBHOUND_PIPELINE_STAGE3_MAX_JOBS_PER_RUN` | No | Positive integer cap **N** for stage 3 per run; unset or invalid uses **5**. Values above **10000** are clamped (safety). Loaded only in **`internal/config`**; **`cmd/worker`** passes it into pipeline activities — feature modules do not call `os.Getenv` for this knob. |
 
 ## LLM (stage 3)
 

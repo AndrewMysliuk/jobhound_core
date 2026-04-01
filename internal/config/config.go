@@ -5,6 +5,8 @@ package config
 // do not scatter os.Getenv across feature modules — add fields and parsing here instead.
 type Config struct {
 	Database Database
+	Ingest   Ingest
+	Pipeline Pipeline
 	// DataDir is the directory containing countries.json (see EnvDataDir). Empty means use "data" relative to the process working directory.
 	DataDir string
 	// DebugHTTPAddr enables cmd/agent local debug HTTP when non-empty (see EnvDebugHTTPAddr); flag -debug-http-addr overrides.
@@ -29,6 +31,8 @@ func Load() Config {
 	}
 	return Config{
 		Database:        LoadDatabaseFromEnv(),
+		Ingest:          LoadIngestFromEnv(),
+		Pipeline:        LoadPipelineFromEnv(),
 		DataDir:         loadDataDirFromEnv(),
 		DebugHTTPAddr:   loadDebugHTTPAddrFromEnv(),
 		AnthropicAPIKey: LoadAnthropicAPIKeyFromEnv(),

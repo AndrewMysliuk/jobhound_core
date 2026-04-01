@@ -77,11 +77,20 @@ func domainJobEqual(a, b domain.Job) bool {
 	}
 	switch {
 	case a.UserID == nil && b.UserID == nil:
-		return true
 	case a.UserID == nil || b.UserID == nil:
 		return false
 	default:
-		return *a.UserID == *b.UserID
+		if *a.UserID != *b.UserID {
+			return false
+		}
+	}
+	switch {
+	case a.Stage1Status == nil && b.Stage1Status == nil:
+		return true
+	case a.Stage1Status == nil || b.Stage1Status == nil:
+		return false
+	default:
+		return *a.Stage1Status == *b.Stage1Status
 	}
 }
 

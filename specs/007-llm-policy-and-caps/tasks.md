@@ -34,50 +34,50 @@ Requires **`specs/006-cache-and-ingest`** (ingest path + retention).
 
 ## A. Contracts & docs
 
-1. [ ] **Contracts match intent** — Definition of done: `contracts/pipeline-run-job-status.md` and `contracts/environment.md` align with `spec.md` acceptance criteria and `plan.md` resolved decisions; no contradiction with `004` stage semantics.
+1. [x] **Contracts match intent** — Definition of done: `contracts/pipeline-run-job-status.md` and `contracts/environment.md` align with `spec.md` acceptance criteria and `plan.md` resolved decisions; no contradiction with `004` stage semantics.
 
 ## B. Migrations & schema
 
-1. [ ] **`jobs` stage-1 status** — Definition of done: versioned `up`/`down` under `migrations/` adds column per contract §3; `down` is safe for dev/CI; matches `contracts/pipeline-run-job-status.md`.
+1. [x] **`jobs` stage-1 status** — Definition of done: versioned `up`/`down` under `migrations/` adds column per contract §3; `down` is safe for dev/CI; matches `contracts/pipeline-run-job-status.md`.
 
-2. [ ] **`pipeline_runs` (minimal)** — Definition of done: migration creates `pipeline_runs` per contract §4 (same change set as `pipeline_run_jobs`); surrogate PK + timestamps; no dependency on other specs.
+2. [x] **`pipeline_runs` (minimal)** — Definition of done: migration creates `pipeline_runs` per contract §4 (same change set as `pipeline_run_jobs`); surrogate PK + timestamps; no dependency on other specs.
 
-3. [ ] **`pipeline_run_jobs`** — Definition of done: migration creates table per contract §5 — PK `(pipeline_run_id, job_id)`, FKs to `jobs` and `pipeline_runs`, **ON DELETE CASCADE** from `job_id`, index for `(pipeline_run_id, status)` (or equivalent for candidate queries).
+3. [x] **`pipeline_run_jobs`** — Definition of done: migration creates table per contract §5 — PK `(pipeline_run_id, job_id)`, FKs to `jobs` and `pipeline_runs`, **ON DELETE CASCADE** from `job_id`, index for `(pipeline_run_id, status)` (or equivalent for candidate queries).
 
 ## C. Storage layer (GORM)
 
-1. [ ] **Models + mapping** — Definition of done: GORM models under agreed `storage/` package; no GORM in `internal/domain`; `TableName()` / tags; enum ↔ string or typed fields consistent with contract.
+1. [x] **Models + mapping** — Definition of done: GORM models under agreed `storage/` package; no GORM in `internal/domain`; `TableName()` / tags; enum ↔ string or typed fields consistent with contract.
 
-2. [ ] **Repository API** — Definition of done: methods to insert/update per-run status through allowed transitions; load `PASSED_STAGE_2` candidates for a `pipeline_run_id`; tests with sqlite/postgres mock or integration-tagged DB tests per repo practice.
+2. [x] **Repository API** — Definition of done: methods to insert/update per-run status through allowed transitions; load `PASSED_STAGE_2` candidates for a `pipeline_run_id`; tests with sqlite/postgres mock or integration-tagged DB tests per repo practice.
 
 ## D. Cap & batch selection
 
-1. [ ] **Named constant N = 5** — Definition of done: single exported const (see `plan.md` D3); referenced by selection and unit tests.
+1. [x] **Named constant N = 5** — Definition of done: single exported const (see `plan.md` D3); referenced by selection and unit tests.
 
-2. [ ] **Selection + idempotency** — Definition of done: for one execution, select at most **N** distinct `job_id` from `PASSED_STAGE_2`; same `job_id` not sent to stage 3 twice in that execution; ordering documented in code (implementation-defined).
+2. [x] **Selection + idempotency** — Definition of done: for one execution, select at most **N** distinct `job_id` from `PASSED_STAGE_2`; same `job_id` not sent to stage 3 twice in that execution; ordering documented in code (implementation-defined).
 
 ## E. Orchestration (Temporal / pipeline glue)
 
-1. [ ] **Activities or pipeline runner** — Definition of done: after stage 2, persist `REJECTED_STAGE_2` / `PASSED_STAGE_2`; when running stage 3, respect cap; update to `PASSED_STAGE_3` / `REJECTED_STAGE_3`; aligns with `003` worker registration pattern.
+1. [x] **Activities or pipeline runner** — Definition of done: after stage 2, persist `REJECTED_STAGE_2` / `PASSED_STAGE_2`; when running stage 3, respect cap; update to `PASSED_STAGE_3` / `REJECTED_STAGE_3`; aligns with `003` worker registration pattern.
 
-2. [ ] **Stage 3 invocation** — Definition of done: uses existing `004` / `internal/llm` scorer; no change to filter/scorer **math** unless contract gap found — then update `004` contract instead of forking semantics here.
+2. [x] **Stage 3 invocation** — Definition of done: uses existing `004` / `internal/llm` scorer; no change to filter/scorer **math** unless contract gap found — then update `004` contract instead of forking semantics here.
 
 ## F. Ingest & retention alignment
 
 *Prerequisite: [`006`](../006-cache-and-ingest/tasks.md) ingest, `PASSED_STAGE_1` wiring, and retention delete path exist.*
 
-1. [ ] **`PASSED_STAGE_1` on jobs** — Definition of done: `006` ingest path (or agreed single place) sets `jobs` stage-1 status when broad stage 1 completes; consistent with `006` spec and **`007`** contract.
+1. [x] **`PASSED_STAGE_1` on jobs** — Definition of done: `006` ingest path (or agreed single place) sets `jobs` stage-1 status when broad stage 1 completes; consistent with `006` spec and **`007`** contract.
 
-2. [ ] **Retention cleanup** — Definition of done: when a `jobs` row is hard-deleted per `006` retention, dependent `pipeline_run_jobs` rows are removed (CASCADE from `007` migration **or** explicit delete in the same path as `006`) — no dangling references.
+2. [x] **Retention cleanup** — Definition of done: when a `jobs` row is hard-deleted per `006` retention, dependent `pipeline_run_jobs` rows are removed (CASCADE from `007` migration **or** explicit delete in the same path as `006`) — no dangling references.
 
 ## G. Quality gates
 
-1. [ ] **`make test` / `go test ./...`** — Definition of done: passes without mandatory network for default tests.
+1. [x] **`make test` / `go test ./...`** — Definition of done: passes without mandatory network for default tests.
 
-2. [ ] **`make vet` / `make fmt`** — Definition of done: clean for touched packages.
+2. [x] **`make vet` / `make fmt`** — Definition of done: clean for touched packages.
 
 ## H. Optional / deferred
 
-1. [ ] **Integration: migrations** — Definition of done: `//go:build integration` test applies migrations and asserts tables/columns/indexes (same approach as `002` if adopted).
+1. [x] **Integration: migrations** — Definition of done: `//go:build integration` test applies migrations and asserts tables/columns/indexes (same approach as `002` if adopted).
 
-2. [ ] **Config-backed N** — Definition of done: deferred; when implemented, extend `internal/config` + `contracts/environment.md` without changing cap **rules** from `spec.md`.
+2. [x] **Config-backed N** — Definition of done: **Implemented** — `JOBHOUND_PIPELINE_STAGE3_MAX_JOBS_PER_RUN` in `internal/config/pipeline.go` + `contracts/environment.md`; cap **rules** unchanged from `spec.md`.

@@ -5,6 +5,11 @@
 
 **Related**: `specs/004-pipeline-stages/contracts/pipeline-stages.md` (stage semantics unchanged); `specs/002-postgres-gorm-migrations/contracts/jobs-schema.md` (`jobs` base table); `specs/006-cache-and-ingest/spec.md` (ingest + retention). Later migrations may add columns to **`pipeline_runs`** (e.g. schedule, workflow ids) without changing the PK or table name.
 
+### Alignment (spec **`007`** + `004`)
+
+- **`spec.md` acceptance**: Cap **N** as a named code constant → §2 here and **`plan.md`** D3; **`PASSED_STAGE_1`** on **`jobs`**, no **`REJECTED_STAGE_1`** → §1.1 and §3; per-run statuses and transitions → §1.2–§1.3 and §5; at most **N** distinct **`job_id`** per execution and no duplicate stage-3 send in one execution → §2; retention / no dangling per-run rows → §7.
+- **`004`**: Stages 1–3 **behaviour** (broad filter, keywords, LLM scoring on **`domain.Job`**) are **unchanged**. This contract adds **persistence** only: canonical ingest completion is **`PASSED_STAGE_1`** on **`jobs`** (wired with **`006`**); stage 2/3 outcomes for a given run live in **`pipeline_run_jobs`**. Jobs **dropped** in memory by stage 1 or 2 in **`004`** are not represented as a **`REJECTED_STAGE_1`** row — that value **does not exist**, consistent with **`004`**’s “omit from the filtered list” model.
+
 ---
 
 ## 1. Status enums (logical)
@@ -55,11 +60,11 @@ PASSED_STAGE_2 → (PASSED_STAGE_3 | REJECTED_STAGE_3)
 
 ## 3. SQL — `jobs` extension
 
-Add a column (names illustrative; **must** match migration + GORM):
+Add a column (**normative name** for v1; **must** match migration + GORM):
 
 | Column | Type | Notes |
 | ------ | ---- | ----- |
-| `stage1_status` (or agreed) | `enum` / `text` + check | At least **`PASSED_STAGE_1`**; nullable for legacy until backfill. |
+| `stage1_status` | `text` + `CHECK` (or Postgres `enum`) | Allowed non-null value: **`PASSED_STAGE_1`** only; **`NULL`** for legacy rows until backfill / **`006`** ingest sets the column. |
 
 ---
 

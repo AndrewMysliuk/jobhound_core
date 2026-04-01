@@ -10,22 +10,23 @@ import (
 // Job is the GORM model for the jobs table.
 // See specs/002-postgres-gorm-migrations/contracts/jobs-schema.md.
 type Job struct {
-	ID          string     `gorm:"column:id;primaryKey;type:text"`
-	Source      string     `gorm:"column:source;type:text;not null"`
-	Title       string     `gorm:"column:title;type:text;not null;default:''"`
-	Company     string     `gorm:"column:company;type:text;not null;default:''"`
-	URL         string     `gorm:"column:url;type:text;not null;default:''"`
-	ApplyURL    *string    `gorm:"column:apply_url;type:text"`
-	Description string     `gorm:"column:description;type:text;not null;default:''"`
-	PostedAt    *time.Time `gorm:"column:posted_at"`
-	IsRemote    *bool      `gorm:"column:is_remote"`
-	CountryCode string     `gorm:"column:country_code;type:text;not null;default:''"`
-	SalaryRaw   string     `gorm:"column:salary_raw;type:text;not null;default:''"`
-	Tags        []byte     `gorm:"column:tags;type:jsonb;not null"`
-	Position    *string    `gorm:"column:position;type:text"`
-	UserID      *string    `gorm:"column:user_id;type:text"`
-	CreatedAt   time.Time  `gorm:"column:created_at;not null"`
-	UpdatedAt   time.Time  `gorm:"column:updated_at;not null"`
+	ID           string     `gorm:"column:id;primaryKey;type:text"`
+	Source       string     `gorm:"column:source;type:text;not null"`
+	Title        string     `gorm:"column:title;type:text;not null;default:''"`
+	Company      string     `gorm:"column:company;type:text;not null;default:''"`
+	URL          string     `gorm:"column:url;type:text;not null;default:''"`
+	ApplyURL     *string    `gorm:"column:apply_url;type:text"`
+	Description  string     `gorm:"column:description;type:text;not null;default:''"`
+	PostedAt     *time.Time `gorm:"column:posted_at"`
+	IsRemote     *bool      `gorm:"column:is_remote"`
+	CountryCode  string     `gorm:"column:country_code;type:text;not null;default:''"`
+	SalaryRaw    string     `gorm:"column:salary_raw;type:text;not null;default:''"`
+	Tags         []byte     `gorm:"column:tags;type:jsonb;not null"`
+	Position     *string    `gorm:"column:position;type:text"`
+	UserID       *string    `gorm:"column:user_id;type:text"`
+	Stage1Status *string    `gorm:"column:stage1_status;type:text"`
+	CreatedAt    time.Time  `gorm:"column:created_at;not null"`
+	UpdatedAt    time.Time  `gorm:"column:updated_at;not null"`
 }
 
 // TableName implements schema.Tabler for the jobs table.
@@ -63,6 +64,10 @@ func NewJobModel(j domain.Job) Job {
 	if j.UserID != nil && *j.UserID != "" {
 		u := *j.UserID
 		m.UserID = &u
+	}
+	if j.Stage1Status != nil && *j.Stage1Status != "" {
+		s := *j.Stage1Status
+		m.Stage1Status = &s
 	}
 	return m
 }
@@ -119,6 +124,10 @@ func (m *Job) ToDomain() domain.Job {
 	if m.UserID != nil && *m.UserID != "" {
 		u := *m.UserID
 		j.UserID = &u
+	}
+	if m.Stage1Status != nil && *m.Stage1Status != "" {
+		s := *m.Stage1Status
+		j.Stage1Status = &s
 	}
 	return j
 }

@@ -1,0 +1,2 @@
+ALTER TABLE jobs DROP CONSTRAINT IF EXISTS jobs_stage1_status_check;
+ALTER TABLE jobs DROP COLUMN IF EXISTS stage1_status;

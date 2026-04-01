@@ -24,6 +24,8 @@ type Job struct {
 	// Position is nil when no MVP keyword group matched; otherwise a canonical label (005).
 	Position *string
 	UserID   *string // optional; nil/empty = unset (future multi-user scope)
+	// Stage1Status is nil for legacy rows or before ingest completes broad stage 1; PASSED_STAGE_1 when stored (007).
+	Stage1Status *string
 }
 
 // ScoredJob is the post–stage-3 shape handed to notification.

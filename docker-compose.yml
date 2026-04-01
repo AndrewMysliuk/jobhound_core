@@ -5,8 +5,15 @@
 # Temporal (spec 003): separate Postgres for Temporal persistence, server, Web UI.
 # gRPC frontend on host: localhost:7233 — set JOBHOUND_TEMPORAL_ADDRESS=localhost:7233
 # Web UI on host: http://localhost:8088 — see README and specs/003 contracts.
+#
+# Redis (spec 006 ingest coordination): host localhost:6379 — set JOBHOUND_REDIS_URL=redis://localhost:6379/0
 
 services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
   postgres:
     image: postgres:16
     environment:

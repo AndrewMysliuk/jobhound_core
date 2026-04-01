@@ -3,10 +3,10 @@
 # Local debug HTTP for collectors (see JOBHOUND_DEBUG_HTTP_ADDR in internal/config).
 DEBUG_HTTP_ADDR ?= 127.0.0.1:8080
 
-.PHONY: help build build-worker build-migrate run run-debug run-worker test test-integration fmt vet tidy migrate-up migrate-down migrate-version
+.PHONY: help build build-worker build-migrate build-retention run run-debug run-worker test test-integration fmt vet tidy migrate-up migrate-down migrate-version
 
 help:
-	@echo "Targets: build | build-worker | build-migrate | run | run-debug | run-worker | test | test-integration | fmt | vet | tidy | migrate-up | migrate-down | migrate-version"
+	@echo "Targets: build | build-worker | build-migrate | build-retention | run | run-debug | run-worker | test | test-integration | fmt | vet | tidy | migrate-up | migrate-down | migrate-version"
 
 build: build-worker
 	go build -o bin/agent ./cmd/agent
@@ -16,6 +16,9 @@ build-worker:
 
 build-migrate:
 	go build -o bin/migrate ./cmd/migrate
+
+build-retention:
+	go build -o bin/retention ./cmd/retention
 
 migrate-up: build-migrate
 	./bin/migrate up
