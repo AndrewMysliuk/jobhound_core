@@ -2,13 +2,13 @@
 
 **Branch**: `004-pipeline-stages`  
 **Date**: 2026-03-30  
-**Last Updated**: 2026-03-30  
+**Last Updated**: 2026-04-02  
 **Spec**: `specs/004-pipeline-stages/spec.md`  
 **Input**: Feature specification + `research.md`
 
 ## Summary
 
-Implement **three narrowing stages** as **pure, testable Go packages** under `internal/pipeline` (and/or focused subpackages): **broad filter** (date window, role synonyms, remote-only, country allowlist), **keyword include/exclude** (no LLM), and **LLM scoring** behind a **provider interface** (Claude wiring deferred). **Run rules** (windows, lists, profile text) are passed **per invocation** from the event/run context — not a single global app config blob for stage semantics. **No Temporal SDK** imports inside stage implementations; **no real HTTP** in default unit tests (fixtures + mocks). Filter “reject” is **not** an error; execution failures (bad config, LLM errors) are **logged by callers** and distinguished from “did not match” (see Resolved decisions for stage 3 policy placeholder).
+Implement **three local processing steps** (implementation stages 1–3) as **pure, testable Go packages** under `internal/pipeline` (and/or focused subpackages): **broad filter** (date window, role synonyms, remote-only, country allowlist), **keyword include/exclude** (no LLM), and **LLM scoring** behind a **provider interface** (Claude wiring deferred). **Product** “stage 1” (external ingest + broad keyword string) is **`006`/`005`** — this epic runs **on the ingested pool** only; see `spec.md` **Product vs implementation numbering** and `product-concept-draft.md`. **Run rules** (windows, lists, profile text) are passed **per invocation** from the event/run context — not a single global app config blob for stage semantics. **No Temporal SDK** imports inside stage implementations; **no real HTTP** in default unit tests (fixtures + mocks). Filter “reject” is **not** an error; execution failures (bad config, LLM errors) are **logged by callers** and distinguished from “did not match” (see Resolved decisions for stage 3 policy placeholder). **Batch** stage-3 cap, ordering, eligible pool, and idempotency are **`007`** (+ orchestration), not this plan’s core.
 
 ## Technical Context
 

@@ -14,6 +14,7 @@ import (
 	"github.com/andrewmysliuk/jobhound_core/internal/jobs"
 	"github.com/andrewmysliuk/jobhound_core/internal/pipeline"
 	"github.com/andrewmysliuk/jobhound_core/internal/platform/pgsql"
+	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/require"
 	"gorm.io/driver/sqlite"
@@ -77,13 +78,16 @@ func TestRunIngestSource_incrementalWatermark(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, db.Exec(`
 		CREATE TABLE ingest_watermarks (
-			source_id TEXT PRIMARY KEY,
+			slot_id TEXT NOT NULL,
+			source_id TEXT NOT NULL,
 			cursor TEXT,
-			updated_at TIMESTAMP NOT NULL
+			updated_at TIMESTAMP NOT NULL,
+			PRIMARY KEY (slot_id, source_id)
 		)
 	`).Error)
 
 	src := "testsrc"
+	testSlot := uuid.MustParse("66666666-6666-4666-8666-666666666666")
 	fixedNow := time.Date(2026, 4, 2, 12, 0, 0, 0, time.UTC)
 	acts := &IngestActivities{
 		Redis:      ingest.NewRedisCoordinator(rdb),
@@ -96,19 +100,19 @@ func TestRunIngestSource_incrementalWatermark(t *testing.T) {
 		Clock:      func() time.Time { return fixedNow },
 	}
 
-	out, err := acts.RunIngestSource(ctx, ingestschema.IngestSourceInput{SourceID: src, ExplicitRefresh: false})
+	out, err := acts.RunIngestSource(ctx, ingestschema.IngestSourceInput{SlotID: testSlot, SourceID: src, ExplicitRefresh: false})
 	require.NoError(t, err)
 	require.True(t, out.UsedIncremental)
 	require.True(t, out.WatermarkAdvanced)
 	require.Equal(t, 1, out.JobsWritten)
 
 	var cur string
-	require.NoError(t, db.Raw(`SELECT cursor FROM ingest_watermarks WHERE source_id = ?`, ingest.NormalizeSourceID(src)).Scan(&cur).Error)
+	require.NoError(t, db.Raw(`SELECT cursor FROM ingest_watermarks WHERE slot_id = ? AND source_id = ?`, testSlot.String(), ingest.NormalizeSourceID(src)).Scan(&cur).Error)
 	require.Equal(t, "v2", cur)
 
-	out2, err := acts.RunIngestSource(ctx, ingestschema.IngestSourceInput{SourceID: src, ExplicitRefresh: true})
+	out2, err := acts.RunIngestSource(ctx, ingestschema.IngestSourceInput{SlotID: testSlot, SourceID: src, ExplicitRefresh: true})
 	require.NoError(t, err)
-	require.NoError(t, db.Raw(`SELECT cursor FROM ingest_watermarks WHERE source_id = ?`, ingest.NormalizeSourceID(src)).Scan(&cur).Error)
+	require.NoError(t, db.Raw(`SELECT cursor FROM ingest_watermarks WHERE slot_id = ? AND source_id = ?`, testSlot.String(), ingest.NormalizeSourceID(src)).Scan(&cur).Error)
 	require.Equal(t, "v3", cur)
 	require.Equal(t, 1, out2.JobsWritten)
 }
@@ -148,13 +152,16 @@ func TestRunIngestSource_broadFilterSkipsNonPassing(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, db.Exec(`
 		CREATE TABLE ingest_watermarks (
-			source_id TEXT PRIMARY KEY,
+			slot_id TEXT NOT NULL,
+			source_id TEXT NOT NULL,
 			cursor TEXT,
-			updated_at TIMESTAMP NOT NULL
+			updated_at TIMESTAMP NOT NULL,
+			PRIMARY KEY (slot_id, source_id)
 		)
 	`).Error)
 
 	src := "multisrc"
+	slot2 := uuid.MustParse("77777777-7777-4777-8777-777777777777")
 	mj := &memJobs{}
 	fixedNow := time.Date(2026, 4, 10, 12, 0, 0, 0, time.UTC)
 	acts := &IngestActivities{
@@ -168,7 +175,7 @@ func TestRunIngestSource_broadFilterSkipsNonPassing(t *testing.T) {
 		Clock:      func() time.Time { return fixedNow },
 	}
 
-	out, err := acts.RunIngestSource(ctx, ingestschema.IngestSourceInput{SourceID: src, ExplicitRefresh: true})
+	out, err := acts.RunIngestSource(ctx, ingestschema.IngestSourceInput{SlotID: slot2, SourceID: src, ExplicitRefresh: true})
 	require.NoError(t, err)
 	require.Equal(t, 1, out.JobsFilteredOut)
 	require.Equal(t, 1, out.JobsWritten)

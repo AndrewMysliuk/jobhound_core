@@ -20,6 +20,10 @@ type Collector interface {
 - **`Name()`** — stable diagnostic label for logs/metrics.
 - **`Fetch`** — one logical run for that source (pagination and request bodies are internal).
 
+## Relationship to orchestration (MVP)
+
+**Collectors are source-scoped**, not slot-scoped: **`Fetch`** returns normalized **`[]domain.Job`** for **one board** in one run. **Search slots**, **`slot_id`**, the **stage-1 broad keyword string**, **which sources are bound** to a slot, **upsert** into PostgreSQL, **watermarks / delta** behavior, and **Redis lock + cooldown per `source_id`** live in **`006`** (and HTTP/workflow contracts in later epics). The same **`Job.Source`** identity is used whether one user has one slot or many; **no requirement** to dedupe across slots inside a collector.
+
 ## `Job.Source` (normative string values)
 
 Use a **fixed lowercase string** per board for `Job.Source` and for `StableJobID` (same value in DB `jobs.source` when persisted).
@@ -58,6 +62,7 @@ Offline tests use **`httptest`** and bodies documented in **`contracts/test-fixt
 ## Related
 
 - `spec.md`
+- [`specs/000-epic-overview/product-concept-draft.md`](../../000-epic-overview/product-concept-draft.md) — slots and stage-1 vs `006`
 - `domain-mapping-mvp.md`
 - `sources-inventory.md`, `../resources/europe-remotely.md`, `../resources/working-nomads.md`
 - `test-fixtures.md`

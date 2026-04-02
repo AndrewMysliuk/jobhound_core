@@ -5,6 +5,8 @@
 
 **Related**: `specs/006-cache-and-ingest/spec.md`; `specs/006-cache-and-ingest/contracts/environment.md`; `007` stage-1 column name in `specs/007-llm-policy-and-caps/contracts/pipeline-run-job-status.md`.
 
+**Product note** ([`product-concept-draft.md`](../../000-epic-overview/product-concept-draft.md) §3): lock + cooldown apply on **every** ingest for a source, including the **first** successful run for a new slot. Keys are **not** prefixed by `slot_id` — different slots that share a source **serialize** at that source by design.
+
 ---
 
 ## 1. Key naming

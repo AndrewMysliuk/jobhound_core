@@ -2,27 +2,29 @@
 
 **Purpose**: Validate specification completeness before / during implementation  
 **Created**: 2026-03-30  
+**Last Updated**: 2026-04-02  
 **Feature**: [spec.md](../spec.md)
 
 ## Content Quality
 
-- [ ] Goal (per-source collectors → `domain.Job`, tiered stack, no retries) is explicit
-- [ ] Pipeline boundary clear (`internal/collectors` vs `internal/pipeline`)
-- [ ] MVP sources named; inventory for later rows separate
-- [ ] Out of scope: cache/dedup (`006`), pipeline stages (`004`)
+- [x] Goal (per-source collectors → `domain.Job`, tiered stack, no retries) is explicit
+- [x] Pipeline boundary clear (`internal/collectors` vs `internal/pipeline`)
+- [x] MVP sources named; inventory for later rows separate
+- [x] Out of scope: cache/dedup (`006`), pipeline stages (`004`)
+- [x] Product alignment: slot / stage-1 orchestration vs collector scope traceable to **[`product-concept-draft.md`](../../000-epic-overview/product-concept-draft.md)** and **`spec.md`** “Product alignment”
 
 ## Requirement Completeness
 
-- [ ] `Job.Source` values and error semantics traceable to **`contracts/collector.md`**
-- [ ] Normalization (description, dates, remote, country, salary/tags/position) traceable to **`contracts/domain-mapping-mvp.md`**
-- [ ] Europe vs Working Nomads transport documented in **`resources/*`**
-- [ ] Tests: no mandatory live network — reflected in **`tasks.md`** and **`spec.md`**
+- [x] `Job.Source` values and error semantics traceable to **`contracts/collector.md`**
+- [x] Normalization (description, dates, remote, country, salary/tags/position, `UserID` policy) traceable to **`contracts/domain-mapping-mvp.md`**
+- [x] Europe vs Working Nomads transport documented in **`resources/*`**
+- [x] Tests: no mandatory live network — reflected in **`tasks.md`** and **`spec.md`**
 
 ## Feature Readiness
 
-- [ ] Dependencies on `001` / `002` acknowledged
-- [ ] **`plan.md`** phases and **`tasks.md`** checklist align with **`spec.md`** acceptance criteria
-- [ ] Constitution alignment (collectors layout, testing policy) reflected
+- [x] Dependencies on `001` / `002` acknowledged
+- [x] **`plan.md`** phases and **`tasks.md`** checklist align with **`spec.md`** acceptance criteria
+- [x] Constitution alignment (collectors layout, testing policy) reflected
 
 ## Notes
 

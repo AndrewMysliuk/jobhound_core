@@ -70,9 +70,18 @@ Inventory of **jobhound_core** pipeline and domain state, semantics choices, and
 
 ---
 
-## 6. References (paths)
+## 6. Product draft alignment (`product-concept-draft.md`)
+
+- **Product stage 1** (ingest, single broad keyword string per slot) ≠ **implementation** `ApplyBroadFilter` — the latter is **local** narrowing on **already-stored** jobs.
+- **Product stage 2** (narrow on pool) corresponds to **implementation** broad filter **+** keyword filter in sequence.
+- **Product stage 3** policy (cap, ordering, eligible pool, idempotency): **`007`** + `internal/pipeline/utils` for selection; **004** stays **pure** scorer + filters.
+
+---
+
+## 7. References (paths)
 
 - Spec: `specs/004-pipeline-stages/spec.md`
+- Product draft: `specs/000-epic-overview/product-concept-draft.md`
 - Epic: `specs/000-epic-overview/spec.md`
 - Constitution: `.specify/memory/constitution.md`
 - Config: `internal/config/anthropic.go`

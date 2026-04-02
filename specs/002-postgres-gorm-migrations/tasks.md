@@ -32,11 +32,20 @@
 
 ## F. Tests
 
-1. [x] **Testтогs: migrations + schema** — Definition of done: integration-style test against Compose Postgres (CI script or `testcontainers` / `-short` skip documented) **or** documented manual step + unit tests for SQL parsing — **minimum**: automated test that runs migrate up and checks `jobs` exists with expected columns (choose one approach in implementation).
+1. [x] **Tests: migrations + schema** — Definition of done: integration-style test against Compose Postgres (CI script or `testcontainers` / `-short` skip documented) **or** documented manual step + unit tests for SQL parsing — **minimum**: automated test that runs migrate up and checks `jobs` exists with expected columns (choose one approach in implementation).
 2. [x] **Tests: mapping** — Definition of done: table-driven tests for `ToDomain` / `NewModel` round-trip and NULL/zero edge cases.
 
 ## G. Optional / deferred (do not block `002` closure)
 
 1. [x] **Stub tables for runs/events** — **Deferred** by plan D3; follow-up tasks live in `specs/008-events-and-run-history/tasks.md`.
 2. [x] **Wire Dedup port to real storage** — **Closed for `002`**: intentionally deferred to `006` (cache/ingest); no separate dedup schema in `002` (`jobs` only per plan D3). Agent keeps `mock.Dedup` in `cmd/agent` until `006` adds persistence (see `specs/006-cache-and-ingest/spec.md`).
+
+---
+
+## Version 2 — MVP / product-draft alignment (2026-04-02)
+
+**Scope**: Documentation and contracts only; **no** new migration or code required for this pass unless a later epic discovers a gap.
+
+1. [x] **Spec + contract narrative** — `spec.md` “Alignment with MVP” and `contracts/jobs-schema.md` “canonical row vs search slots” match [`product-concept-draft.md`](../000-epic-overview/product-concept-draft.md) (slots, `user_id` vs slot ownership, cascade expectations delegated to `007`/`011`).
+2. [x] **Plan follow-up note** — `plan.md` records slot/delete semantics for child tables when `slot_id` arrives.
 

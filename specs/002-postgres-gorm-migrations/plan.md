@@ -2,13 +2,15 @@
 
 **Branch**: `002-postgres-gorm-migrations`  
 **Date**: 2026-03-29  
-**Last Updated**: 2026-03-29  
+**Last Updated**: 2026-04-02  
 **Spec**: `specs/002-postgres-gorm-migrations/spec.md`  
-**Input**: Feature specification + `research.md`
+**Input**: Feature specification + `research.md` + [`product-concept-draft.md`](../000-epic-overview/product-concept-draft.md)
 
 ## Summary
 
 Add **PostgreSQL** via **GORM**, **versioned SQL migrations** with **golang-migrate**, and a **storage layer** for `jobs` with bidirectional mapping to **`domain.Job`** (no GORM in `internal/domain`). Provide **Docker Compose** for local Postgres, document **env vars** in Makefile/README, and a **dedicated migrate entrypoint** so the agent binary does not auto-migrate in production. **No** `go-common` or Omega internal libraries. **SQLite** is out of scope. Optional run/event tables are **deferred** to `008` / `011` unless a concrete blocker appears (see Resolved decisions).
+
+**MVP narrative (2026-04-02)**: **`jobs`** is the **canonical** vacancy table (one PK per stable id). **Slot-scoped pools** attach via **downstream** schema (`007` / `006` / `011`), not by duplicating `jobs` rows per slot—see spec “Alignment with MVP”.
 
 ## Technical Context
 
@@ -61,6 +63,7 @@ Add **PostgreSQL** via **GORM**, **versioned SQL migrations** with **golang-migr
 
 - Index tuning (`source`, `posted_at`) when `006` ingest query patterns are fixed.
 - Temporal + run history schema in `003` / `008` once workflow IDs and payloads are stable.
+- When **`slot_id`** (and related) land on **`pipeline_runs`** or sibling tables, ensure **ON DELETE** behavior matches product draft §2 (slot delete → no orphans referencing that slot).
 
 ## Project structure (documentation)
 

@@ -7,6 +7,8 @@ Target shape: **`domain.Job`** in `internal/domain/job.go`, plus **planned field
 
 **`Job.ID`**: always from **`domain.StableJobID(Job.Source, listingURL)`** with **`listingURL` = `Job.URL`**, per `001-agent-skeleton-and-domain`.
 
+**`UserID`**: MVP **collectors do not** populate this from site data — leave **`nil`**. **Orchestration / ingest** (`006` and callers) may set it when persisting **slot-scoped** rows per [`product-concept-draft.md`](../../000-epic-overview/product-concept-draft.md) (single-tenant MVP, multi-user later).
+
 - **`URL`** — canonical **job listing page** on the board (stable identity).
 - **`ApplyURL`** — link where the candidate **applies** (ATS, external form, or `mailto:`). Empty if unknown or same-as-listing is not asserted.
 
@@ -113,5 +115,6 @@ If a new `apply_option` value appears at runtime, **`Fetch` must error** (do not
 ## Related
 
 - `collector.md`
+- [`specs/000-epic-overview/product-concept-draft.md`](../../000-epic-overview/product-concept-draft.md)
 - `jobs-table-extension.md`
 - `../resources/europe-remotely.md`, `../resources/working-nomads.md`

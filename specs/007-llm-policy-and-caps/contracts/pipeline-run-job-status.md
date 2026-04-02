@@ -5,9 +5,9 @@
 
 **Related**: `specs/004-pipeline-stages/contracts/pipeline-stages.md` (stage semantics unchanged); `specs/002-postgres-gorm-migrations/contracts/jobs-schema.md` (`jobs` base table); `specs/006-cache-and-ingest/spec.md` (ingest + retention). Later migrations may add columns to **`pipeline_runs`** (e.g. schedule, workflow ids) without changing the PK or table name.
 
-### Alignment (spec **`007`** + `004`)
+### Alignment (spec **`007`** + `004` + [`product-concept-draft.md`](../../000-epic-overview/product-concept-draft.md))
 
-- **`spec.md` acceptance**: Cap **N** as a named code constant → §2 here and **`plan.md`** D3; **`PASSED_STAGE_1`** on **`jobs`**, no **`REJECTED_STAGE_1`** → §1.1 and §3; per-run statuses and transitions → §1.2–§1.3 and §5; at most **N** distinct **`job_id`** per execution and no duplicate stage-3 send in one execution → §2; retention / no dangling per-run rows → §7.
+- **`spec.md` acceptance**: Cap **N** as a named code constant → §2 here and **`plan.md`** D3; **`PASSED_STAGE_1`** on **`jobs`**, no **`REJECTED_STAGE_1`** → §1.1 and §3; per-run statuses and transitions → §1.2–§1.3 and §5; **eligible** pool, **deterministic** ordering, at most **N** distinct **`job_id`** per execution and no duplicate stage-3 send in one execution → §2; **`slot_id`** on **`pipeline_runs`** → §4; **`Temporal`** idempotency (no double cap / duplicate outcomes) → §2; retention / no dangling per-run rows → §7.
 - **`004`**: Stages 1–3 **behaviour** (broad filter, keywords, LLM scoring on **`domain.Job`**) are **unchanged**. This contract adds **persistence** only: canonical ingest completion is **`PASSED_STAGE_1`** on **`jobs`** (wired with **`006`**); stage 2/3 outcomes for a given run live in **`pipeline_run_jobs`**. Jobs **dropped** in memory by stage 1 or 2 in **`004`** are not represented as a **`REJECTED_STAGE_1`** row — that value **does not exist**, consistent with **`004`**’s “omit from the filtered list” model.
 
 ---
@@ -49,12 +49,12 @@ PASSED_STAGE_2 → (PASSED_STAGE_3 | REJECTED_STAGE_3)
 
 | Rule | Detail |
 | ---- | ------ |
-| Value | **5** initially — **named constant** in code (see **`plan.md`** D3). |
-| Scope | Only pairs already in **`PASSED_STAGE_2`** when **this** pipeline-run **execution** builds the stage-3 batch. |
+| Value | **5** initially — **named constant** in code (see **`plan.md`** D3); env override **`JOBHOUND_PIPELINE_STAGE3_MAX_JOBS_PER_RUN`** does not change **rules** (`contracts/environment.md`). |
+| Eligible pool | **(job, pipeline_run)** pairs in **`PASSED_STAGE_2`** for this run that have **no** terminal stage-3 outcome yet (**not** **`PASSED_STAGE_3`** / **`REJECTED_STAGE_3`**). |
 | Limit | At most **N** distinct **`job_id`** values sent to stage 3 in **one** execution of that run. |
-| Ordering | **Which** **N** rows — **implementation-defined** (document in code). |
-| Backlog | Rows not selected remain **`PASSED_STAGE_2`** until a later feature processes them (out of scope for v1 except as backlog). |
-| Idempotency | Within **one** execution, the same **`job_id`** **must not** be sent to stage 3 **twice**. |
+| Ordering | **Normative**: sort the **eligible** set by **`job_id` ascending** (lexicographic), then take the first **N**. **Same** eligible set → **same** selection order (product draft §4). |
+| Backlog | Eligible rows not selected remain **`PASSED_STAGE_2`** until a **later** execution or explicit **“process next batch”**-style action (`011` when implemented). |
+| Idempotency | Within **one** execution, the same **`job_id`** **must not** be sent to stage 3 **twice**. Under **Temporal retries**, the execution must **not** double-consume **N** or insert conflicting **terminal** rows for the same **`(pipeline_run_id, job_id)`**. |
 
 ---
 
@@ -70,12 +70,15 @@ Add a column (**normative name** for v1; **must** match migration + GORM):
 
 ## 4. SQL — `pipeline_runs` (minimal, **owned by `007`**)
 
-**`007`** migrations **create** this table. It exists solely to give **`pipeline_run_id`** a stable FK target; other epics may add nullable columns later.
+**`007`** migrations **create** this table. It exists to give **`pipeline_run_id`** a stable FK target and to associate each run with a **search slot** ([`product-concept-draft.md`](../../000-epic-overview/product-concept-draft.md) §4, §10). Other epics may add nullable columns later.
 
 | Column | Type | Notes |
 | ------ | ---- | ----- |
 | `id` | `uuid` or `bigserial` | PK — referenced as **`pipeline_run_id`** in child table. |
 | `created_at` | `timestamptz` | Recommended. |
+| `slot_id` | `uuid` | **Search slot** for this run. **NULL** allowed only in **legacy** rows before slot DDL is wired; **new** runs should always set this when the slot model is active. **FK** to `search_slots(id)` when that table exists (`011` / `002` follow-up — document in migration). |
+
+**Migration note**: If an early **`007`** migration shipped **without** **`slot_id`**, add it in a **follow-up** `ALTER TABLE` (see **`007` `tasks.md`** supplement) before relying on slot-scoped APIs.
 
 ---
 

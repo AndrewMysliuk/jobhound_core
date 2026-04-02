@@ -2,7 +2,8 @@
 
 **Branch**: `005-job-collectors`  
 **Spec**: `specs/005-job-collectors/spec.md`  
-**Date**: 2026-03-30
+**Date**: 2026-03-30  
+**Last Updated**: 2026-04-02
 
 Short inventory and pointers. **Wire/DOM/JSON detail** is normative in **`resources/europe-remotely.md`** and **`resources/working-nomads.md`**, not duplicated here.
 
@@ -27,6 +28,8 @@ Short inventory and pointers. **Wire/DOM/JSON detail** is normative in **`resour
 - **`001`** — `domain.Job`, `StableJobID`.
 - **`002`** / **`jobs-table-extension.md`** — when persisting new job fields.
 - **`004`** — consumes normalized `Job` (e.g. `PostedAt`, remote, country).
+- **`006`** — slot-scoped ingest, upsert, watermarks, Redis coordination; **not** implemented in **`005`**.
+- **[`000` product concept draft](../000-epic-overview/product-concept-draft.md)** — MVP behavior for slots and stage-1 vs later stages; epics must stay consistent.
 
 ## 4. Risks (summary)
 

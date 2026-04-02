@@ -43,3 +43,13 @@
 
 1. [x] **Real Anthropic client implementation** — Optional follow-up; interface + mock sufficient for `004` per spec.
 2. [x] **Temporal activities invoking stages** — Owned by later specs (`006`+).
+
+---
+
+## Version 2 — 2026-04-02 (product draft alignment)
+
+**Scope**: Documentation and contracts only; **no** code changes required — implementation already matches “ingested pool → local filters → LLM,” with ingest and batch LLM policy in other epics.
+
+1. [x] **`spec.md`** — Product vs implementation numbering table; links to `product-concept-draft.md` and `007`.
+2. [x] **`contracts/pipeline-stages.md`** — Mapping table to product stages; related links.
+3. [x] **`plan.md`**, **`research.md`**, **`checklists/requirements.md`** — Consistent cross-references and notes.

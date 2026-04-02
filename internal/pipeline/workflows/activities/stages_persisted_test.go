@@ -14,6 +14,7 @@ import (
 	pipelinestorage "github.com/andrewmysliuk/jobhound_core/internal/pipeline/storage"
 	pipeutils "github.com/andrewmysliuk/jobhound_core/internal/pipeline/utils"
 	"github.com/andrewmysliuk/jobhound_core/internal/platform/pgsql"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -48,6 +49,7 @@ func testSQLite(t *testing.T) *gorm.DB {
 		`CREATE TABLE pipeline_runs (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			created_at TIMESTAMP NOT NULL,
+			slot_id TEXT,
 			broad_filter_key_hash TEXT
 		)`,
 		`CREATE TABLE pipeline_run_jobs (
@@ -85,14 +87,15 @@ func TestRunPersistedPipelineStages_persistsStage2AndScoresCappedBatch(t *testin
 		seedJobRow(t, db, id, "backend golang remote")
 	}
 
-	runID, err := runRepo.CreateRun(ctx)
+	slotID := uuid.MustParse("55555555-5555-4555-8555-555555555555")
+	runID, err := runRepo.CreateRun(ctx, &slotID)
 	require.NoError(t, err)
 
 	broadHash, err := ingest.BroadFilterKeyHashFromRules(pipeline.BroadFilterRules{
 		RoleSynonyms:     []string{"go"},
 		RemoteOnly:       true,
 		CountryAllowlist: []string{"de"},
-	}, []string{"djinni"})
+	}, []string{"djinni"}, slotID, nil)
 	require.NoError(t, err)
 
 	scorer := stubScorer(func(_ context.Context, _ string, j domain.Job) (domain.ScoredJob, error) {
@@ -160,7 +163,7 @@ func TestRunPersistedPipelineStages_stage3RejectScore(t *testing.T) {
 	now := time.Date(2026, 3, 1, 12, 0, 0, 0, time.UTC)
 	seedJobRow(t, db, "a", "backend")
 
-	runID, err := runRepo.CreateRun(ctx)
+	runID, err := runRepo.CreateRun(ctx, nil)
 	require.NoError(t, err)
 
 	scorer := stubScorer(func(_ context.Context, _ string, j domain.Job) (domain.ScoredJob, error) {

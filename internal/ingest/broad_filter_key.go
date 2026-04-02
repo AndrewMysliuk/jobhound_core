@@ -11,11 +11,14 @@ import (
 
 	"github.com/andrewmysliuk/jobhound_core/internal/pipeline"
 	pipeutils "github.com/andrewmysliuk/jobhound_core/internal/pipeline/utils"
+	"github.com/google/uuid"
 )
 
 // BroadFilterKeyParts is the semantic input for the canonical broad filter key (006 ingest-watermark-and-filter-key.md §2).
 // Callers map workflow/search parameters into these fields before hashing.
 type BroadFilterKeyParts struct {
+	SlotID      uuid.UUID
+	UserID      *string // optional; omitted from JSON when nil or empty after trim
 	Role        string
 	TimeFromUTC *time.Time
 	TimeToUTC   *time.Time
@@ -23,8 +26,8 @@ type BroadFilterKeyParts struct {
 	Keywords    []string
 }
 
-// BroadFilterKeyPartsFromRules derives key parts from stage-1 rules plus the ingest source set.
-// Role synonyms, remote-only, and country allowlist are folded into keywords as stable tokens; time window uses UTC RFC3339 when both bounds are set.
+// BroadFilterKeyPartsFromRules derives key parts from stage-1 rules plus the ingest source set (excluding slot/user).
+// Set SlotID (and optional UserID) before [CanonicalBroadFilterKeyJSON] / [BroadFilterKeyHashHex].
 func BroadFilterKeyPartsFromRules(rules pipeline.BroadFilterRules, sources []string) (BroadFilterKeyParts, error) {
 	if err := pipeutils.ValidateBroadFilterRules(rules); err != nil {
 		return BroadFilterKeyParts{}, err
@@ -60,16 +63,35 @@ func BroadFilterKeyPartsFromRules(rules pipeline.BroadFilterRules, sources []str
 	}, nil
 }
 
-// CanonicalBroadFilterKeyJSON returns compact JSON with fixed key order: role, time_window, sources, keywords; empty sections omitted.
+// CanonicalBroadFilterKeyJSON returns compact JSON with fixed key order: slot_id, user_id (optional), role, time_window, sources, keywords.
 // String fields are trimmed and lowercased; sources and keywords are sorted and deduplicated (contract §2).
 func CanonicalBroadFilterKeyJSON(p BroadFilterKeyParts) (string, error) {
+	if p.SlotID == uuid.Nil {
+		return "", fmt.Errorf("ingest: broad filter key requires slot_id")
+	}
 	var parts []string
+	sid, err := json.Marshal(p.SlotID.String())
+	if err != nil {
+		return "", err
+	}
+	parts = append(parts, `"slot_id":`+string(sid))
+	if p.UserID != nil {
+		if u := strings.TrimSpace(*p.UserID); u != "" {
+			b, err := json.Marshal(strings.ToLower(u))
+			if err != nil {
+				return "", err
+			}
+			parts = append(parts, `"user_id":`+string(b))
+		}
+	}
+	hasContent := false
 	if t := strings.TrimSpace(strings.ToLower(p.Role)); t != "" {
 		b, err := json.Marshal(t)
 		if err != nil {
 			return "", err
 		}
 		parts = append(parts, `"role":`+string(b))
+		hasContent = true
 	}
 	if p.TimeFromUTC != nil && p.TimeToUTC != nil {
 		tw := struct {
@@ -84,6 +106,7 @@ func CanonicalBroadFilterKeyJSON(p BroadFilterKeyParts) (string, error) {
 			return "", err
 		}
 		parts = append(parts, `"time_window":`+string(b))
+		hasContent = true
 	}
 	src := normalizeStringSlice(p.Sources)
 	slices.Sort(src)
@@ -94,6 +117,7 @@ func CanonicalBroadFilterKeyJSON(p BroadFilterKeyParts) (string, error) {
 			return "", err
 		}
 		parts = append(parts, `"sources":`+string(b))
+		hasContent = true
 	}
 	kws := normalizeStringSlice(p.Keywords)
 	slices.Sort(kws)
@@ -104,9 +128,10 @@ func CanonicalBroadFilterKeyJSON(p BroadFilterKeyParts) (string, error) {
 			return "", err
 		}
 		parts = append(parts, `"keywords":`+string(b))
+		hasContent = true
 	}
-	if len(parts) == 0 {
-		return "", fmt.Errorf("ingest: broad filter key has no non-empty fields")
+	if !hasContent {
+		return "", fmt.Errorf("ingest: broad filter key has no non-empty fields beyond slot_id")
 	}
 	return "{" + strings.Join(parts, ",") + "}", nil
 }
@@ -121,12 +146,17 @@ func BroadFilterKeyHashHex(p BroadFilterKeyParts) (string, error) {
 	return hex.EncodeToString(sum[:]), nil
 }
 
-// BroadFilterKeyHashFromRules combines [BroadFilterKeyPartsFromRules] and [BroadFilterKeyHashHex].
-func BroadFilterKeyHashFromRules(rules pipeline.BroadFilterRules, sources []string) (string, error) {
+// BroadFilterKeyHashFromRules combines [BroadFilterKeyPartsFromRules] and [BroadFilterKeyHashHex] with slot (and optional user) scope.
+func BroadFilterKeyHashFromRules(rules pipeline.BroadFilterRules, sources []string, slotID uuid.UUID, userID *string) (string, error) {
+	if slotID == uuid.Nil {
+		return "", fmt.Errorf("ingest: slot_id is required for broad filter key hash")
+	}
 	parts, err := BroadFilterKeyPartsFromRules(rules, sources)
 	if err != nil {
 		return "", err
 	}
+	parts.SlotID = slotID
+	parts.UserID = userID
 	return BroadFilterKeyHashHex(parts)
 }
 

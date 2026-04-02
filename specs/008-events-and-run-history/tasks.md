@@ -1,23 +1,25 @@
-# Tasks: Scheduled events and run history
+# Tasks: Scheduled auto-refresh and run history
 
-**Input**: `spec.md`; schema stubs **deferred** from `specs/002-postgres-gorm-migrations` (plan D3, optional “runs/events” in `002/spec.md`).  
-**Depends on**: `003`, `006`, `007` (per `008/spec.md`); DB bootstrap and migrate path from `002`.
+**Input**: [spec.md](./spec.md), [contracts/scheduled-runs-and-history.md](./contracts/scheduled-runs-and-history.md), [plan.md](./plan.md).  
+**Schema stubs**: optional carry-over from `specs/002-postgres-gorm-migrations` (plan D3) if still listed there—**table names and columns are owned by this epic’s contract**.  
+**Depends on**: `003`, `004`, `006`, `007` (per spec); DB bootstrap from `002`.  
+**Product order**: implement after core vertical (`009` / `011` + ingest + pipeline) per `specs/000-epic-overview/product-concept-draft.md` §8–§9.
 
 ## A. Contracts
 
-1. [ ] **Event + run history schema contracts** — Definition of done: `contracts/events-schema.md` and/or `contracts/run-history-schema.md` (or one combined doc) describe tables, PKs, nullability, and how they relate to Temporal workflow/run IDs and incremental watermarks.
+1. [ ] **Schedule + run history schema contract** — Definition of done: [contracts/scheduled-runs-and-history.md](./contracts/scheduled-runs-and-history.md) reviewed; open questions in §5 resolved; aligns with `pipeline_runs.slot_id` and slot lifecycle (**draft** §2).
 
-## B. Migrations (stub tables carried from `002`)
+## B. Migrations (stub or full tables)
 
-2. [ ] **SQL migration: run history stub** — Definition of done: versioned `up`/`down` under repo `migrations/` creates a minimal table (names/columns owned here; align with `002` optional sketch: id, timestamps, status, nullable `temporal_workflow_run_id`, nullable `payload` jsonb or equivalent agreed in contract). Down drops or safe downgrade per team preference.
+2. [ ] **SQL migration: run history** — Definition of done: versioned `up`/`down` under repo `migrations/` creates the history table (columns per contract §3); down is safe per team preference.
 
-3. [ ] **SQL migration: scheduled event stub** — Definition of done: minimal table for saved search + schedule metadata needed before full `011` API; exact columns fixed in contract A.1. Integrates with watermark / “last successful run” fields from `008` goal.
+3. [ ] **SQL migration: slot schedule** — Definition of done: versioned `up`/`down` creates the schedule table (columns per contract §2); integrates with optional `temporal_schedule_id`.
 
 ## C. Storage layer
 
-4. [ ] **GORM models + mapping** — Definition of done: packages under `internal/.../storage/` (no GORM in `internal/domain`); `TableName()`, `NewModel` / `ToDomain` (or symmetric) for event and run-history entities; `WithContext` on queries.
+4. [ ] **GORM models + mapping** — Definition of done: packages under `internal/.../storage/`; `TableName()`, mapping helpers; `WithContext` on queries.
 
-5. [ ] **Repository interfaces** — Definition of done: minimal ports for append run history, read last watermark / last run time, CRUD or subset for events as needed by `003` worker and `006` ingest alignment.
+5. [ ] **Repository interfaces** — Definition of done: minimal ports for append history, read/update schedule by `slot_id`, list recent history; no duplicate “saved search” entity—parameters stay on the slot.
 
 ## D. Tests
 
@@ -25,6 +27,13 @@
 
 7. [ ] **Unit: mapping** — Definition of done: table-driven tests for NULL/zero and round-trip for storage models introduced in C.4.
 
-## E. Cross-cutting (not duplicated in `006`)
+## E. Cross-cutting
 
-- **Dedup / job store persistence** stays under **`006`** per `002/tasks.md` task 16; do not conflate with run-history rows unless spec explicitly merges concerns.
+- **Dedup / job store persistence** stays under **`006`**; run history rows record **tick outcomes**, not normalized job bodies, unless spec explicitly extends scope.
+- **Temporal** schedule registration vs external trigger: document chosen approach in contract or `plan.md` D3 when implemented.
+
+---
+
+## Changelog (spec / artifacts only)
+
+**2026-04-02** — Aligned [spec.md](./spec.md) with [`product-concept-draft.md`](../000-epic-overview/product-concept-draft.md): slot-scoped schedules, post-core phasing, delta + cap references, no filter snapshot history. Added [contracts/scheduled-runs-and-history.md](./contracts/scheduled-runs-and-history.md), [plan.md](./plan.md), [checklists/requirements.md](./checklists/requirements.md). Task identifiers A–E unchanged; wording updated for **slot** centricity and contract path.

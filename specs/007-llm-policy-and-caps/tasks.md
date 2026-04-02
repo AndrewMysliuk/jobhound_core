@@ -81,3 +81,21 @@ Requires **`specs/006-cache-and-ingest`** (ingest path + retention).
 1. [x] **Integration: migrations** — Definition of done: `//go:build integration` test applies migrations and asserts tables/columns/indexes (same approach as `002` if adopted).
 
 2. [x] **Config-backed N** — Definition of done: **Implemented** — `JOBHOUND_PIPELINE_STAGE3_MAX_JOBS_PER_RUN` in `internal/config/pipeline.go` + `contracts/environment.md`; cap **rules** unchanged from `spec.md`.
+
+---
+
+## Version 2 — MVP product alignment (2026-04-02)
+
+**Input**: Updated `spec.md`, `plan.md`, `contracts/*` aligned with [`product-concept-draft.md`](../000-epic-overview/product-concept-draft.md) §4, §10 (`slot_id` on runs, deterministic cap ordering, eligible pool, Temporal idempotency).
+
+**Prerequisite**: **`search_slots`** (or agreed slot table) may land in **`011`** / **`002`** — **`slot_id`** FK can be deferred as **NULL** until then; document in migration.
+
+1. [x] **`pipeline_runs.slot_id`** — Definition of done: migration adds **`slot_id UUID NULL`** (or **NOT NULL** if slots exist); GORM model + run creation paths set it when orchestration has a slot; index if queried by slot.
+
+2. [x] **Cap selection** — Definition of done: load **eligible** `PASSED_STAGE_2` rows (no terminal stage 3 for this run), **ORDER BY `job_id` ASC**, take **≤ N**; unit tests assert deterministic order; update any previous “implementation-defined” ordering in code comments.
+
+3. [x] **Temporal idempotency** — Definition of done: stage-3 batch activities use **idempotent** writes (e.g. deterministic upserts / conflict handling) so retries do not double-send jobs or corrupt **`pipeline_run_jobs`** rows — documented next to activities.
+
+4. [x] **Contract cross-check** — Definition of done: `contracts/pipeline-run-job-status.md` §2 behavior reflected in `internal/pipeline` (or selection package) tests.
+
+5. [x] **Quality** — Definition of done: `make test`, `make vet`, `make fmt` for touched packages.

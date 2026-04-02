@@ -2,13 +2,15 @@
 
 **Branch**: `005-job-collectors`  
 **Date**: 2026-03-30  
-**Last Updated**: 2026-03-30  
+**Last Updated**: 2026-04-02  
 **Spec**: `specs/005-job-collectors/spec.md`  
-**Input**: Feature specification, `resources/*`, `contracts/*`
+**Input**: Feature specification, `resources/*`, `contracts/*`, [`product-concept-draft.md`](../000-epic-overview/product-concept-draft.md)
 
 ## Summary
 
 Implement **two MVP collectors** (Europe Remotely, Working Nomads) under **`internal/collectors/`**, each satisfying **`pipeline.Collector`**, normalizing to **`domain.Job`** per **`contracts/domain-mapping-mvp.md`**. **HTTP**: `net/http` + **goquery** (Europe) and **`encoding/json`** (Working Nomads); **no retries**; **`httptest`** + fixtures for **`go test ./...`** without live network.
+
+**Product boundary**: collectors are **per-source fetch + map**; **slot-scoped ingest**, **upsert**, **watermarks**, and **coordination** are **`006`** — see **`spec.md`** “Product alignment” and **`contracts/collector.md`** “Relationship to orchestration”.
 
 ## Technical Context
 

@@ -42,6 +42,7 @@ After each **spike**, update **Tier (theory)** → **Tier (fact)** and **Notes**
 
 ## Related
 
+- [`specs/000-epic-overview/product-concept-draft.md`](../../000-epic-overview/product-concept-draft.md) — MVP phasing (“more sources” extends **`005`**)
 - `specs/005-job-collectors/spec.md` — feature goal and scope
 - `specs/005-job-collectors/contracts/collector.md` — module boundary + `Job.Source` values
 - `specs/005-job-collectors/contracts/domain-mapping-mvp.md` — → `domain.Job` (MVP normalization + errors)

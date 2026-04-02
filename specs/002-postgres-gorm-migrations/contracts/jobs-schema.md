@@ -4,6 +4,12 @@
 **Status**: **Frozen** for `002` — first migration (`migrations/000001_*_jobs.up.sql` or next free version) and storage mapping **must** match this document.  
 **Domain type**: `internal/domain/job.go` → `Job`
 
+## MVP: canonical row vs search slots
+
+[`product-concept-draft.md`](../../000-epic-overview/product-concept-draft.md) §2–3: a **search slot** has its own stage-1 pool and downstream results. **`jobs`** stores **canonical** listing facts **keyed only by stable `id`** (`001`); it does **not** carry **`slot_id`**. Membership of a vacancy in a slot’s pool is expressed through **slot/run-scoped** tables (coordinated with **`006` / `007` / `011`**—e.g. links from runs to `job_id`, future `slot_id` on run headers). The same canonical `id` may appear in **multiple** slots via **multiple association rows**, not multiple `jobs` PKs.
+
+**`user_id`** here is optional listing-level attribution reserved for multi-user (`001`); **slot ownership** is **not** defined solely by this column.
+
 ## SQL table `jobs`
 
 Logical columns (names and types are normative):
@@ -67,5 +73,6 @@ CREATE TABLE jobs (
 
 ## Related
 
-- `spec.md` — Initial schema (v0)
+- `spec.md` — Initial schema (v0) and “Alignment with MVP”
+- `product-concept-draft.md` — slots, pools, delete semantics for child data
 - `plan.md` — D7, D8, D3 (`jobs` only in `002`)

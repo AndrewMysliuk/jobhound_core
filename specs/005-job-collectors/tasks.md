@@ -1,5 +1,6 @@
 # Tasks: Job collectors (MVP sources)
 
+**Last Updated**: 2026-04-02  
 **Input**: `spec.md`, `plan.md`, `research.md`, `contracts/*`, `resources/*`  
 **Tests**: REQUIRED — `**go test ./...`** without live network; `**httptest**` + bodies aligned with `**contracts/test-fixtures.md**`. Wire shapes and selectors: `**resources/europe-remotely.md**`, `**resources/working-nomads.md**`.
 
@@ -39,3 +40,17 @@
 1. [x] **Debug HTTP runner** — Definition of done: `cmd/agent` `-debug-http-addr` and optional `JOBHOUND_DEBUG_HTTP_ADDR`; `GET /health`, per-source `POST /debug/collectors/europe_remotely` and `POST /debug/collectors/working_nomads` via `internal/collectors/handlers/debughttp`; full `domain.Job` JSON in `jobs`; single JSON body contract (`limit` + optional Working Nomads ES fields); unit tests without network.
 2. [x] **Captured real `admin-ajax.php` body** — Definition of done: `**resources/europe-remotely.md`** holds implementation-aligned reference body (fields + example); replace with DevTools capture when available (redact secrets).
 
+---
+
+## Version 2 — Product alignment with global MVP draft (2026-04-02)
+
+**Input**: [`specs/000-epic-overview/product-concept-draft.md`](../000-epic-overview/product-concept-draft.md)  
+**Scope**: Documentation and contract cross-links only — **no code changes** required for this pass.
+
+1. [x] **`spec.md`** — Definition of done: “Product alignment (MVP)” section; out-of-scope clarifies slot/`006` boundary; Related links `product-concept-draft.md`.
+2. [x] **`plan.md`** — Definition of done: summary references product draft and orchestration boundary.
+3. [x] **`contracts/collector.md`** — Definition of done: “Relationship to orchestration (MVP)” + Related link.
+4. [x] **`contracts/domain-mapping-mvp.md`** — Definition of done: `UserID` sourcing rule (collectors leave unset; ingest may set).
+5. [x] **`research.md`** — Definition of done: dependencies include `006` and product draft pointer.
+6. [x] **`contracts/sources-inventory.md`** — Definition of done: Related includes product draft (phasing).
+7. [x] **`checklists/requirements.md`** — Definition of done: product-alignment checklist rows updated.

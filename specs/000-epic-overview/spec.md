@@ -2,16 +2,22 @@
 
 **Feature Branch**: `000-epic-overview`
 **Created**: 2026-03-29
-**Last Updated**: 2026-03-30
-**Status**: Completed
+**Last Updated**: 2026-04-02
+**Status**: Active (index complete; numbered epics aligned incrementally with the product draft)
 
-**Purpose**: Index of all planned features under `specs/`. Each numbered folder has its own brief `spec.md` for orientation; detailed requirements come later via Spec Kit per feature.
+**Purpose**: Index of all planned features under `specs/`. Each numbered folder has its own brief `spec.md` for orientation; detailed requirements come later via Spec Kit per feature. If an epic contradicts [`product-concept-draft.md`](./product-concept-draft.md) on user-visible or data-lifecycle behavior, **fix the epic** (or the draft first if the product decision changed).
 
-**Layer 0 (epic index)**: **Completed** — overview, feature table `001`–`012`, constitution v1.1, and Cursor rules aligned. **Docker Compose** for Postgres/Temporal is implemented when delivering `002` / `003`, not part of this milestone.
+**End-to-end product behavior (draft)**: [`product-concept-draft.md`](./product-concept-draft.md) — search **slots**, three stages, filter **reset** rules, stage-3 **cap/ordering/idempotency**, MVP vs later; narrative source of truth until promoted or split.
+
+**Layer 0 (epic index)**: Overview, feature table `001`–`012`, constitution, and Cursor rules. **Docker Compose** for Postgres/Temporal lands with **`002` / `003`**, not as a separate milestone.
 
 ## Product summary
 
-Personal job agent: ingest vacancies, **three narrowing stages** (role/time → keywords → CV-aware LLM), store in **PostgreSQL**, run **manual** and **scheduled event** flows via **Temporal**, optional **Telegram** (short payload). Web UI lives in a **separate repo**; this backend exposes HTTP API. **Auth omitted for now**; models stay extensible for a future user id.
+Personal job agent built around **search slots** (product constant **3–5** per user later; **single-tenant** operationally for MVP): each slot has an immutable **stage-1 broad keyword string** after the first successful ingest, **bound sources**, and **slot-scoped** vacancy rows and pipeline outcomes (`slot_id`; schema **reserves `user_id`** for registration and isolation without rewriting ownership).
+
+**Three stages** (see draft §1–§4): **(1)** broad external ingest and optional delta refresh; **(2)** local narrow filters (include/exclude; optional date TBD) on the stage-1 pool only; **(3)** LLM on rows that passed stage 2, with **cap, deterministic ordering, eligible pool, and idempotency** per draft §4 (epics **`004` / `007`**). **Manual marks** stay coarse (same passed/failed buckets as the pipeline) plus a small correction path; **reset** when filters change wipes dependent outcomes per draft §5.
+
+**PostgreSQL** for persistence; **Temporal** for workflows. **API-first** (**`011`**); any product UI is a separate deliverable. **Telegram** (**`010`**) and **scheduled auto-refresh** (**`008`**) are **after** a working core vertical (draft §8–§9). **Auth** may be omitted in MVP APIs; **schema** still carries **`user_id`** where needed for a later multi-user model.
 
 ## Local development (target)
 
@@ -29,24 +35,27 @@ Personal job agent: ingest vacancies, **three narrowing stages** (role/time → 
 
 | # | Folder | One-line scope |
 |---|--------|----------------|
-| 001 | `001-agent-skeleton-and-domain` | Go layout, `domain.Job` (+ apply URL field), `Source`+listing stable IDs, optional user scope |
-| 002 | `002-postgres-gorm-migrations` | DB connection, GORM, migration strategy, base tables |
+| 001 | `001-agent-skeleton-and-domain` | Go layout, `domain.Job` (+ apply URL field), `Source` + listing stable IDs; **`user_id` / slot-ready** domain shapes |
+| 002 | `002-postgres-gorm-migrations` | DB connection, GORM, migration strategy, base tables (**slot- and user-aware** as specs require) |
 | 003 | `003-temporal-orchestration` | Client, worker, dev/prod wiring, thin hello-workflow pattern |
-| 004 | `004-pipeline-stages` | Pure services: stage 1 / 2 / 3 callable from activities |
+| 004 | `004-pipeline-stages` | Pure stage logic: **broad pool → narrow (local) → LLM**; callable from activities; semantics per draft |
 | 005 | `005-job-collectors` | `Collector` interface, tiered sources (HTTP, goquery, rod) |
-| 006 | `006-cache-and-ingest` | Normalized job store, watermarks, cache vs explicit refresh rules |
-| 007 | `007-llm-policy-and-caps` | Auto cap (e.g. 5), extra statuses, manual “run LLM” actions |
-| 008 | `008-events-and-run-history` | Event entity, schedule, incremental runs, history (0 results OK) |
-| 009 | `009-manual-search-workflow` | Same engine, API-triggered workflow, response contract |
-| 010 | `010-telegram-notifications` | Activity: short messages, rate/cap alignment with 007 |
-| 011 | `011-http-public-api` | REST (or RPC) for future UI: events, runs, manual actions |
-| 012 | `012-observability` | Logging, correlation with workflow run ids, ops hooks for GCP |
+| 006 | `006-cache-and-ingest` | Normalized job store, watermarks, delta vs refresh; **Redis lock + cooldown by `source_id`** (shared across slots); slot-scoped association |
+| 007 | `007-llm-policy-and-caps` | Caps, **ordering, eligible pool, idempotency** (draft §4); pipeline runs mapped to **slot** (+ user); manual “next batch” style actions |
+| 008 | `008-events-and-run-history` | Event entity, **schedule**, incremental runs, history (0 results OK); **post-core** per draft §8 |
+| 009 | `009-manual-search-workflow` | Same engine, **API-triggered** workflow, response contract; **slot id**, reset rules §5 |
+| 010 | `010-telegram-notifications` | Activity: short messages, cap alignment with **`007`**; **post-core** per draft §8 |
+| 011 | `011-http-public-api` | REST (or RPC) for UI: slots, profile, runs, manual actions; **§5 reset** semantics |
+| 012 | `012-observability` | Structured logging; correlation (Temporal + HTTP + **`slot_id`/`user_id`**); GCP-friendly export; optional Grafana-style **ops** dashboards (draft §7) — post-core per draft §9 |
 
 ## Suggested implementation order
 
-`001` → `002` → `003` → `004` → `005` / `006` (schema coordinated) → `007` → `008` → `009` → `010` → `011` → `012` (can overlap early with 003).
+**Product phasing** (see draft §9): **(1)** core vertical—slots, profile, ingest + delta, stage-2/3 recompute, persistence, **minimal API / manual triggers** to drive it; **(2)** more sources (`005`); **(3)** extensions—Telegram (`010`), schedules (`008`), richer observability (`012`).
+
+**Dependency-friendly sequence**: `001` → `002` → `003` → `004` → `005` / `006` (schema coordinated) → `007` → **`009` / `011`** (expose runs and slot operations for the core path) → then **`008`** / **`010`** as needed → **`012`** (can overlap early with `003`). Treat **`008`** and **`010`** as optional until the single-user core path is usable end-to-end.
 
 ## Related
 
+- [`product-concept-draft.md`](./product-concept-draft.md) — global product draft (slots, stages, reset rules, stage-3 policy, MVP vs backlog).
 - `.specify/memory/constitution.md` — principles and stack.
 - Reference layout style: `omg-bo/specs` (folder per feature, `spec.md` inside).

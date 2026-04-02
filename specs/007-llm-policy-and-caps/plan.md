@@ -2,13 +2,13 @@
 
 **Branch**: `007-llm-policy-and-caps`  
 **Date**: 2026-03-31  
-**Last Updated**: 2026-03-31  
+**Last Updated**: 2026-04-02  
 **Spec**: `specs/007-llm-policy-and-caps/spec.md`  
-**Input**: Feature specification + `contracts/*`
+**Input**: Feature specification + `contracts/*` + [`product-concept-draft.md`](../000-epic-overview/product-concept-draft.md)
 
 ## Summary
 
-Introduce a **cap N** (initially **5**, **named code constant**) on how many `(job_id, pipeline_run_id)` pairs in **`PASSED_STAGE_2`** may enter **stage 3** in **one pipeline-run execution**, with **idempotent** batch selection (no duplicate stage-3 processing for the same job in the same execution). Persist **split statuses**: **`PASSED_STAGE_1`** on **`jobs`** (broad ingest / stage 1 complete — no `REJECTED_STAGE_1`), and **per-run** rows for **`REJECTED_STAGE_2`**, **`PASSED_STAGE_2`**, **`PASSED_STAGE_3`**, **`REJECTED_STAGE_3`** keyed by **`(job_id, pipeline_run_id)`**. Wire **orchestration** (Temporal activities / worker, `003`) so executions load candidates, apply cap, invoke `004` stage 3 only for the selected batch, and update rows per **`contracts/pipeline-run-job-status.md`**.
+Introduce a **cap N** (initially **5**, **named code constant**) on how many `(job_id, pipeline_run_id)` pairs from the **eligible** **`PASSED_STAGE_2`** pool may enter **stage 3** in **one pipeline-run execution**, with **idempotent** batch selection and **deterministic** ordering (see contract). Persist **split statuses**: **`PASSED_STAGE_1`** on **`jobs`** (broad ingest / stage 1 complete — no `REJECTED_STAGE_1`), and **per-run** rows for **`REJECTED_STAGE_2`**, **`PASSED_STAGE_2`**, **`PASSED_STAGE_3`**, **`REJECTED_STAGE_3`** keyed by **`(job_id, pipeline_run_id)`**. **`pipeline_runs`** includes **`slot_id`** so a run maps to a **search slot** (product draft). Wire **orchestration** (Temporal activities / worker, `003`) so executions load candidates, apply cap, invoke `004` stage 3 only for the selected batch, and update rows per **`contracts/pipeline-run-job-status.md`**.
 
 This spec does **not** change stage 1–3 **math** from `004`; it adds **policy + persistence + batching**.
 
@@ -39,9 +39,9 @@ This spec does **not** change stage 1–3 **math** from `004`; it adds **policy 
 | Phase | Output |
 |-------|--------|
 | 0 Contracts | `contracts/environment.md`, `contracts/pipeline-run-job-status.md` |
-| 1 Migrations | SQL `up`/`down`: `jobs` column for stage **1** status; **`pipeline_runs`** (minimal — **owned by `007`**); **`pipeline_run_jobs`** per contract; indexes and **FK** + **ON DELETE CASCADE** from per-run rows to `jobs` |
+| 1 Migrations | SQL `up`/`down`: `jobs` column for stage **1** status; **`pipeline_runs`** (minimal + **`slot_id`** per contract — supplement migration if initial ship omitted it); **`pipeline_run_jobs`** per contract; indexes and **FK** + **ON DELETE CASCADE** from per-run rows to `jobs` |
 | 2 Domain & storage | GORM models + repository methods: upsert per-run status transitions; load `PASSED_STAGE_2` candidates for a run; optional domain types for enum |
-| 3 Cap + selection | Pure helper or small service: given candidate set + execution idempotency key, select ≤ **N** jobs; ordering **implementation-defined** (document in code) |
+| 3 Cap + selection | Pure helper or small service: given **eligible** `PASSED_STAGE_2` set + execution idempotency key, select ≤ **N** jobs; ordering **deterministic** per **`contracts/pipeline-run-job-status.md`** |
 | 4 Orchestration | Worker activities / pipeline glue: after stage 2 outcomes written, run stage 3 batch loop respecting cap; update to **`PASSED_STAGE_3`** / **`REJECTED_STAGE_3`**; never double-send same `job_id` in one execution |
 | 5 Ingest alignment | **`006`** path sets **`PASSED_STAGE_1`** on **`jobs`** when broad stage 1 completes; retention deletes cascade per contract |
 | 6 Quality gates | `make test`, `make vet`, `make fmt`; integration tests for migrations optional (`integration` tag) |
@@ -50,10 +50,10 @@ This spec does **not** change stage 1–3 **math** from `004`; it adds **policy 
 
 | # | Topic | Decision |
 |---|--------|----------|
-| D1 | **`pipeline_runs` ownership** | **`007`** migration creates **`pipeline_runs`** (minimal: surrogate PK + timestamps). Per-run rows **require** `pipeline_run_id` → **`pipeline_runs(id)`**. Later epics may **`ALTER TABLE pipeline_runs`** to add metadata (schedule, workflow ids, etc.) **without** renaming the table or changing the PK type. |
+| D1 | **`pipeline_runs` ownership** | **`007`** migration creates **`pipeline_runs`** (minimal: surrogate PK + timestamps + **`slot_id`** per contract). Per-run rows **require** `pipeline_run_id` → **`pipeline_runs(id)`**. Later epics may **`ALTER TABLE pipeline_runs`** to add metadata (schedule, workflow ids, etc.) **without** renaming the table or changing the PK type. |
 | D2 | **Per-run table name** | **`pipeline_run_jobs`** — canonical name in **`contracts/pipeline-run-job-status.md`** (may differ in code only if contract is updated). |
 | D3 | **Cap constant location** | Exported identifier in **`internal/pipeline`** (e.g. `MaxStage3JobsPerPipelineRunExecution` = **5**) or `internal/config` package-level const — **one** place; referenced by selection logic and tests. |
-| D4 | **Ordering** | Which **N** of `PASSED_STAGE_2` rows are chosen is **implementation-defined**; must be **deterministic enough** for the same execution input if re-run in tests (document strategy). |
+| D4 | **Ordering** | **Normative**: among **eligible** rows (non-terminal stage 3 for this run), order by **`job_id` ascending** unless a later contract adds an explicit tie-breaker column — **same inputs → same order** (product draft §4). Document in selection code. |
 | D5 | **Stage 3 failure** | Align with **`004`**: LLM failure may return **`error`**; activity decides abort vs mark job failed — document chosen behaviour in activities or contract addendum. |
 
 ## Engineering follow-ups (non-blocking)

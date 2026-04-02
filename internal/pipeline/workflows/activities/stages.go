@@ -106,9 +106,18 @@ func (a *Activities) RunPersistedPipelineStages(ctx context.Context, in pipeline
 	}
 	selected := pipeutils.SelectStage3JobIDs(candidates, exclude, a.Stage3MaxJobsPerRun)
 
+	// Stage 3 + Temporal: [Repository.SetRunJobStatus] is idempotent for terminal rows; [GetRunJobStatus] skips
+	// duplicate LLM work when a retry runs after a successful persist. A crash between [llm.Scorer.Score] and
+	// SetRunJobStatus can still double-call the scorer unless the workflow passes [PersistedPipelineStagesInput.Stage3SentJobIDs]
+	// from a partial checkpoint (011+).
 	sentIDs := append([]string(nil), in.Stage3SentJobIDs...)
 	var scored []domain.ScoredJob
 	for _, id := range selected {
+		if cur, ok, err := a.Runs.GetRunJobStatus(ctx, in.PipelineRunID, id); err != nil {
+			return nil, err
+		} else if ok && (cur == pipeline.RunJobPassedStage3 || cur == pipeline.RunJobRejectedStage3) {
+			continue
+		}
 		job, err := a.Jobs.GetByID(ctx, id)
 		if err != nil {
 			return nil, fmt.Errorf("load job %q: %w", id, err)

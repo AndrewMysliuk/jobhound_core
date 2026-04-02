@@ -34,7 +34,7 @@ func TestMigrationsJobsSchema_integration(t *testing.T) {
 	assertJobsSchema(t, cols)
 }
 
-// TestMigrationsIngestWatermarkAndPipelineRuns_integration checks 006 ingest_watermarks
+// TestMigrationsIngestWatermarkAndPipelineRuns_integration checks ingest_watermarks
 // and pipeline_runs.broad_filter_key_hash after migrations (specs/006-cache-and-ingest).
 func TestMigrationsIngestWatermarkAndPipelineRuns_integration(t *testing.T) {
 	sqlDB := migrateUpAndOpenDB(t)
@@ -48,8 +48,8 @@ func TestMigrationsIngestWatermarkAndPipelineRuns_integration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if n != 3 {
-		t.Fatalf("ingest_watermarks column count: got %d want 3", n)
+	if n != 4 {
+		t.Fatalf("ingest_watermarks column count: got %d want 4 (slot_id, source_id, cursor, updated_at)", n)
 	}
 
 	err = sqlDB.QueryRowContext(ctx, `
@@ -64,7 +64,7 @@ func TestMigrationsIngestWatermarkAndPipelineRuns_integration(t *testing.T) {
 	}
 }
 
-// TestMigrationsPipelineRunJobsCascadeOnJobDelete_integration verifies 007 §7: deleting a job row
+// TestMigrationsPipelineRunJobsCascadeOnJobDelete_integration verifies deleting a job row
 // removes matching pipeline_run_jobs via FK ON DELETE CASCADE (006 retention alignment).
 func TestMigrationsPipelineRunJobsCascadeOnJobDelete_integration(t *testing.T) {
 	sqlDB := migrateUpAndOpenDB(t)
@@ -133,6 +133,7 @@ func TestMigrations007PipelineTables_integration(t *testing.T) {
 	}{
 		"id":                    {"bigint", "NO"},
 		"created_at":            {"timestamp with time zone", "NO"},
+		"slot_id":               {"uuid", "YES"},
 		"broad_filter_key_hash": {"text", "YES"},
 	})
 

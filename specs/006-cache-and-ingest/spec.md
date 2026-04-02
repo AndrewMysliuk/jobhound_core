@@ -2,8 +2,10 @@
 
 **Feature Branch**: `006-cache-and-ingest`  
 **Created**: 2026-03-29  
-**Last Updated**: 2026-03-31  
+**Last Updated**: 2026-04-02  
 **Status**: Draft
+
+**Product narrative**: [`../000-epic-overview/product-concept-draft.md`](../000-epic-overview/product-concept-draft.md) — search slots, stage-1 refresh vs filter resets, Redis keyed by `source_id`.
 
 ## Goal
 
@@ -13,7 +15,7 @@
 
 Define **when** ingest hits external collectors vs reads from Postgres, **incremental cursor** (when supported by collectors), **retention** for old job rows, and optional **explicit refresh** (default off).
 
-**Pipeline identity (v1):** broad stage-1 searches that match the **same normalized filter key** share a **global** pipeline context (different users may search “the same thing”). Narrow stage-2/3 filtering is **not** ingest (`004` / `007`).
+**Search slot (MVP):** stage-1 ingest and the **stage-1 pool** are **scoped to a search slot** (`slot_id`), not a global “same broad query” cache across slots. Two slots may use the **same** broad keyword string; each still has its **own** pool and downstream rows — **no** requirement to dedupe or merge vacancies **across** slots (see `002` canonical `jobs` vs slot associations). The **normalized broad filter key** hash and **watermarks** are reconciled in **`(user_id, slot_id)`** scope (see **`contracts/ingest-watermark-and-filter-key.md`**). Narrow stage-2/3 filtering is **not** ingest (`004` / `007`).
 
 ## Non-goals
 
@@ -30,14 +32,14 @@ Define **when** ingest hits external collectors vs reads from Postgres, **increm
 
 ## Broad query key and “cache”
 
-- **“Same” broad stage-1 request** is identified by a **normalized filter key**: canonical JSON (fixed field order; **case-insensitive** string values; **sorted** keyword arrays) then **SHA-256** hex — see **`contracts/ingest-watermark-and-filter-key.md`**. The hash is stored per pipeline run (e.g. **`pipeline_runs.broad_filter_key_hash`**) once `007`’s **`pipeline_runs`** table exists.
-- When a new broad request matches an existing key, **reuse** matching rows already in Postgres **and** **merge in new vacancies** from collectors (see incremental fetch): e.g. one user runs today, another runs three days later — **same key** implies **cached rows + delta**, not a frozen snapshot from the first day only.
-- **Stage 2+** (keywords like Vue vs React) filters **existing** `PASSED_STAGE_1` rows inside a pipeline run — that path is **`004` / `007`**, not a second full ingest in this spec.
+- **“Same” broad stage-1 request** for bookkeeping is identified by a **normalized filter key**: canonical JSON (includes **`slot_id`** and reserved **`user_id`** when present — see **`contracts/ingest-watermark-and-filter-key.md`**) then **SHA-256** hex. The hash is stored per pipeline run (e.g. **`pipeline_runs.broad_filter_key_hash`**) once `007`’s **`pipeline_runs`** table exists.
+- **Within one slot**, later runs with the **same** immutable broad parameters (per product draft §2–3) **merge new** vacancies into that slot’s pool via **delta** ingest + canonical **`jobs`** upsert — not a frozen snapshot from day one only. **Across slots**, there is **no** shared “global” row pool keyed only by keywords: identical strings in two slots still produce **separate** slot pools and association rows.
+- **Stage 2+** (keywords like Vue vs React) filters **existing** rows in the slot’s stage-1 pool — that path is **`004` / `007`**, not a second full ingest in this spec.
 
 ## Incremental fetch (watermark)
 
-- **Watermark** = per-source **cursor** stored in **PostgreSQL** (table **`ingest_watermarks`**) for “fetch only newer than X” when the collector supports it (`005`). Cursor value is **opaque** to this spec (`005` defines payload).
-- Until a collector exposes incremental semantics, ingest follows that collector’s **full-fetch** behavior; the watermark row may exist with **`cursor` unused** for that source.
+- **Watermark** = **per `(slot_id, source_id)`** **cursor** stored in **PostgreSQL** (table **`ingest_watermarks`**) for “fetch only newer than X” when the collector supports it (`005`). Cursor value is **opaque** to this spec (`005` defines payload). Two slots hitting the **same** source **must not** share one cursor — each slot advances its own watermark.
+- Until a collector exposes incremental semantics, ingest follows that collector’s **full-fetch** behavior; the watermark row may exist with **`cursor` unused** for that pair.
 
 ## Redis usage (v1, minimal)
 
@@ -71,10 +73,12 @@ Define **when** ingest hits external collectors vs reads from Postgres, **increm
 
 ## Dependencies
 
+- **`000`** ([`product-concept-draft.md`](../000-epic-overview/product-concept-draft.md)): slot-scoped stage-1 pool, Redis lock by `source_id`, immutable broad string per slot after first ingest.
 - **`001`**: `domain.Job`, stable id rules.
-- **`002`**: Postgres schema, migrations.
+- **`002`**: Postgres schema, migrations; canonical `jobs` vs slot associations.
 - **`005`**: collectors; watermark wired when incremental behavior exists.
-- **`007`**: `pipeline_runs` (minimal); **`PASSED_STAGE_1`** on `jobs`; per-run rows and **ON DELETE CASCADE** from `pipeline_run_jobs` to `jobs` — ingest and retention **must** align with those migrations/contracts.
+- **`007`**: `pipeline_runs` (minimal, **`slot_id`** per contract); **`PASSED_STAGE_1`** on `jobs`; per-run rows and **ON DELETE CASCADE** from `pipeline_run_jobs` to `jobs` — ingest and retention **must** align with those migrations/contracts.
+- **`011`** (when implemented): HTTP API shapes for “pull new” / slot lifecycle — referenced for **refresh** UX, not required to freeze Redis/Postgres rules here.
 
 ## Local / Docker
 
@@ -89,7 +93,7 @@ Plan, task backlog, and frozen contracts: [`plan.md`](./plan.md), [`tasks.md`](.
 
 1. Ingest uses **Redis** lock + cooldown with **default TTLs 600 s / 3600 s** and **fail closed** if Redis is unavailable.
 2. **Explicit refresh** (when enabled) bypasses **cooldown only**; **lock** is always acquired; default is **off**.
-3. **Watermark** persisted in **`ingest_watermarks`**; **broad filter key** is **SHA-256** hex of canonical JSON per **`contracts/ingest-watermark-and-filter-key.md`**, stored per run (e.g. **`pipeline_runs.broad_filter_key_hash`**).
+3. **Watermark** persisted in **`ingest_watermarks`** **per `(slot_id, source_id)`**; **broad filter key** is **SHA-256** hex of canonical JSON (includes **`slot_id`**) per **`contracts/ingest-watermark-and-filter-key.md`**, stored per run (e.g. **`pipeline_runs.broad_filter_key_hash`**).
 4. **`jobs`** receives **`PASSED_STAGE_1`** per **`007`** contract when broad stage 1 completes.
 5. **Retention** deletes `jobs` older than **7 days** by **`created_at` (UTC)**; schedule **at most every 7 days UTC**; **manual** path uses the same semantics; dependent **`pipeline_run_jobs`** rows are removed (**CASCADE** or same transaction).
 6. **Description-only** row update does **not** by itself reset **`004`/`007`** per-run outcomes for that job.

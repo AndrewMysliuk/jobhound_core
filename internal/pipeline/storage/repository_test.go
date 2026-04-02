@@ -8,6 +8,7 @@ import (
 
 	"github.com/andrewmysliuk/jobhound_core/internal/pipeline"
 	"github.com/andrewmysliuk/jobhound_core/internal/platform/pgsql"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -45,6 +46,7 @@ func testDB(t *testing.T) *gorm.DB {
 		`CREATE TABLE pipeline_runs (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			created_at TIMESTAMP NOT NULL,
+			slot_id TEXT,
 			broad_filter_key_hash TEXT
 		)`,
 		`CREATE TABLE pipeline_run_jobs (
@@ -75,7 +77,7 @@ func TestRepository_SetBroadFilterKeyHash(t *testing.T) {
 	repo := NewRepository(pgsql.NewGetter(db))
 	ctx := context.Background()
 
-	runID, err := repo.CreateRun(ctx)
+	runID, err := repo.CreateRun(ctx, nil)
 	require.NoError(t, err)
 
 	want := "ab" + strings.Repeat("0", 62)
@@ -97,13 +99,22 @@ func TestRepository_CreateRun(t *testing.T) {
 	repo := NewRepository(pgsql.NewGetter(db))
 	ctx := context.Background()
 
-	id1, err := repo.CreateRun(ctx)
+	id1, err := repo.CreateRun(ctx, nil)
 	require.NoError(t, err)
 	require.Positive(t, id1)
 
-	id2, err := repo.CreateRun(ctx)
+	id2, err := repo.CreateRun(ctx, nil)
 	require.NoError(t, err)
 	require.Greater(t, id2, id1)
+
+	slot := uuid.MustParse("44444444-4444-4444-8444-444444444444")
+	id3, err := repo.CreateRun(ctx, &slot)
+	require.NoError(t, err)
+	require.Greater(t, id3, id2)
+	var gotSlot *string
+	require.NoError(t, db.Raw(`SELECT slot_id FROM pipeline_runs WHERE id = ?`, id3).Scan(&gotSlot).Error)
+	require.NotNil(t, gotSlot)
+	require.Equal(t, slot.String(), *gotSlot)
 }
 
 func TestRepository_SetRunJobStatus_stage2Then3(t *testing.T) {
@@ -111,7 +122,7 @@ func TestRepository_SetRunJobStatus_stage2Then3(t *testing.T) {
 	repo := NewRepository(pgsql.NewGetter(db))
 	ctx := context.Background()
 
-	runID, err := repo.CreateRun(ctx)
+	runID, err := repo.CreateRun(ctx, nil)
 	require.NoError(t, err)
 	seedJob(t, db, "job-a")
 
@@ -130,7 +141,7 @@ func TestRepository_SetRunJobStatus_invalidTransition(t *testing.T) {
 	repo := NewRepository(pgsql.NewGetter(db))
 	ctx := context.Background()
 
-	runID, err := repo.CreateRun(ctx)
+	runID, err := repo.CreateRun(ctx, nil)
 	require.NoError(t, err)
 	seedJob(t, db, "job-x")
 
@@ -144,7 +155,7 @@ func TestRepository_SetRunJobStatus_idempotent(t *testing.T) {
 	repo := NewRepository(pgsql.NewGetter(db))
 	ctx := context.Background()
 
-	runID, err := repo.CreateRun(ctx)
+	runID, err := repo.CreateRun(ctx, nil)
 	require.NoError(t, err)
 	seedJob(t, db, "job-y")
 
@@ -157,7 +168,7 @@ func TestRepository_SetRunJobStatus_insertRequiresStage2Outcome(t *testing.T) {
 	repo := NewRepository(pgsql.NewGetter(db))
 	ctx := context.Background()
 
-	runID, err := repo.CreateRun(ctx)
+	runID, err := repo.CreateRun(ctx, nil)
 	require.NoError(t, err)
 	seedJob(t, db, "job-z")
 
@@ -170,7 +181,7 @@ func TestRepository_ListPassedStage2JobIDs_orderAndFilter(t *testing.T) {
 	repo := NewRepository(pgsql.NewGetter(db))
 	ctx := context.Background()
 
-	runID, err := repo.CreateRun(ctx)
+	runID, err := repo.CreateRun(ctx, nil)
 	require.NoError(t, err)
 	for _, id := range []string{"m", "a", "z"} {
 		seedJob(t, db, id)
@@ -182,6 +193,57 @@ func TestRepository_ListPassedStage2JobIDs_orderAndFilter(t *testing.T) {
 	got, err := repo.ListPassedStage2JobIDs(ctx, runID)
 	require.NoError(t, err)
 	require.Equal(t, []string{"a", "m", "z"}, got)
+}
+
+// 007 contract §2: eligible pool is PASSED_STAGE_2 only; terminal stage-3 rows must not appear (same row loses PASSED_STAGE_2 after transition).
+func TestRepository_ListPassedStage2JobIDs_excludesAfterStage3(t *testing.T) {
+	db := testDB(t)
+	repo := NewRepository(pgsql.NewGetter(db))
+	ctx := context.Background()
+	runID, err := repo.CreateRun(ctx, nil)
+	require.NoError(t, err)
+	seedJob(t, db, "j")
+	require.NoError(t, repo.SetRunJobStatus(ctx, runID, "j", pipeline.RunJobPassedStage2))
+	require.NoError(t, repo.SetRunJobStatus(ctx, runID, "j", pipeline.RunJobPassedStage3))
+	got, err := repo.ListPassedStage2JobIDs(ctx, runID)
+	require.NoError(t, err)
+	require.Empty(t, got)
+}
+
+func TestRepository_SetRunJobStatus_terminal3IgnoresStage2Rewrite(t *testing.T) {
+	db := testDB(t)
+	repo := NewRepository(pgsql.NewGetter(db))
+	ctx := context.Background()
+	runID, err := repo.CreateRun(ctx, nil)
+	require.NoError(t, err)
+	seedJob(t, db, "j")
+	require.NoError(t, repo.SetRunJobStatus(ctx, runID, "j", pipeline.RunJobPassedStage2))
+	require.NoError(t, repo.SetRunJobStatus(ctx, runID, "j", pipeline.RunJobPassedStage3))
+	require.NoError(t, repo.SetRunJobStatus(ctx, runID, "j", pipeline.RunJobPassedStage2))
+	var st string
+	require.NoError(t, db.Raw(
+		`SELECT status FROM pipeline_run_jobs WHERE pipeline_run_id = ? AND job_id = ?`,
+		runID, "j").Scan(&st).Error)
+	require.Equal(t, string(pipeline.RunJobPassedStage3), st)
+}
+
+func TestRepository_GetRunJobStatus(t *testing.T) {
+	db := testDB(t)
+	repo := NewRepository(pgsql.NewGetter(db))
+	ctx := context.Background()
+	runID, err := repo.CreateRun(ctx, nil)
+	require.NoError(t, err)
+	seedJob(t, db, "x")
+	st, ok, err := repo.GetRunJobStatus(ctx, runID, "x")
+	require.NoError(t, err)
+	require.False(t, ok)
+	require.Equal(t, pipeline.RunJobStatus(""), st)
+
+	require.NoError(t, repo.SetRunJobStatus(ctx, runID, "x", pipeline.RunJobPassedStage2))
+	st, ok, err = repo.GetRunJobStatus(ctx, runID, "x")
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Equal(t, pipeline.RunJobPassedStage2, st)
 }
 
 func TestRepository_SetRunJobStatus_emptyJobID(t *testing.T) {

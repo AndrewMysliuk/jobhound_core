@@ -13,6 +13,7 @@ import (
 	"github.com/andrewmysliuk/jobhound_core/internal/jobs"
 	"github.com/andrewmysliuk/jobhound_core/internal/pipeline"
 	pipeutils "github.com/andrewmysliuk/jobhound_core/internal/pipeline/utils"
+	"github.com/google/uuid"
 )
 
 // RunIngestSourceActivityName is the registered Temporal activity for per-source ingest (006).
@@ -43,6 +44,9 @@ func (a *IngestActivities) RunIngestSource(ctx context.Context, in ingestschema.
 	if a.Watermarks == nil {
 		return nil, fmt.Errorf("ingest activity: Watermarks store is required")
 	}
+	if in.SlotID == uuid.Nil {
+		return nil, fmt.Errorf("ingest activity: slot_id is required")
+	}
 	id := ingest.NormalizeSourceID(in.SourceID)
 	if id == "" {
 		return nil, ingest.ErrEmptySourceID
@@ -64,7 +68,7 @@ func (a *IngestActivities) RunIngestSource(ctx context.Context, in ingestschema.
 	var nextCursor string
 	if inc, ok := col.(collectors.IncrementalCollector); ok {
 		usedIncr = true
-		cur, err := a.Watermarks.GetCursor(ctx, id)
+		cur, err := a.Watermarks.GetCursor(ctx, in.SlotID, id)
 		if err != nil {
 			return nil, err
 		}
@@ -101,7 +105,7 @@ func (a *IngestActivities) RunIngestSource(ctx context.Context, in ingestschema.
 	}
 
 	if usedIncr {
-		if err := a.Watermarks.SetCursor(ctx, id, nextCursor); err != nil {
+		if err := a.Watermarks.SetCursor(ctx, in.SlotID, id, nextCursor); err != nil {
 			return nil, err
 		}
 		out.WatermarkAdvanced = true

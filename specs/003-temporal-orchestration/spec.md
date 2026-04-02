@@ -2,12 +2,22 @@
 
 **Feature Branch**: `003-temporal-orchestration`  
 **Created**: 2026-03-29  
-**Last Updated**: 2026-03-29  
+**Last Updated**: 2026-04-02  
 **Status**: Implemented
 
 ## Goal
 
-Add **Temporal** to the stack: a **dedicated worker binary** that runs workflows and activities, a **minimal reference workflow** to prove end-to-end execution, and **Docker Compose** services for **Temporal Server** and **Temporal Web UI** alongside existing Postgres. Workflows orchestrate only; **activities** are the hook for future calls into pipeline and storage (`004`–`006`). **No database access** is required in this feature’s demo path.
+Add **Temporal** to the stack: a **dedicated worker binary** that runs workflows and activities, a **minimal reference workflow** to prove end-to-end execution, and **Docker Compose** services for **Temporal Server** and **Temporal Web UI** alongside existing Postgres. Workflows orchestrate only; **activities** are the hook for future calls into pipeline and storage (`004`, `006`, `007`). **No database access** is required in this feature’s demo path.
+
+## Product alignment (MVP draft)
+
+End-to-end product behavior—**search slots**, three pipeline stages, **reset rules** (recompute from PostgreSQL without implicit re-fetch), and **Temporal-safe idempotency** for capped LLM work—is the narrative source of truth in [`specs/000-epic-overview/product-concept-draft.md`](../000-epic-overview/product-concept-draft.md). This epic implements **orchestration plumbing only**; it does not encode slot or pipeline semantics.
+
+**Constraints for later workflows** (documented here so implementers of `006`, `007`, `008`, `009`, `011` share the same expectations):
+
+- **Context**: product workflows and their activities must accept **`slot_id`** (and **`user_id`** when registration lands) in payloads started from API or schedules—see draft §2–§5 and epics **`009`**, **`011`**, **`008`**. The v0 reference workflow deliberately uses a **single string** input and no slot context.
+- **Idempotency**: activities that consume **caps** or persist **stage-3** outcomes must remain correct under **Temporal retries** (no double-charging the cap, no conflicting rows for the same `(slot_id, job_id)` outcome)—draft §4; detailed types and storage in **`004`** / **`007`**.
+- **Orchestration vs ingest**: “re-run stages after filter/profile change” means **activities read and write Postgres** per draft §5; a **new stage-1 crawl** is a **separate** user or API action (`006` / collectors), not an automatic side effect of filter edits.
 
 ## Worker binary and cmd layout
 
@@ -38,7 +48,7 @@ Timeouts and retry defaults for the reference workflow and its activities should
 
 ## Out of scope
 
-- Real product workflows: scheduled events, manual search, ingest — **`008`**, **`009`**, **`006`**.
+- Real product workflows: **ingest** (`006`), **schedules** (`008`), **manual/API-triggered runs** (`009`), **public HTTP API** entrypoints (`011`) — each epic defines workflow names, payloads, and task-queue usage on top of this foundation.
 - Production deployment topology for workers on GCP (only high-level note that address/namespace will come from env in prod is fine).
 - Advanced observability and correlation — **`012`**.
 
@@ -57,9 +67,14 @@ Timeouts and retry defaults for the reference workflow and its activities should
 
 ## Related
 
+- `specs/000-epic-overview/product-concept-draft.md` — MVP behavior, slots, reset rules, stage-3 policy.
 - `specs/000-epic-overview/spec.md`
 - `specs/002-postgres-gorm-migrations/spec.md`
+- `specs/006-cache-and-ingest/spec.md` — ingest activities and Redis coordination.
+- `specs/007-llm-policy-and-caps/spec.md` — caps and idempotency with Temporal retries.
 - `specs/008-events-and-run-history/spec.md`
+- `specs/009-manual-search-workflow/spec.md`
+- `specs/011-http-public-api/spec.md`
 - `.specify/memory/constitution.md`
 
 ## Planning artifacts

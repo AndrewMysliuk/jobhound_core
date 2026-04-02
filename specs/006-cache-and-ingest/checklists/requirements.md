@@ -7,7 +7,7 @@
 ## Content Quality
 
 - [ ] Goal (Postgres durable store, Redis lock/cooldown, no Redis search cache v1) is explicit
-- [ ] Broad filter key + watermark + retention + explicit refresh covered
+- [ ] **Slot-scoped** broad filter key + **per `(slot_id, source_id)`** watermark + retention + explicit refresh covered — traceable to **`spec.md`** and [`product-concept-draft.md`](../../000-epic-overview/product-concept-draft.md)
 - [ ] Non-goals: public API (`011`), notifications, scheduler UI
 - [ ] Dependencies: `001`, `002`, `005`, `007` (stage-1 column + `pipeline_run_jobs` CASCADE) acknowledged
 

@@ -65,3 +65,21 @@
 1. [x] **Integration tests** — Definition of done: `//go:build integration` applies migrations and/or Redis mini test if adopted.
 
 2. [x] **Env TTL overrides** — Definition of done: **Implemented** — `JOBHOUND_INGEST_LOCK_TTL_SEC` / `JOBHOUND_INGEST_COOLDOWN_TTL_SEC` in `internal/config/ingest.go` + `contracts/environment.md`; worker passes TTLs into `ingest.NewRedisCoordinatorWithTTL`.
+
+---
+
+## Version 2 — MVP product alignment (2026-04-02)
+
+**Input**: Updated `spec.md`, `plan.md`, `contracts/*` aligned with [`product-concept-draft.md`](../000-epic-overview/product-concept-draft.md) §2–3, §10 (slot-scoped watermarks + broad filter key; no cross-slot pool merge).
+
+**Prerequisite**: Coordinate with **`007` Version 2** (`pipeline_runs.slot_id`, canonical JSON includes `slot_id`) so ingest and hashes use the same slot identity.
+
+1. [x] **`ingest_watermarks` composite PK** — Definition of done: migration replaces **`source_id`-only** DDL with **`(slot_id, source_id)`** per `contracts/ingest-watermark-and-filter-key.md`; dev `down` safe; integration test / fixture updated (`migrations_integration_test.go`, `internal/ingest/*_test.go`).
+
+2. [x] **`WatermarkStore` API** — Definition of done: `GetCursor` / `SetCursor` take **`slot_id`** (UUID) + **`source_id`**; all call sites (ingest activities, tests) pass slot from workflow / run context.
+
+3. [x] **Broad filter key canonical JSON** — Definition of done: builder includes **`slot_id`** (and optional **`user_id`**) per contract; **`pipeline_runs.broad_filter_key_hash`** matches new canonical payload; unit tests for hash stability.
+
+4. [x] **Docs / config** — Definition of done: `contracts/environment.md` unchanged unless new env needed; any inline comments reference slot-scoped semantics.
+
+5. [x] **Quality** — Definition of done: `make test`, `make vet`, `make fmt` for touched packages.

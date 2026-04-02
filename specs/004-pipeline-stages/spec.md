@@ -2,18 +2,30 @@
 
 **Feature Branch**: `004-pipeline-stages`  
 **Created**: 2026-03-29  
-**Last Updated**: 2026-03-30  
+**Last Updated**: 2026-04-02  
 **Status**: Implemented
 
 ## Goal
 
-Implement the **three narrowing stages** as **pure, testable packages** with no Temporal inside and **no network calls** in unit tests:
+Implement **three sequential local processing steps** on **already-ingested, normalized** `domain.Job` values (the **stage-1 pool** in product terms — populated by collectors / ingest in **`006`**) as **pure, testable packages** with no Temporal inside and **no network calls** in unit tests:
 
-1. **Broad filter (stage 1):** publication date window, role synonyms (title + description), remote-only when required, optional country allowlist.
-2. **Keywords (stage 2):** include / exclude over text, **no LLM**.
-3. **LLM scoring (stage 3):** user profile (for now a **single text block**) + vacancy text; structured output (at minimum score and rationale; extra fields as needed).
+1. **Broad filter (implementation stage 1):** publication date window, role synonyms (title + description), remote-only when required, optional country allowlist. **Not** the same as **product** “stage 1” (external broad ingest + keyword string); see **Product vs implementation numbering** below.
+2. **Keywords (implementation stage 2):** include / exclude over text, **no LLM**.
+3. **LLM scoring (implementation stage 3):** user profile (for now a **single text block**) + vacancy text; structured output (at minimum score and rationale; extra fields as needed).
 
 Parsing HTML/API from sites and turning “human” dates into `PostedAt` is **out of scope for this feature**; see `005-job-collectors`.
+
+## Product vs implementation numbering
+
+Global MVP behavior is described in [`specs/000-epic-overview/product-concept-draft.md`](../000-epic-overview/product-concept-draft.md). **Numbering differs** between that narrative and this epic:
+
+| Product (draft §1–§4) | What it is | Where it lives |
+|------------------------|------------|----------------|
+| **Stage 1** | External ingest: sources, normalize, persist; **single broad keyword string** per slot (immutable after first successful ingest). | Primarily **`006`** (and **`005`** collectors). |
+| **Stage 2** | **Local** narrow: include/exclude (optional date TBD) **only** on the stage-1 pool for the slot. | **`004`** — **broad filter** then **keyword filter** in order (both are “narrow” on stored rows). |
+| **Stage 3** | LLM on rows that **passed** product stage 2; cap, **deterministic ordering**, eligible pool, **idempotency** under retries. | **`004`** — per-job scorer + structured output; **batch** caps, ordering, and run-scoped idempotency are **`007`** (+ orchestration) per draft §4. |
+
+This epic **does not** implement HTTP collectors or slot ingest; callers pass `[]domain.Job` and rule structs **per invocation**. **Reset** when filters change (draft §5) is enforced **outside** these pure functions — see **`011`** / orchestration specs.
 
 ## Behaviour: filter rejection vs error
 
@@ -75,9 +87,9 @@ Semantics (all includes vs any include, any exclude rejects, etc.) must be defin
 
 ## Acceptance criteria
 
-1. **Stage 1** implements date window (explicit `from`/`to` or default **last 7 days UTC**), role synonyms on **title + description**, optional **remote-only** and **country allowlist** per contract; filter drops are **not** errors.
-2. **Stage 2** implements include/exclude keywords on **title + description** with unambiguous semantics (**all** non-empty includes match; **any** exclude rejects) and tests.
-3. **Stage 3** exposes an **LLM scorer interface**; minimum output **score + rationale**; unit tests use **mocks** only — **no** real Anthropic calls in default `go test ./...`.
+1. **Implementation stage 1** (broad filter) implements date window (explicit `from`/`to` or default **last 7 days UTC**), role synonyms on **title + description**, optional **remote-only** and **country allowlist** per contract; filter drops are **not** errors.
+2. **Implementation stage 2** (keywords) implements include/exclude keywords on **title + description** with unambiguous semantics (**all** non-empty includes match; **any** exclude rejects) and tests.
+3. **Implementation stage 3** (LLM) exposes an **LLM scorer interface**; minimum output **score + rationale**; unit tests use **mocks** only — **no** real Anthropic calls in default `go test ./...`.
 4. Stage packages contain **no** Temporal SDK imports and **no** network I/O inside pure filter/keyword logic; LLM calls only behind the scorer implementation used in tests (mock) or wired with **`JOBHOUND_ANTHROPIC_API_KEY`** at composition time.
 5. Run **rules** (windows, lists, profile text) are supplied **per invocation**, not as the sole source from global app env (see `contracts/environment.md`).
 6. **`contracts/pipeline-stages.md`** and **`contracts/environment.md`** match implemented behaviour and env names in **`internal/config`**.
@@ -94,4 +106,6 @@ Semantics (all includes vs any include, any exclude rejects, etc.) must be defin
 ## Related
 
 - `specs/000-epic-overview/spec.md` — product context and feature order.
+- `specs/000-epic-overview/product-concept-draft.md` — slots, three product stages, reset rules, stage-3 policy (§4).
+- `specs/007-llm-policy-and-caps/spec.md` — caps, ordering, eligible pool, idempotency for **batch** stage 3.
 - `specs/003-temporal-orchestration/spec.md` — orchestration (stages called from activities later).

@@ -1,7 +1,15 @@
 # Contract: pipeline stages (domain logic)
 
 **Feature**: `004-pipeline-stages`  
-**Purpose**: Freeze **behaviour** and **boundary types** for stage 1 (broad filter), stage 2 (keywords), and stage 3 (LLM scoring). **Orchestration** (Temporal, HTTP handlers) lives outside these packages.
+**Purpose**: Freeze **behaviour** and **boundary types** for **implementation** stage 1 (broad filter), stage 2 (keywords), and stage 3 (LLM scoring). **Orchestration** (Temporal, HTTP handlers) lives outside these packages.
+
+## Mapping to product stages (`product-concept-draft.md`)
+
+| Product (draft) | Implementation in this contract |
+|-----------------|----------------------------------|
+| **Stage 1** — external ingest, broad keyword string, persist pool | **Out of scope** here; **`006` / `005`**. Callers supply `[]domain.Job` from the slot’s stage-1 pool. |
+| **Stage 2** — narrow on **stored** rows only (include/exclude; optional date TBD) | **`ApplyBroadFilter`** then **`ApplyKeywordFilter`** in that order. Optional date/window rules in broad filter align with draft “optional date TBD” for stage 2; role synonyms / remote / country are **additional** narrow dimensions on the same pool. |
+| **Stage 3** — LLM on rows that passed stage 2 | **`Scorer` / `Score`** with minimum score + rationale. **Per-run cap**, **deterministic ordering** of who enters the cap, **eligible pool**, and **Temporal idempotency** for batch runs are **not** fully specified here — see **`007`** and draft §4. |
 
 ## Shared principles
 
@@ -95,6 +103,11 @@ Optional keys may be added later; parser should **reject** missing required keys
 ## Versioning
 
 - Breaking changes to rules structs or JSON contract require updating this file, `plan.md`, and tests.
+
+## Related
+
+- `specs/000-epic-overview/product-concept-draft.md` — product numbering, reset §5, stage-3 policy §4.
+- `specs/007-llm-policy-and-caps/` — batch caps, ordering, eligible pool, idempotency.
 
 ## Change process
 

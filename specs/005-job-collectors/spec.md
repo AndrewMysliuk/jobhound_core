@@ -2,12 +2,20 @@
 
 **Feature Branch**: `005-job-collectors`  
 **Created**: 2026-03-29  
-**Last Updated**: 2026-03-30  
+**Last Updated**: 2026-04-02  
 **Status**: Implemented
 
 ## Goal
 
 Per-source **`Collector`** implementations **fetch** listings and **normalize** to **`domain.Job`**. Stack is **tiered**: `net/http` + **goquery** and/or **`encoding/json`** first; **go-rod** + optional session only when a source requires it (constitution). Timeouts and structured errors — no silent junk. **No HTTP retries** on collector requests (one attempt per logical request; failure surfaces as error).
+
+## Product alignment (MVP)
+
+**Source of truth**: [`specs/000-epic-overview/product-concept-draft.md`](../000-epic-overview/product-concept-draft.md) — search slots, stage-1 broad ingest, reset rules, and multi-user **reservations** in schema.
+
+- **This epic** owns **HTTP fetch + normalization per board** (`pipeline.Collector`). It does **not** own **slot** lifecycle, the **immutable stage-1 broad keyword string**, **bound sources per slot**, **upsert**, **watermarks / delta refresh**, or **Redis ingest coordination** — those are **`006`** (and API shapes in **`009` / `011`** when implemented).
+- **Orchestration** may run **one collector per bound source in parallel** for a slot’s stage-1 run; **failure of one source does not cancel others** unless a higher-level workflow defines otherwise — see **`contracts/collector.md`**.
+- **`Job.UserID`** is **not** filled from site HTML/API by MVP collectors; orchestration/persistence may set it when writing **slot-scoped** rows (see **`contracts/domain-mapping-mvp.md`**).
 
 ## Spec artifacts (this directory)
 
@@ -100,7 +108,8 @@ Offline: **`httptest`** + bodies from **`contracts/test-fixtures.md`** (or copie
 
 ## Out of scope
 
-- Cache, upsert, watermarks, dedup policy — `006-cache-and-ingest`.
+- **Slot** model, **`slot_id`**, per-slot stage-1 parameters beyond what a **collector constructor** needs (e.g. site-specific query overrides for debug), **immutable broad string** after first ingest, **hard delete** of slot data — product rules in **`000`** / orchestration epics; not collector package logic.
+- Cache, upsert, watermarks, dedup policy, Redis lock by **`source_id`** — `006-cache-and-ingest`.
 - Pipeline filter/scoring rules — `004-pipeline-stages` (collectors only fill `Job`).
 
 ## Dependencies
@@ -130,6 +139,7 @@ Offline: **`httptest`** + bodies from **`contracts/test-fixtures.md`** (or copie
 
 ## Related
 
+- [`specs/000-epic-overview/product-concept-draft.md`](../000-epic-overview/product-concept-draft.md) — global MVP behavior (slots, stage 1–3, resets)
 - `contracts/collector.md` — boundary + errors + `Job.Source` strings
 - `contracts/domain-mapping-mvp.md` — Europe Remotely + Working Nomads → `Job`
 - `contracts/jobs-table-extension.md` — optional SQL columns

@@ -1,7 +1,7 @@
 # Contract: Watermark & broad filter key
 
 **Feature**: `006-cache-and-ingest`  
-**Purpose**: Freeze **Postgres** shapes for per-source **watermark** and the **normalized broad filter key** used for global pipeline identity.
+**Purpose**: Freeze **Postgres** shapes for **slot-scoped** **watermark** and the **normalized broad filter key** used for pipeline bookkeeping (aligned with [`product-concept-draft.md`](../../000-epic-overview/product-concept-draft.md) §2–3, §10).
 
 **Related**: `001` stable job id; `005` collectors; `007` `pipeline_runs` (minimal table) — **`006`** may **extend** `pipeline_runs` with a nullable hash column via migration (after `007` creates the table).
 
@@ -15,17 +15,22 @@
 
 | Column      | Type        | Notes |
 |-------------|-------------|--------|
-| `source_id` | `TEXT` **PRIMARY KEY** | Normalized same way as Redis `source_id` in `redis-ingest-coordination.md`. |
+| `slot_id`   | `UUID` **NOT NULL** | Search slot this cursor belongs to; same source in **two** slots → **two** rows. |
+| `source_id` | `TEXT` **NOT NULL** | Normalized same way as Redis `source_id` in `redis-ingest-coordination.md`. |
 | `cursor`    | `TEXT`      | **Opaque** string from the collector (`005`) when incremental mode is supported; **NULL** or empty when unused. |
 | `updated_at`| `TIMESTAMPTZ` **NOT NULL** | Last write. |
 
-**Semantics**: If a collector does not support incremental fetch, the row may exist with **`cursor` unused**; ingest uses full-fetch for that source.
+**Primary key**: **`(slot_id, source_id)`**.
+
+**Semantics**: If a collector does not support incremental fetch, the row may exist with **`cursor` unused**; ingest uses full-fetch for that **(slot, source)** pair.
+
+**Transition note**: Older deployments that implemented **`source_id` only** as PK require a **follow-up migration** (see `006` **`tasks.md`** supplement) to add **`slot_id`** and retarget PK — spec **normative** shape is the composite above.
 
 ---
 
-## 2. Broad filter key (same stage-1 search)
+## 2. Broad filter key (same stage-1 search **within a slot**)
 
-**Equivalence**: Two broad stage-1 requests are “the same” iff they produce the **same** canonical payload and thus the **same** hash.
+**Equivalence**: Two broad stage-1 requests are “the same” for hash purposes iff they produce the **same** canonical payload and thus the **same** hash — **including** the same **`slot_id`** (and **`user_id`** when set). Different slots **always** differ in canonical JSON, even if keywords and sources are identical.
 
 ### Canonical JSON (v1)
 
@@ -33,12 +38,14 @@ Build a JSON object with **fixed key order** (as listed), **case-insensitive** n
 
 | Field           | Type / notes |
 |-----------------|--------------|
+| `slot_id`       | string — UUID canonical form (lowercase hex with hyphens) |
+| `user_id`       | optional string, trimmed; **omit** if `NULL` / empty (single-tenant MVP) |
 | `role`          | string, trimmed, lowercased |
 | `time_window`   | object or string as defined by product — must be stable (e.g. `{ "from": "ISO8601", "to": "ISO8601" }` UTC) |
 | `sources`       | array of source ids, **sorted** |
 | `keywords`      | array of top-level broad keywords, **sorted**, trimmed, lowercased |
 
-Omit empty optional sections consistently (document in code). **Do not** include user identity — pipeline is **global** for matching filters (`spec.md`).
+Omit empty optional sections consistently (document in code).
 
 Serialize to a **single canonical UTF-8 string** (no insignificant whitespace), then compute:
 

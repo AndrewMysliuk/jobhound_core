@@ -20,5 +20,6 @@
 
 ## Relationship to other contracts
 
+- **Product behavior**: `specs/000-epic-overview/product-concept-draft.md` — stage numbering vs **`004`** implementation is documented in `specs/004-pipeline-stages/spec.md`.
 - **Temporal**: `specs/003-temporal-orchestration/contracts/environment.md` — unrelated to stage math; activities may call stages and load Anthropic key at wire-up.
 - **Database**: `specs/002-postgres-gorm-migrations/contracts/environment.md` — persistence remains outside stage functions per spec.

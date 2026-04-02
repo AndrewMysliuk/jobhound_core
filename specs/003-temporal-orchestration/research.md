@@ -62,14 +62,14 @@ Common local patterns:
 |------|----------------|
 | `001` | Repo layout; domain must not import Temporal |
 | `002` | **Not required** for demo path; worker may omit `JOBHOUND_DATABASE_URL` if activities stay DB-free |
-| `000` | Epic: Compose stack includes Postgres + Temporal |
+| `000` | Epic index; [`product-concept-draft.md`](../000-epic-overview/product-concept-draft.md) defines **slots**, **stages**, and **Temporal idempotency** (draft §4) for product workflows |
 
 ---
 
 ## 6. Out of scope (recap)
 
 - Production worker deployment on GCP (env-only note OK).
-- Real schedules, ingest, Telegram — later specs.
+- Real schedules (`008`), ingest (`006`), API/manual runs (`009`/`011`), Telegram (`010`) — later specs.
 - Advanced tracing/correlation — `012`.
 
 ---
@@ -80,3 +80,4 @@ Common local patterns:
 - Postgres compose: `docker-compose.yml`
 - Constitution: `.specify/memory/constitution.md`
 - Epic: `specs/000-epic-overview/spec.md`
+- MVP draft: `specs/000-epic-overview/product-concept-draft.md`

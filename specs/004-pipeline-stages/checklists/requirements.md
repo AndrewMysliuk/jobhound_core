@@ -2,11 +2,13 @@
 
 **Purpose**: Validate specification completeness and quality before / during implementation  
 **Created**: 2026-03-30  
+**Last reviewed**: 2026-04-02 (aligned with `product-concept-draft.md`)  
 **Feature**: [spec.md](../spec.md)
 
 ## Content Quality
 
-- [x] Goal (three stages, pure logic, no Temporal in stages) is explicit
+- [x] Goal (three **local** implementation stages on ingested jobs, pure logic, no Temporal in stages) is explicit
+- [x] **Product** stage 1 (ingest) vs **implementation** stage 1 (broad filter) distinction documented (`spec.md`, `contracts/pipeline-stages.md`)
 - [x] Focused on domain stages (not collectors, not orchestration wiring)
 - [x] Filter rejection vs execution error distinction is stated
 - [x] Run-context rules vs global config distinction is stated
@@ -30,3 +32,4 @@
 
 - **Plan-level locks** (package layout, stage 3 error policy for callers) live in **`plan.md`**; update this checklist if spec and plan diverge.
 - **Exact** Go type names and JSON schema for LLM output are frozen in **`contracts/pipeline-stages.md`** at implementation time.
+- **Product vs code numbering** is documented in **`spec.md`** and the top of **`contracts/pipeline-stages.md`**; batch stage-3 policy is **`007`**.

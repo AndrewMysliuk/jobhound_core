@@ -7,19 +7,21 @@ import (
 	"time"
 
 	"github.com/andrewmysliuk/jobhound_core/internal/platform/pgsql"
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
 
-// WatermarkStore persists per-source opaque cursors in ingest_watermarks (006 contract).
+// WatermarkStore persists per-(slot, source) opaque cursors in ingest_watermarks (006 contract).
 type WatermarkStore interface {
 	// GetCursor returns the stored cursor, or empty if missing or NULL.
-	GetCursor(ctx context.Context, sourceID string) (cursor string, err error)
+	GetCursor(ctx context.Context, slotID uuid.UUID, sourceID string) (cursor string, err error)
 	// SetCursor upserts the row; empty cursor is stored as SQL NULL.
-	SetCursor(ctx context.Context, sourceID string, cursor string) error
+	SetCursor(ctx context.Context, slotID uuid.UUID, sourceID string, cursor string) error
 }
 
 type ingestWatermarkRow struct {
+	SlotID    uuid.UUID `gorm:"column:slot_id;primaryKey"`
 	SourceID  string    `gorm:"column:source_id;primaryKey"`
 	Cursor    *string   `gorm:"column:cursor"`
 	UpdatedAt time.Time `gorm:"column:updated_at"`
@@ -38,16 +40,19 @@ func NewGormWatermarkStore(get pgsql.GormGetter) *GormWatermarkStore {
 }
 
 // GetCursor implements [WatermarkStore].
-func (s *GormWatermarkStore) GetCursor(ctx context.Context, sourceID string) (string, error) {
+func (s *GormWatermarkStore) GetCursor(ctx context.Context, slotID uuid.UUID, sourceID string) (string, error) {
 	if s == nil || s.get == nil {
 		return "", errors.New("ingest: nil GormWatermarkStore")
+	}
+	if slotID == uuid.Nil {
+		return "", errors.New("ingest: slot_id is required for watermark")
 	}
 	id := NormalizeSourceID(sourceID)
 	if id == "" {
 		return "", nil
 	}
 	var row ingestWatermarkRow
-	err := s.get().WithContext(ctx).Where("source_id = ?", id).First(&row).Error
+	err := s.get().WithContext(ctx).Where("slot_id = ? AND source_id = ?", slotID.String(), id).First(&row).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return "", nil
@@ -61,9 +66,12 @@ func (s *GormWatermarkStore) GetCursor(ctx context.Context, sourceID string) (st
 }
 
 // SetCursor implements [WatermarkStore].
-func (s *GormWatermarkStore) SetCursor(ctx context.Context, sourceID string, cursor string) error {
+func (s *GormWatermarkStore) SetCursor(ctx context.Context, slotID uuid.UUID, sourceID string, cursor string) error {
 	if s == nil || s.get == nil {
 		return errors.New("ingest: nil GormWatermarkStore")
+	}
+	if slotID == uuid.Nil {
+		return errors.New("ingest: slot_id is required for watermark")
 	}
 	id := NormalizeSourceID(sourceID)
 	if id == "" {
@@ -75,9 +83,12 @@ func (s *GormWatermarkStore) SetCursor(ctx context.Context, sourceID string, cur
 		c := strings.TrimSpace(cursor)
 		cur = &c
 	}
-	row := ingestWatermarkRow{SourceID: id, Cursor: cur, UpdatedAt: now}
+	row := ingestWatermarkRow{SlotID: slotID, SourceID: id, Cursor: cur, UpdatedAt: now}
 	return s.get().WithContext(ctx).Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "source_id"}},
+		Columns: []clause.Column{
+			{Name: "slot_id"},
+			{Name: "source_id"},
+		},
 		DoUpdates: clause.AssignmentColumns([]string{"cursor", "updated_at"}),
 	}).Create(&row).Error
 }

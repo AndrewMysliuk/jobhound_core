@@ -2,13 +2,15 @@
 
 **Branch**: `003-temporal-orchestration`  
 **Date**: 2026-03-29  
-**Last Updated**: 2026-03-29  
+**Last Updated**: 2026-04-02  
 **Spec**: `specs/003-temporal-orchestration/spec.md`  
-**Input**: Feature specification + `research.md`
+**Input**: Feature specification + `research.md` + [`specs/000-epic-overview/product-concept-draft.md`](../000-epic-overview/product-concept-draft.md)
 
 ## Summary
 
 Add **Temporal** to local dev and the repo: **Docker Compose** services for **Temporal Server** (with auto-setup) and **Temporal Web UI** alongside existing **Postgres**, a dedicated **`cmd/worker`** binary that registers workflows and activities on task queue **`jobhound`** in namespace **`default`**, and a **reference v0 workflow** plus one **deterministic, DB-free activity** to prove end-to-end execution and UI visibility. A **Temporal client** path (test and/or tiny dev entrypoint) starts the same workflow against the same queue/namespace. **`internal/domain`** must not import the Temporal Go SDK; workflow/activity code lives under a dedicated package (see Resolved decisions). **Plain `go test ./...`** stays Docker-free via **in-memory test env** *or* **`integration`-tagged** tests only (constitution).
+
+**MVP draft alignment**: the global product draft defines **slots**, **reset-without-refetch**, and **idempotent** stage-3 work under retries. This plan stays **foundation-only**; those behaviors are specified in **`004`**, **`006`**, **`007`**, and consumer epics **`008`–`011`**, not in `003`.
 
 ## Technical Context
 
@@ -59,7 +61,7 @@ Add **Temporal** to local dev and the repo: **Docker Compose** services for **Te
 
 ## Engineering follow-ups (non-blocking)
 
-- Real product workflows, schedules, and pipeline activities — `006`, `008`, `009`.
+- Real product workflows, ingest, schedules, and API-triggered runs — `006`, `008`, `009`, `011` (payloads include **`slot_id`** / reserved **`user_id`**; activities idempotent where caps or outcomes are written — draft §4).
 - GCP worker topology and prod addressing — env-only note sufficient for `003`.
 - Correlation / advanced observability — `012`.
 

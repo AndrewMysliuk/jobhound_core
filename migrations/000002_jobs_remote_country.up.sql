@@ -1,3 +1,0 @@
-ALTER TABLE jobs
-    ADD COLUMN is_remote BOOLEAN,
-    ADD COLUMN country_code TEXT NOT NULL DEFAULT '';
