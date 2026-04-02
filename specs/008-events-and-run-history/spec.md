@@ -15,7 +15,7 @@ Persist an **append-only run history** (and minimal schedule metadata) so operat
 
 ## Clarifications (vs older “Event = saved search” wording)
 
-- A **schedule** is **not** a second copy of broad keywords, sources, or stage-2/3 parameters. Those belong to the **slot** (and related persistence as **`002`/`011`** define). This epic stores **when** (and whether) to run the engine for a given **`slot_id`** (+ reserved **`user_id`**), plus **execution** history rows.
+- A **schedule** is **not** a second copy of broad keywords, sources, or stage-2/3 parameters. Those belong to the **slot** (and related persistence as **`002`/`010`** define). This epic stores **when** (and whether) to run the engine for a given **`slot_id`** (+ reserved **`user_id`**), plus **execution** history rows.
 - **`008`** complements **`009`** (on-demand / API-triggered workflow): same pipeline semantics where possible; **Temporal** Schedule or an external trigger (e.g. GCP Cloud Scheduler) is an implementation choice documented in the contract.
 - Each automatic execution creates or continues work that remains subject to **`007`** caps and idempotency **per pipeline-run execution** (draft §4); history rows may reference **`pipeline_run_id`** when a distinct run is recorded for that tick.
 
@@ -27,8 +27,7 @@ Persist an **append-only run history** (and minimal schedule metadata) so operat
 
 ## Out of scope
 
-- **Telegram** notifications (**`010`**).
-- **Full public HTTP CRUD** for schedules and history (**`011`**); thin internal hooks from worker/API are acceptable if needed for registration.
+- **Full public HTTP CRUD** for schedules and history (**`010`**); thin internal hooks from worker/API are acceptable if needed for registration.
 - **Versioned filter snapshots** or “what the filters were last Tuesday” (explicitly out of product scope until a later epic—draft §5).
 - Replacing or merging the **manual** workflow spec (**`009`**); only **parity** of engine behavior is assumed.
 
@@ -46,4 +45,4 @@ Concrete backlog (including DB stubs deferred from **`002`** where still applica
 
 ## Local / Docker
 
-Temporal + Postgres from Compose; worker owns schedule registration or reacts to external triggers. Production may use Cloud Scheduler calling a small endpoint or starting workflows—exact wiring is **`011`/ops**, not required to block schema/history design here.
+Temporal + Postgres from Compose; worker owns schedule registration or reacts to external triggers. Production may use Cloud Scheduler calling a small endpoint or starting workflows—exact wiring is **`010`/ops**, not required to block schema/history design here.

@@ -41,4 +41,4 @@ Application Postgres remains on `localhost:5432` (`postgres` service); Temporal 
 
 ## Relationship to database env
 
-The **reference v0** workflow does **not** require `JOBHOUND_DATABASE_URL`. If a future worker binary loads DB and Temporal, both contracts apply: see `specs/002-postgres-gorm-migrations/contracts/environment.md`. Product workflows (`006`–`007`, `009`, `011`) will use DB-backed activities while preserving **idempotent** side effects under retries—see [`product-concept-draft.md`](../../000-epic-overview/product-concept-draft.md) §4 and epic **`007`**.
+The **reference v0** workflow does **not** require `JOBHOUND_DATABASE_URL`. If a future worker binary loads DB and Temporal, both contracts apply: see `specs/002-postgres-gorm-migrations/contracts/environment.md`. Product workflows (`006`–`007`, `009`, `010`) will use DB-backed activities while preserving **idempotent** side effects under retries—see [`product-concept-draft.md`](../../000-epic-overview/product-concept-draft.md) §4 and epic **`007`**.

@@ -29,4 +29,4 @@
 
 - **Plan-level locks** (env var names, `migrations/` path, Postgres 16, defer run/event stubs) live in **`plan.md`**; update checklist if spec and plan diverge.
 - **Exact** Makefile targets and test strategy (Compose vs testcontainers) are implementation details; success = criteria in `spec.md` § Acceptance criteria satisfied.
-- **Product draft**: `spec.md` links [`product-concept-draft.md`](../../000-epic-overview/product-concept-draft.md) and states how **`jobs`** relates to **slot-scoped** data (`007` / `006` / `011`).
+- **Product draft**: `spec.md` links [`product-concept-draft.md`](../../000-epic-overview/product-concept-draft.md) and states how **`jobs`** relates to **slot-scoped** data (`007` / `006` / `010`).

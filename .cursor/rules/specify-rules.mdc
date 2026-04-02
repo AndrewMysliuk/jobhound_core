@@ -15,7 +15,7 @@ Spec-driven workflow via `.specify` and `/speckit.*` commands. Update this file 
 - `github.com/go-rod/rod` + session cookies file for LinkedIn (Tier 3)
 - PostgreSQL + GORM + migrations — jobs, history, profile, dedup
 - Temporal — workflows/activities for manual runs and scheduled events
-- Claude API for scoring; Telegram Bot API for delivery
+- Claude API for scoring; product delivery channels (e.g. HTTP/API) per specs—third-party push notifications out of MVP scope
 - Local: Docker Compose (Postgres + Temporal); production: GCP (see `specs/000-epic-overview`)
 
 ## Project Structure
@@ -84,7 +84,8 @@ migrations/             # SQL migration files
 - 2026-04-01: `internal/collectors/handlers/debughttp` split like omg-bo — `handler.go` + `registerRoutes` + per-route files; `cmd/agent` uses `NewHTTPHandler`
 - 2026-04-01: Module conventions aligned with omg-bo/omg-api — `handlers/` (registry + one file per route), `schema/` inside module, `impl/` + `storage/` only, workflows with explicit `RegisterWorkflow` in `New`; debug HTTP documented under `collectors/handlers`; comment minimalism
 - 2026-03-29: Constitution v1.3 — testing policy (colocated unit tests; `integration` build tag; optional `tests/integration/`)
-- 2026-03-29: `specs/` epic index (`000`–`012`) + Postgres/Temporal architecture
+- 2026-04-02: Epics renumbered (`010` HTTP API, `011` observability); Telegram epic removed from MVP index
+- 2026-03-29: `specs/` epic index (`000`–`011`) + Postgres/Temporal architecture
 - 2026-03-29: Module layout under `internal/` (`jobs`, `pipeline`, `db`, `domain`) + `cmd/agent`, `cmd/worker`, `cmd/migrate`
 - 2026-03-29: Constitution v1.4 — `internal/config` as single source for env-backed settings
 - 2026-03-29: Temporal layout — per-module `internal/<feature>/workflows/` + `activities/`; no global `internal/temporal`

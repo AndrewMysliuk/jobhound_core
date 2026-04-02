@@ -3,7 +3,7 @@
 **Input**: [spec.md](./spec.md), [contracts/scheduled-runs-and-history.md](./contracts/scheduled-runs-and-history.md), [plan.md](./plan.md).  
 **Schema stubs**: optional carry-over from `specs/002-postgres-gorm-migrations` (plan D3) if still listed there—**table names and columns are owned by this epic’s contract**.  
 **Depends on**: `003`, `004`, `006`, `007` (per spec); DB bootstrap from `002`.  
-**Product order**: implement after core vertical (`009` / `011` + ingest + pipeline) per `specs/000-epic-overview/product-concept-draft.md` §8–§9.
+**Product order**: implement after core vertical (`009` / `010` + ingest + pipeline) per `specs/000-epic-overview/product-concept-draft.md` §8–§9.
 
 ## A. Contracts
 

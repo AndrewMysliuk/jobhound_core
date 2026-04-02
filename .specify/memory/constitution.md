@@ -2,9 +2,9 @@
 
 ## Product
 
-Personal job aggregator on Go: ingest vacancies from several sources, narrow in **three stages** (role/time → keywords include/exclude → CV-aware LLM), persist results and history, notify via Telegram on scheduled **events**. **Temporal** runs durable workflows for manual runs and hourly (or other) event schedules.
+Personal job aggregator on Go: ingest vacancies from several sources, narrow in **three stages** (role/time → keywords include/exclude → CV-aware LLM), persist results and history. **Temporal** runs durable workflows for manual runs and scheduled **events** (see specs).
 
-High-level flow: **collect / read cache → stage 1 → stage 2 → stage 3 (LLM) → persist → (optional) Telegram**. Same engine for interactive API triggers and cron-like event runs.
+High-level flow: **collect / read cache → stage 1 → stage 2 → stage 3 (LLM) → persist**. Same engine for interactive API triggers and cron-like event runs; optional third-party notifications are **out of MVP** (see product draft).
 
 ## Core Principles
 
@@ -14,7 +14,7 @@ Every source implements a single `Collector` contract; adding a site does not re
 
 ### II. Stages before blanket LLM
 
-Stage 1 (broad role / time window) and stage 2 (keyword include/exclude) shrink the set; the LLM (stage 3) runs on that pool so we do not score obvious noise. Policy for auto vs manual LLM passes is defined in specs (e.g. cap for automatic Telegram path).
+Stage 1 (broad role / time window) and stage 2 (keyword include/exclude) shrink the set; the LLM (stage 3) runs on that pool so we do not score obvious noise. Policy for auto vs manual LLM passes is defined in specs (e.g. per-run cap in `007`).
 
 ### III. Session abstraction for headless
 
@@ -26,7 +26,7 @@ Vacancies, deduplication, event run history, user profile text, and scoring outc
 
 ### V. Temporal for orchestration
 
-Workflows coordinate activities (fetch, persist, score, notify). Retries, visibility, and local/cloud parity are first-class; auth is deferred but data models stay extensible for a future `user_id` (or equivalent).
+Workflows coordinate activities (fetch, persist, score). Retries, visibility, and local/cloud parity are first-class; auth is deferred but data models stay extensible for a future `user_id` (or equivalent).
 
 ### VI. Config without secrets in repo
 
@@ -42,7 +42,7 @@ Secrets and local paths live in `.env` (gitignored). Variable **names** are docu
 - PostgreSQL + GORM + migrations
 - Temporal (worker + workflows + activities)
 - Collectors: `net/http`, goquery, go-rod where needed
-- Claude API for scoring; Telegram Bot API for delivery
+- Claude API for scoring; results exposed via API/UI per specs (no Telegram in MVP)
 - Local dev: **Docker Compose** (Postgres, Temporal stack) as specified in `specs/000-epic-overview`
 
 ## Internal layout

@@ -18,7 +18,7 @@ type Dedup interface {
 	MarkSent(ctx context.Context, jobID string) error
 }
 
-// Notifier delivers scored jobs (e.g. Telegram).
+// Notifier delivers scored jobs to a downstream channel (orchestration-owned; not used for MVP push).
 type Notifier interface {
 	Send(ctx context.Context, jobs []domain.ScoredJob) error
 }

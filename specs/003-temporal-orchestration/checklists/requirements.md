@@ -7,7 +7,7 @@
 ## Content Quality
 
 - [x] Goal (worker, reference workflow, Compose, no DB on demo path) is explicit
-- [x] Aligned with [`product-concept-draft.md`](../../000-epic-overview/product-concept-draft.md): foundation only; slot/idempotency expectations forwarded to `006`/`007`/`009`/`011`
+- [x] Aligned with [`product-concept-draft.md`](../../000-epic-overview/product-concept-draft.md): foundation only; slot/idempotency expectations forwarded to `006`/`007`/`009`/`010`
 - [x] Focused on orchestration foundation (not product workflows or GCP topology)
 - [x] Acceptance criteria are actionable for QA and implementation
 - [x] Mandatory sections present (goal, scope, criteria, dependencies, related)
@@ -18,7 +18,7 @@
 - [x] Namespace (`default`) and task queue (`jobhound`) are fixed and unambiguous
 - [x] Boundary: `internal/domain` must not import Temporal SDK — testable
 - [x] Docker vs default `go test` constraint explicit (in-memory or integration tag)
-- [x] Out of scope boundaries clear (`006`, `008`, `009`, `011`, `012`, prod workers)
+- [x] Out of scope boundaries clear (`006`, `008`, `009`, `010`, `011`, prod workers)
 
 ## Feature Readiness
 

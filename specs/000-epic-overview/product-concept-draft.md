@@ -4,9 +4,9 @@
 **Created**: 2026-04-02  
 **Last Updated**: 2026-04-02  
 
-**Purpose**: Single end-to-end description of how JobHound is meant to behave for users and how the backend fits together. Numbered epics (`001`–`012`) remain the place for technical contracts; this document is the **product/source-of-truth narrative** until it is promoted or split.
+**Purpose**: Single end-to-end description of how JobHound is meant to behave for users and how the backend fits together. Numbered epics (`001`–`011`) remain the place for technical contracts; this document is the **product/source-of-truth narrative** until it is promoted or split.
 
-**Docs vs epics**: This file is the **global product truth** (behavior, reset rules, MVP boundaries). Folders **`001`–`012`** are **slices** for concrete technical contracts (schema, env, Redis keys, workflows). If an epic contradicts this draft on **user-visible or data-lifecycle behavior**, align the epic to **this** document—or change this draft first if the product decision changed.
+**Docs vs epics**: This file is the **global product truth** (behavior, reset rules, MVP boundaries). Folders **`001`–`011`** are **slices** for concrete technical contracts (schema, env, Redis keys, workflows). If an epic contradicts this draft on **user-visible or data-lifecycle behavior**, align the epic to **this** document—or change this draft first if the product decision changed.
 
 **MVP scope**: One real user (“single-tenant” operationally), but **data model and APIs reserve** `user_id`, registration, and multi-user isolation later (PhantomBuster-style mental model: limited **search slots** per user).
 
@@ -37,7 +37,7 @@
 ## 3. Stage 1: ingest and “refresh”
 
 - **First run** (slot has broad keywords, first successful ingest): collectors run **in parallel** (per source), vacancies are **upserted** and associated with the slot; user sees the **stage-1 pool** (subject to limits—sites may not expose reliable dates, so “medium” fetch limits and **delta** logic vs stored ids / watermarks align with `006` / collector specs).
-- **Later “pull new”** (same slot, same immutable broad string): **not** a full re-import of the universe by default—**incremental / smaller limit** path that **appends** **new** listings relative to what the slot already has (exact API shape lives in `009` / `011` when implemented).
+- **Later “pull new”** (same slot, same immutable broad string): **not** a full re-import of the universe by default—**incremental / smaller limit** path that **appends** **new** listings relative to what the slot already has (exact API shape lives in `009` / `010` when implemented).
 - Changing **stage-2 or stage-3 filters** does **not** imply re-hitting external sites by itself (see §5).
 - **Ingest coordination (`006`)**: Redis **lock + cooldown** applies on **every** ingest for a source—including the **first** successful run for a new slot. Same code path end-to-end. The lock is keyed by **`source_id`** (normalized collector identity), **not** by slot: parallel ingests for different slots that share a source **serialize** at the source, by design.
 
@@ -52,7 +52,7 @@
   - **Deterministic ordering**: within a slot, the order in which eligible jobs are chosen for the cap must be **fixed and documented** (e.g. by `first_seen` / stable id)—same inputs → same selection—so retries and UI are not flaky.
   - **Eligible pool**: jobs that **passed stage 2** and do not have a **current** stage-3 result for this slot (including after a §5 stage-3 reset or profile-driven invalidation).
   - **Idempotency**: LLM work units must be safe under **Temporal retries** (no double-consuming cap, no duplicate inconsistent rows for the same `(slot_id, job_id)` outcome).
-- **UI** may let the user configure **all three stages at once** or **one at a time**; backend accepts the same logical parameters (one resource or partial updates—implementation detail in `011`). After **profile** text is saved, the client should **trigger or offer** stage-3-only recompute (see §5)—otherwise the UI will show stale LLM outcomes.
+- **UI** may let the user configure **all three stages at once** or **one at a time**; backend accepts the same logical parameters (one resource or partial updates—implementation detail in `010`). After **profile** text is saved, the client should **trigger or offer** stage-3-only recompute (see §5)—otherwise the UI will show stale LLM outcomes.
 
 ---
 
@@ -80,7 +80,7 @@
 
 ## 7. UI and operators
 
-- **Backend** is **API-first** (`011`). Any UI is a separate deliverable (separate repo or folder).
+- **Backend** is **API-first** (`010`). Any UI is a separate deliverable (separate repo or folder).
 - **Grafana** (or similar) may be used for **ops / metrics / read-only dashboards** (health, counts, ad-hoc SQL)—**not** required to be the primary product UI.
 - For a **Tailwind-friendly** product UI, prefer a thin **web app** (e.g. Vite + React + Tailwind / shadcn, or **htmx** + server-rendered HTML + Tailwind) calling the same API—faster to customize than Grafana for CRUD and workflows.
 
@@ -90,9 +90,10 @@
 
 Implement **after** the core works end-to-end for one user and the **source pool** has grown:
 
-- **Telegram** notifications (aligned with stage-3 successes and caps—see `010` / `007`).
 - **Scheduled auto-refresh** (hourly / few hours): same slot, same filters, delta ingest + re-run stages as defined—ties to `008`.
 - **Applications / outcomes table** (where the user applied, interview, reject)—**idea only** for now; product value for an aggregator, **not** part of MVP.
+
+**Not planned as MVP** (no numbered epic): third-party push notifications (e.g. Telegram)—revisit after the core vertical if needed; stage-3 **caps** in `007` stay independent of any future delivery channel.
 
 ---
 
@@ -100,7 +101,7 @@ Implement **after** the core works end-to-end for one user and the **source pool
 
 1. **Core**: slots, profile, stage-1 ingest + delta refresh, stage-2/3 recompute rules, persistence, minimal API + minimal UI to drive it.
 2. **More sources**: extend collectors (`005`).
-3. **Extensions**: Telegram, schedules, applications tracking, richer observability (`012`).
+3. **Extensions**: schedules, applications tracking, richer observability (`011`).
 
 ---
 
@@ -109,7 +110,7 @@ Implement **after** the core works end-to-end for one user and the **source pool
 - **004**: pure stage logic (unchanged semantics; slot is orchestration + storage).
 - **006**: ingest, watermarks, Redis coordination—slot-scoped ingest must not collide with **global** broad-key assumptions; **scope broad reuse by `(user_id, slot_id)`** when reconciling with `006`/`007`.
 - **007**: caps and `pipeline_run` / per-job statuses—map **pipeline run** to **slot** (and user) when implementing; **caps, ordering, eligible pool, and idempotency** must match §4 stage-3 policy.
-- **008**–**011**: schedules, manual workflow, HTTP API—must accept **slot id** and respect §5 reset rules.
+- **008**–**010**: schedules, manual workflow, HTTP API—must accept **slot id** and respect §5 reset rules.
 - This draft **supersedes** informal contradictions for **product** behavior until epics are updated to match.
 
 ---

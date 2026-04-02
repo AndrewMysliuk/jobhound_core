@@ -46,6 +46,6 @@
 
 **Scope**: Documentation and contracts only; **no** new migration or code required for this pass unless a later epic discovers a gap.
 
-1. [x] **Spec + contract narrative** — `spec.md` “Alignment with MVP” and `contracts/jobs-schema.md` “canonical row vs search slots” match [`product-concept-draft.md`](../000-epic-overview/product-concept-draft.md) (slots, `user_id` vs slot ownership, cascade expectations delegated to `007`/`011`).
+1. [x] **Spec + contract narrative** — `spec.md` “Alignment with MVP” and `contracts/jobs-schema.md` “canonical row vs search slots” match [`product-concept-draft.md`](../000-epic-overview/product-concept-draft.md) (slots, `user_id` vs slot ownership, cascade expectations delegated to `007`/`010`).
 2. [x] **Plan follow-up note** — `plan.md` records slot/delete semantics for child tables when `slot_id` arrives.
 

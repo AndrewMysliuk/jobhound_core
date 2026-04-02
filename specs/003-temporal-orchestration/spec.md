@@ -13,9 +13,9 @@ Add **Temporal** to the stack: a **dedicated worker binary** that runs workflows
 
 End-to-end product behavior—**search slots**, three pipeline stages, **reset rules** (recompute from PostgreSQL without implicit re-fetch), and **Temporal-safe idempotency** for capped LLM work—is the narrative source of truth in [`specs/000-epic-overview/product-concept-draft.md`](../000-epic-overview/product-concept-draft.md). This epic implements **orchestration plumbing only**; it does not encode slot or pipeline semantics.
 
-**Constraints for later workflows** (documented here so implementers of `006`, `007`, `008`, `009`, `011` share the same expectations):
+**Constraints for later workflows** (documented here so implementers of `006`, `007`, `008`, `009`, `010` share the same expectations):
 
-- **Context**: product workflows and their activities must accept **`slot_id`** (and **`user_id`** when registration lands) in payloads started from API or schedules—see draft §2–§5 and epics **`009`**, **`011`**, **`008`**. The v0 reference workflow deliberately uses a **single string** input and no slot context.
+- **Context**: product workflows and their activities must accept **`slot_id`** (and **`user_id`** when registration lands) in payloads started from API or schedules—see draft §2–§5 and epics **`009`**, **`010`**, **`008`**. The v0 reference workflow deliberately uses a **single string** input and no slot context.
 - **Idempotency**: activities that consume **caps** or persist **stage-3** outcomes must remain correct under **Temporal retries** (no double-charging the cap, no conflicting rows for the same `(slot_id, job_id)` outcome)—draft §4; detailed types and storage in **`004`** / **`007`**.
 - **Orchestration vs ingest**: “re-run stages after filter/profile change” means **activities read and write Postgres** per draft §5; a **new stage-1 crawl** is a **separate** user or API action (`006` / collectors), not an automatic side effect of filter edits.
 
@@ -48,9 +48,9 @@ Timeouts and retry defaults for the reference workflow and its activities should
 
 ## Out of scope
 
-- Real product workflows: **ingest** (`006`), **schedules** (`008`), **manual/API-triggered runs** (`009`), **public HTTP API** entrypoints (`011`) — each epic defines workflow names, payloads, and task-queue usage on top of this foundation.
+- Real product workflows: **ingest** (`006`), **schedules** (`008`), **manual/API-triggered runs** (`009`), **public HTTP API** entrypoints (`010`) — each epic defines workflow names, payloads, and task-queue usage on top of this foundation.
 - Production deployment topology for workers on GCP (only high-level note that address/namespace will come from env in prod is fine).
-- Advanced observability and correlation — **`012`**.
+- Advanced observability and correlation — **`011`**.
 
 ## Dependencies
 
@@ -74,7 +74,7 @@ Timeouts and retry defaults for the reference workflow and its activities should
 - `specs/007-llm-policy-and-caps/spec.md` — caps and idempotency with Temporal retries.
 - `specs/008-events-and-run-history/spec.md`
 - `specs/009-manual-search-workflow/spec.md`
-- `specs/011-http-public-api/spec.md`
+- `specs/010-http-public-api/spec.md`
 - `.specify/memory/constitution.md`
 
 ## Planning artifacts

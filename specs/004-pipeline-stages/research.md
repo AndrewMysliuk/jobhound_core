@@ -64,7 +64,7 @@ Inventory of **jobhound_core** pipeline and domain state, semantics choices, and
 
 ## 5. Out of scope (recap)
 
-- HTTP, Telegram, DB **inside** stage functions.
+- HTTP, push/email-style delivery, DB **inside** stage functions.
 - Parsing “5 days ago” text — `005`.
 - Per-vacancy status tracking for filter drops.
 

@@ -1,11 +1,11 @@
 # Feature: Observability and operations
 
-**Feature Branch**: `012-observability`  
+**Feature Branch**: `011-observability`  
 **Created**: 2026-03-29  
 **Last Updated**: 2026-04-02  
 **Status**: Draft
 
-**Alignment**: Product narrative and MVP phasing live in [`../000-epic-overview/product-concept-draft.md`](../000-epic-overview/product-concept-draft.md). This epic is **ops-facing** only: it must not substitute the **API-first** product surface (`011`) or a separate UI. If anything here implied “build Grafana instead of API/UI,” that contradicts the draft—this epic stays **telemetry and operator visibility**.
+**Alignment**: Product narrative and MVP phasing live in [`../000-epic-overview/product-concept-draft.md`](../000-epic-overview/product-concept-draft.md). This epic is **ops-facing** only: it must not substitute the **API-first** product surface (`010`) or a separate UI. If anything here implied “build Grafana instead of API/UI,” that contradicts the draft—this epic stays **telemetry and operator visibility**.
 
 ## Goal
 
@@ -14,20 +14,20 @@ Structured **logging**, stable **correlation** across process boundaries (HTTP r
 ## Scope
 
 - **Conventions** for `cmd/worker`, future `cmd/api` (or equivalent), and any long-running binaries: field names, levels, and what context to attach before a log line.
-- **Correlation IDs**: at minimum Temporal `workflow_id` / `run_id` (and activity context where useful); HTTP **request id** once **`011`** serves traffic; **`slot_id`** / **`user_id`** on domain operations (ingest, pipeline runs, manual workflows per **`009`**).
+- **Correlation IDs**: at minimum Temporal `workflow_id` / `run_id` (and activity context where useful); HTTP **request id** once **`010`** serves traffic; **`slot_id`** / **`user_id`** on domain operations (ingest, pipeline runs, manual workflows per **`009`**).
 - **Local / Docker**: readable console logs by default; **JSON** (or another structured encoder) behind an env knob for compose and prod parity.
 - **Operator dashboards (draft §7)**: **Grafana** (or similar) on **metrics / health / ad-hoc SQL or log-derived views** is **optional** and **read-only ops**—not the primary product UI. “Temporal Web + log queries” remains the **minimal** story until this epic ships richer tooling.
 
 ## Out of scope
 
 - Full SRE playbook, on-call rotations, pager policies.
-- **Product** analytics dashboards, CRUD, or workflow control surfaces (those stay **`011`** + UI).
+- **Product** analytics dashboards, CRUD, or workflow control surfaces (those stay **`010`** + UI).
 - Choosing a single vendor for **metrics** and **traces** before there is a concrete need (document options when implementing; OpenTelemetry as a possible direction is fine to mention in plan/tasks later).
 
 ## Dependencies
 
 - **Product phasing**: per draft §9, richer observability lands in the **extensions** phase **after** a working core vertical; implementation may **start small** alongside **`003`** (worker logs) without blocking core epics.
-- **Technical**: most value for HTTP correlation once **`011`** exists; slot-aware fields assume **`002`** / pipeline storage already carry **`slot_id`** (and reserved **`user_id`**) as in **`006`** / **`007`**.
+- **Technical**: most value for HTTP correlation once **`010`** exists; slot-aware fields assume **`002`** / pipeline storage already carry **`slot_id`** (and reserved **`user_id`**) as in **`006`** / **`007`**.
 
 ## Local / Docker
 
@@ -36,5 +36,5 @@ Structured **logging**, stable **correlation** across process boundaries (HTTP r
 
 ## Related
 
-- [`../000-epic-overview/product-concept-draft.md`](../000-epic-overview/product-concept-draft.md) — §7 UI vs ops; §9 phasing (`012` after core).
+- [`../000-epic-overview/product-concept-draft.md`](../000-epic-overview/product-concept-draft.md) — §7 UI vs ops; §9 phasing (`011` after core).
 - [`../000-epic-overview/spec.md`](../000-epic-overview/spec.md) — epic index and suggested order.

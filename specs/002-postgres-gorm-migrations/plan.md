@@ -8,9 +8,9 @@
 
 ## Summary
 
-Add **PostgreSQL** via **GORM**, **versioned SQL migrations** with **golang-migrate**, and a **storage layer** for `jobs` with bidirectional mapping to **`domain.Job`** (no GORM in `internal/domain`). Provide **Docker Compose** for local Postgres, document **env vars** in Makefile/README, and a **dedicated migrate entrypoint** so the agent binary does not auto-migrate in production. **No** `go-common` or Omega internal libraries. **SQLite** is out of scope. Optional run/event tables are **deferred** to `008` / `011` unless a concrete blocker appears (see Resolved decisions).
+Add **PostgreSQL** via **GORM**, **versioned SQL migrations** with **golang-migrate**, and a **storage layer** for `jobs` with bidirectional mapping to **`domain.Job`** (no GORM in `internal/domain`). Provide **Docker Compose** for local Postgres, document **env vars** in Makefile/README, and a **dedicated migrate entrypoint** so the agent binary does not auto-migrate in production. **No** `go-common` or Omega internal libraries. **SQLite** is out of scope. Optional run/event tables are **deferred** to `008` / `010` unless a concrete blocker appears (see Resolved decisions).
 
-**MVP narrative (2026-04-02)**: **`jobs`** is the **canonical** vacancy table (one PK per stable id). **Slot-scoped pools** attach via **downstream** schema (`007` / `006` / `011`), not by duplicating `jobs` rows per slot—see spec “Alignment with MVP”.
+**MVP narrative (2026-04-02)**: **`jobs`** is the **canonical** vacancy table (one PK per stable id). **Slot-scoped pools** attach via **downstream** schema (`007` / `006` / `010`), not by duplicating `jobs` rows per slot—see spec “Alignment with MVP”.
 
 ## Technical Context
 

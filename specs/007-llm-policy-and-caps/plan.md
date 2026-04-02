@@ -60,8 +60,6 @@ This spec does **not** change stage 1–3 **math** from `004`; it adds **policy 
 
 - Move **N** from const to **`internal/config`** env without changing cap **rules** (spec allows later).  
 - Manual / repeat stage 3 (`007` out of scope).  
-- **`010`** Telegram — at most **N** notifications per run aligns with cap; delivery not defined here.
-
 ## Project structure (documentation)
 
 ```text

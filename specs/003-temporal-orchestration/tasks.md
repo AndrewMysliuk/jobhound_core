@@ -46,9 +46,9 @@
 **Input**: [`specs/000-epic-overview/product-concept-draft.md`](../000-epic-overview/product-concept-draft.md), epic index `000`.  
 **Code**: not required for v2 (implementation unchanged).
 
-1. [x] **`spec.md`** — Add **Product alignment** (slots, reset-without-refetch, idempotency §4); refresh **Out of scope** and **Related** epic list (`006`, `007`, `008`, `009`, `011`).
+1. [x] **`spec.md`** — Add **Product alignment** (slots, reset-without-refetch, idempotency §4); refresh **Out of scope** and **Related** epic list (`006`, `007`, `008`, `009`, `010`).
 2. [x] **`plan.md`** — Reference MVP draft in **Input** and **Summary**; update **Engineering follow-ups** epic IDs and slot/idempotency note.
-3. [x] **`research.md`** — Link draft in dependencies; recap out-of-scope epics including `010`/`011`.
+3. [x] **`research.md`** — Link draft in dependencies; recap out-of-scope epics including `008`–`010` / `011`.
 4. [x] **`checklists/requirements.md`** — Checklist item for draft alignment; out-of-scope list matches spec.
 5. [x] **`contracts/reference-workflow.md`** — Explicit that v0 has no `slot_id`; product payloads defined later.
 6. [x] **`contracts/environment.md`** — Cross-link draft §4 / `007` for future DB-backed activities.

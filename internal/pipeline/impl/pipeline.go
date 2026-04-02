@@ -13,7 +13,7 @@ import (
 )
 
 // Pipeline wires pipeline contracts and runs one collect → stage 1 → stage 2 → stage 3 → dedup → notify pass.
-// It is orchestration only: no persistence or Telegram inside stage functions.
+// It is orchestration only: no persistence or side-channel notifications inside stage functions.
 type Pipeline struct {
 	Collector collectors.Collector
 	// Clock is used for stage 1 default date window; nil means time.Now.

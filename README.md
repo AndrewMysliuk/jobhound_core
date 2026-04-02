@@ -1,6 +1,6 @@
 # jobhound_core
 
-Backend for a **personal job agent**: collect vacancies, pipeline (filters → LLM scoring), **PostgreSQL** storage, **Temporal** orchestration, optional Telegram. Go 1.24.
+Backend for a **personal job agent**: collect vacancies, pipeline (filters → LLM scoring), **PostgreSQL** storage, **Temporal** orchestration, API-first product surface (no third-party push notifications in MVP). Go 1.24.
 
 For modules, env vars, and Docker, see `specs/` and `.specify/memory/constitution.md`.
 

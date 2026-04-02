@@ -5,13 +5,13 @@
 **Last Updated**: 2026-04-02  
 **Status**: Draft  
 
-**Product narrative**: [`../000-epic-overview/product-concept-draft.md`](../000-epic-overview/product-concept-draft.md) — **§2** (search **slot** as unit of work; **`slot_id`**; schema reserves **`user_id`**), **§3** (first ingest vs later **“pull new”** / incremental path—exact trigger shape lives here and in **`011`**), **§4** (stage-3 **cap, ordering, eligible pool, idempotency** apply to **each** manual execution), **§5** (filter/profile **reset wipes** dependent outcomes **before** or **as part of** the same user action; manual workflows **recompute** from PostgreSQL—**no** implicit full re-crawl when only filters changed), **§9** (core vertical: manual/API triggers before schedules **`008`**).
+**Product narrative**: [`../000-epic-overview/product-concept-draft.md`](../000-epic-overview/product-concept-draft.md) — **§2** (search **slot** as unit of work; **`slot_id`**; schema reserves **`user_id`**), **§3** (first ingest vs later **“pull new”** / incremental path—exact trigger shape lives here and in **`010`**), **§4** (stage-3 **cap, ordering, eligible pool, idempotency** apply to **each** manual execution), **§5** (filter/profile **reset wipes** dependent outcomes **before** or **as part of** the same user action; manual workflows **recompute** from PostgreSQL—**no** implicit full re-crawl when only filters changed), **§9** (core vertical: manual/API triggers before schedules **`008`**).
 
 ## Goal
 
 Provide **on-demand** orchestration (Temporal workflow **preferred** for parity with **`008`**) that runs the **same pipeline semantics** as scheduled execution: **slot-scoped** stage-1 ingest where requested, then **local** stages 2–3 per **`004`** / **`007`**, driven by an **API**, **CLI**, or internal call—not by a cron.
 
-The outcome is a **stable request/response contract** (DTOs live in module `schema/` when implemented) so **`011`** can expose thin HTTP without redefining behavior.
+The outcome is a **stable request/response contract** (DTOs live in module `schema/` when implemented) so **`010`** can expose thin HTTP without redefining behavior.
 
 ## Clarifications (vs older “cache and/or fresh fetch” wording)
 
@@ -28,9 +28,9 @@ The outcome is a **stable request/response contract** (DTOs live in module `sche
 
 ## Out of scope
 
-- **Full public REST** surface and slot CRUD (**`011`**).
+- **Full public REST** surface and slot CRUD (**`010`**).
 - **Schedule definition** and append-only **tick history** (**`008`**)—manual runs may still log to **`pipeline_run`** / job status per **`007`** where that already exists.
-- **Telegram** (**`010`**), **observability** beyond what **`012`** adds later.
+- **Observability** beyond what **`011`** adds later.
 
 ## Dependencies
 
@@ -46,4 +46,4 @@ Backlog and contract detail: [`tasks.md`](./tasks.md), [`contracts/manual-workfl
 
 ## Local / Docker
 
-Start workflows from **`cmd/worker`** tests, **`cmd/agent`** debug hooks, or a minimal internal caller against Compose **Temporal** + **Postgres**; exact HTTP entrypoints are **`011`**.
+Start workflows from **`cmd/worker`** tests, **`cmd/agent`** debug hooks, or a minimal internal caller against Compose **Temporal** + **Postgres**; exact HTTP entrypoints are **`010`**.

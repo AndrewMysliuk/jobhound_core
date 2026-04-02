@@ -31,7 +31,7 @@
 
 ## F. Integration with `internal/pipeline`
 
-1. [x] **Wire `impl` (or orchestration)** — Definition of done: pipeline applies stage 1 → 2 → 3 in order; **no** persistence or Telegram inside stage functions.
+1. [x] **Wire `impl` (or orchestration)** — Definition of done: pipeline applies stage 1 → 2 → 3 in order; **no** persistence or side-channel notifications inside stage functions.
 2. [x] **Update mocks** — Definition of done: `pipeline/mock` implements updated interfaces where applicable.
 
 ## G. Quality gates
