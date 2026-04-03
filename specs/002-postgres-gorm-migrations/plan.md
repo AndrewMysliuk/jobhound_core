@@ -2,15 +2,15 @@
 
 **Branch**: `002-postgres-gorm-migrations`  
 **Date**: 2026-03-29  
-**Last Updated**: 2026-04-02  
+**Last Updated**: 2026-04-03  
 **Spec**: `specs/002-postgres-gorm-migrations/spec.md`  
 **Input**: Feature specification + `research.md` + [`product-concept-draft.md`](../000-epic-overview/product-concept-draft.md)
 
 ## Summary
 
-Add **PostgreSQL** via **GORM**, **versioned SQL migrations** with **golang-migrate**, and a **storage layer** for `jobs` with bidirectional mapping to **`domain.Job`** (no GORM in `internal/domain`). Provide **Docker Compose** for local Postgres, document **env vars** in Makefile/README, and a **dedicated migrate entrypoint** so the agent binary does not auto-migrate in production. **No** `go-common` or Omega internal libraries. **SQLite** is out of scope. Optional run/event tables are **deferred** to `008` / `010` unless a concrete blocker appears (see Resolved decisions).
+Add **PostgreSQL** via **GORM**, **versioned SQL migrations** with **golang-migrate**, and a **storage layer** for `jobs` with bidirectional mapping to **`domain.Job`** (no GORM in `internal/domain`). Provide **Docker Compose** for local Postgres, document **env vars** in Makefile/README, and a **dedicated migrate entrypoint** so the agent binary does not auto-migrate in production. **No** `go-common` or Omega internal libraries. **SQLite** is out of scope. Optional run/event tables are **deferred** to **`008` / `009`** unless a concrete blocker appears (see Resolved decisions).
 
-**MVP narrative (2026-04-02)**: **`jobs`** is the **canonical** vacancy table (one PK per stable id). **Slot-scoped pools** attach via **downstream** schema (`007` / `006` / `010`), not by duplicating `jobs` rows per slot—see spec “Alignment with MVP”.
+**MVP narrative (2026-04-02)**: **`jobs`** is the **canonical** vacancy table (one PK per stable id). **Slot-scoped pools** attach via **downstream** schema (`007` / `006` / `009`), not by duplicating `jobs` rows per slot—see spec “Alignment with MVP”.
 
 ## Technical Context
 
@@ -52,7 +52,7 @@ Add **PostgreSQL** via **GORM**, **versioned SQL migrations** with **golang-migr
 |---|--------|----------|
 | D1 | **Migrations directory** | **`migrations/`** at repo root; filenames follow golang-migrate convention (`000001_....up.sql`). |
 | D2 | **Postgres version (local)** | **16** in Compose and docs unless CI forces another LTS. |
-| D3 | **Run / event stub tables** | **Defer** to `008` / Temporal specs; ship **`jobs` only** in `002` to keep v0 tight (spec “optional v0” → choose minimal). |
+| D3 | **Run / event stub tables** | **Defer** to Temporal / **`008`–`009`** specs; ship **`jobs` only** in `002` to keep v0 tight (spec “optional v0” → choose minimal). |
 | D4 | **Migrate invocation** | **Dedicated** command: prefer **`cmd/migrate`** *or* documented **`make migrate-up`** wrapping `migrate` CLI / small Go main — **not** inside `cmd/agent` default startup for prod. |
 | D5 | **DSN env var** | Single primary: **`JOBHOUND_DATABASE_URL`** (Postgres URL form). If migrate tool needs a separate var, document **`JOBHOUND_MIGRATE_DATABASE_URL`** as optional override; default to same as D1 in `contracts/environment.md`. |
 | D6 | **GORM AutoMigrate** | **Not used** for schema authority; SQL migrations only. |

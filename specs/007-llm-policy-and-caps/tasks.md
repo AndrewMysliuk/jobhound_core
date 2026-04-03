@@ -88,7 +88,7 @@ Requires **`specs/006-cache-and-ingest`** (ingest path + retention).
 
 **Input**: Updated `spec.md`, `plan.md`, `contracts/*` aligned with [`product-concept-draft.md`](../000-epic-overview/product-concept-draft.md) §4, §10 (`slot_id` on runs, deterministic cap ordering, eligible pool, Temporal idempotency).
 
-**Prerequisite**: **`search_slots`** (or agreed slot table) may land in **`010`** / **`002`** — **`slot_id`** FK can be deferred as **NULL** until then; document in migration.
+**Prerequisite**: **`search_slots`** (or agreed slot table) may land in **`009`** / **`002`** — **`slot_id`** FK can be deferred as **NULL** until then; document in migration.
 
 1. [x] **`pipeline_runs.slot_id`** — Definition of done: migration adds **`slot_id UUID NULL`** (or **NOT NULL** if slots exist); GORM model + run creation paths set it when orchestration has a slot; index if queried by slot.
 

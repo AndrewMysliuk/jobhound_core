@@ -37,7 +37,7 @@
 
 ## G. Optional / deferred (do not block `002` closure)
 
-1. [x] **Stub tables for runs/events** — **Deferred** by plan D3; follow-up tasks live in `specs/008-events-and-run-history/tasks.md`.
+1. [x] **Stub tables for runs/events** — **Deferred** by plan D3; follow-up when **`008` / `009`** define persistence needs.
 2. [x] **Wire Dedup port to real storage** — **Closed for `002`**: intentionally deferred to `006` (cache/ingest); no separate dedup schema in `002` (`jobs` only per plan D3). Agent keeps `mock.Dedup` in `cmd/agent` until `006` adds persistence (see `specs/006-cache-and-ingest/spec.md`).
 
 ---
@@ -46,6 +46,6 @@
 
 **Scope**: Documentation and contracts only; **no** new migration or code required for this pass unless a later epic discovers a gap.
 
-1. [x] **Spec + contract narrative** — `spec.md` “Alignment with MVP” and `contracts/jobs-schema.md` “canonical row vs search slots” match [`product-concept-draft.md`](../000-epic-overview/product-concept-draft.md) (slots, `user_id` vs slot ownership, cascade expectations delegated to `007`/`010`).
+1. [x] **Spec + contract narrative** — `spec.md` “Alignment with MVP” and `contracts/jobs-schema.md` “canonical row vs search slots” match [`product-concept-draft.md`](../000-epic-overview/product-concept-draft.md) (slots, `user_id` vs slot ownership, cascade expectations delegated to `007`/`009`).
 2. [x] **Plan follow-up note** — `plan.md` records slot/delete semantics for child tables when `slot_id` arrives.
 

@@ -2,20 +2,20 @@
 
 **Feature Branch**: `002-postgres-gorm-migrations`  
 **Created**: 2026-03-29  
-**Last Updated**: 2026-04-02  
+**Last Updated**: 2026-04-03  
 **Status**: Implemented
 
 ## Goal
 
-Connect to **PostgreSQL** with **GORM**, add **versioned SQL migrations** (same approach as omg-api), and place persistence in a **storage layer** with a clear split between **domain** and **GORM models**. Provide local **Docker Compose** for Postgres and documented env vars. The v0 schema covers **jobs** and, if needed, **minimal stubs** for runs/events ahead of `006` / `008` / `010`. **SQLite is not part of the target architecture** (see constitution).
+Connect to **PostgreSQL** with **GORM**, add **versioned SQL migrations** (same approach as omg-api), and place persistence in a **storage layer** with a clear split between **domain** and **GORM models**. Provide local **Docker Compose** for Postgres and documented env vars. The v0 schema covers **jobs** and, if needed, **minimal stubs** for runs/events ahead of `006` / `008` / `009`. **SQLite is not part of the target architecture** (see constitution).
 
 ## Alignment with MVP (product draft)
 
 **Source**: [`specs/000-epic-overview/product-concept-draft.md`](../000-epic-overview/product-concept-draft.md).
 
-- **`jobs`** holds **canonical** normalized vacancy rows: **one row per stable job id** (`001`). It is **not** the stage-1 “pool” keyed only by this table—**which slot** a vacancy belongs to is modeled by **slot/run-scoped** tables coordinated with **`006` / `007` / `010`** (e.g. run headers, `pipeline_run_jobs`, future **`slot_id`** on runs as those contracts freeze). The product draft’s **“no cross-slot dedup”** means **separate slot associations** for the same canonical `id`, not duplicate `jobs` primary keys.
+- **`jobs`** holds **canonical** normalized vacancy rows: **one row per stable job id** (`001`). It is **not** the stage-1 “pool” keyed only by this table—**which slot** a vacancy belongs to is modeled by **slot/run-scoped** tables coordinated with **`006` / `007` / `009`** (e.g. run headers, `pipeline_run_jobs`, future **`slot_id`** on runs as those contracts freeze). The product draft’s **“no cross-slot dedup”** means **separate slot associations** for the same canonical `id`, not duplicate `jobs` primary keys.
 - **`user_id`** on `jobs` stays **nullable** and **reserved** for multi-tenant listing attribution (`001`); **slot ownership** and **`slot_id`** live at the **hunt / run / API** persistence layer for MVP, not necessarily mirrored on every `jobs` row.
-- **Hard-delete a slot** (draft §2) must remove **all** rows tied to that slot (membership, marks, runs)—**cascade rules** on those child tables are owned by the epics that define them (`007`, `010`, etc.); `002` defines the **parent** canonical row in `jobs` and how storage maps to **`domain.Job`**.
+- **Hard-delete a slot** (draft §2) must remove **all** rows tied to that slot (membership, marks, runs)—**cascade rules** on those child tables are owned by the epics that define them (`007`, `009`, etc.); `002` defines the **parent** canonical row in `jobs` and how storage maps to **`domain.Job`**.
 
 ## Style reference (omg-api)
 
@@ -64,11 +64,11 @@ Indexes: at least PK on `id`; others (e.g. `source`, time) as needed for ingest 
 
 ### Tables for runs / events (optional v0)
 
-If `002` includes stubs for `008` / Temporal `003`:
+If `002` includes stubs for Temporal `003` / workflow epics:
 
-- Table names and columns are **owned by migrations** so later specs can extend them; allow **one minimal** run-history table (id, timestamps, status, nullable `temporal_workflow_run_id`, nullable `payload` jsonb) and/or a **minimal** event row — exact columns in the plan, or defer to `008` if `002` ships **only** `jobs`.
+- Table names and columns are **owned by migrations** so later specs can extend them; allow **one minimal** run-history table (id, timestamps, status, nullable `temporal_workflow_run_id`, nullable `payload` jsonb) and/or a **minimal** event row — exact columns in the plan, or defer to **`008` / `009`** if `002` ships **only** `jobs`.
 
-**Rule**: keep v0 small; prefer a tight `jobs` table plus an explicit follow-up in `008` over speculative columns.
+**Rule**: keep v0 small; prefer a tight `jobs` table plus an explicit follow-up in **`008`–`009`** over speculative columns.
 
 ## Docker Compose (local)
 
@@ -83,8 +83,8 @@ If `002` includes stubs for `008` / Temporal `003`:
 
 ## Out of scope
 
-- Final cache/watermark schema, full events/schedules model, HTTP API — see `006`, `008`, `010`.
-- DDL for **`search_slots`**, **`slot_id`** on runs, manual marks, and full **§5 reset** persistence — owned by **`007` / `010`** (and related contracts) once shapes are frozen; `002` only anchors **canonical `jobs`** and mapping to **`domain.Job`**.
+- Final cache/watermark schema, full run/schedule model (if we add a scheduled-refresh epic), HTTP API — see `006`, `008`, `009`.
+- DDL for **`search_slots`**, **`slot_id`** on runs, manual marks, and full **§5 reset** persistence — owned by **`007` / `009`** (and related contracts) once shapes are frozen; `002` only anchors **canonical `jobs`** and mapping to **`domain.Job`**.
 - `go-common`, Debezium, CDC handlers.
 - Production GCP setup / secrets beyond documenting env var names.
 

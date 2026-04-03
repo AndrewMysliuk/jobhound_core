@@ -69,8 +69,8 @@ Common local patterns:
 ## 6. Out of scope (recap)
 
 - Production worker deployment on GCP (env-only note OK).
-- Real schedules (`008`), ingest (`006`), API/manual runs (`009`/`010`) — later specs.
-- Advanced tracing/correlation — `011`.
+- Scheduled auto-refresh (product backlog), ingest (`006`), API/manual runs (`008`/`009`) — later specs.
+- Advanced tracing/correlation — `010`.
 
 ---
 

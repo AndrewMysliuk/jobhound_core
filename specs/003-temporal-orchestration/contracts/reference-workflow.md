@@ -1,7 +1,7 @@
 # Contract: reference workflow (v0)
 
 **Feature**: `003-temporal-orchestration`  
-**Purpose**: Single **demo** workflow and **one** activity to validate Temporal wiring, registration, and Web UI visibility. **Not** product logic; replace or extend in later specs (`006`, `008`, `009`, `010`). Product runs will carry **`slot_id`** (and **`user_id`** when applicable) per [`product-concept-draft.md`](../../000-epic-overview/product-concept-draft.md)—**not** part of this v0 I/O contract.
+**Purpose**: Single **demo** workflow and **one** activity to validate Temporal wiring, registration, and Web UI visibility. **Not** product logic; replace or extend in later specs (`006`, `008`, `009`). Product runs will carry **`slot_id`** (and **`user_id`** when applicable) per [`product-concept-draft.md`](../../000-epic-overview/product-concept-draft.md)—**not** part of this v0 I/O contract.
 
 ## Runtime identifiers (must match worker and client)
 

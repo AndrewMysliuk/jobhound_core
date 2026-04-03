@@ -25,7 +25,7 @@ Global MVP behavior is described in [`specs/000-epic-overview/product-concept-dr
 | **Stage 2** | **Local** narrow: include/exclude (optional date TBD) **only** on the stage-1 pool for the slot. | **`004`** — **broad filter** then **keyword filter** in order (both are “narrow” on stored rows). |
 | **Stage 3** | LLM on rows that **passed** product stage 2; cap, **deterministic ordering**, eligible pool, **idempotency** under retries. | **`004`** — per-job scorer + structured output; **batch** caps, ordering, and run-scoped idempotency are **`007`** (+ orchestration) per draft §4. |
 
-This epic **does not** implement HTTP collectors or slot ingest; callers pass `[]domain.Job` and rule structs **per invocation**. **Reset** when filters change (draft §5) is enforced **outside** these pure functions — see **`010`** / orchestration specs.
+This epic **does not** implement HTTP collectors or slot ingest; callers pass `[]domain.Job` and rule structs **per invocation**. **Reset** when filters change (draft §5) is enforced **outside** these pure functions — see **`008`** / **`009`** (workflows + HTTP).
 
 ## Behaviour: filter rejection vs error
 

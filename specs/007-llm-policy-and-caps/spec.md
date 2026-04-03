@@ -55,7 +55,7 @@ PASSED_STAGE_2 → (PASSED_STAGE_3 | REJECTED_STAGE_3)
 - **N** is a **code constant** (initial value **5**; may later move to config without changing the rules below).
 - **Eligible pool** for stage 3 in that execution: `(job, pipeline_run)` pairs in **`PASSED_STAGE_2`** that do **not** yet have a **terminal** stage-3 outcome (**`PASSED_STAGE_3`** or **`REJECTED_STAGE_3`**) for **this** run — including after a **stage-3-only reset** (product draft §5) or profile-driven invalidation that clears stage-3 outputs.
 - From that **eligible** set, at most **N** jobs are sent to stage 3 in **one** execution of that run. **Ordering** must be **deterministic** and **documented** (same inputs → same selection order — e.g. **`job_id` ascending** or a stable timestamp column agreed in storage); retries and UI must not depend on nondeterministic DB row order.
-- Pairs that remain **`PASSED_STAGE_2`** because they were **not** selected in that execution **stay** `PASSED_STAGE_2` (cap backlog) until a **later** pipeline-run execution or an explicit **“process next batch”**-style action (product draft §4; API/workflow shapes in **`010`** when implemented).
+- Pairs that remain **`PASSED_STAGE_2`** because they were **not** selected in that execution **stay** `PASSED_STAGE_2` (cap backlog) until a **later** pipeline-run execution or an explicit **“process next batch”**-style action (product draft §4; API/workflow shapes in **`008` / `009`** when implemented).
 - **“One automatic run”** means **one pipeline-run execution** (e.g. one workflow execution handling that run). Cap **N** and idempotency below apply to **that** execution.
 
 ## Run safety
@@ -78,7 +78,7 @@ PASSED_STAGE_2 → (PASSED_STAGE_3 | REJECTED_STAGE_3)
 ## Out of scope
 
 - **Event scheduling, rich run-history rows, workflow IDs in DB** — not in this spec; **`007`** only needs a **`pipeline_run_id`** FK target as defined in the implementation contracts.
-- **HTTP API** shapes for listing/filtering (`010`).
+- **HTTP API** shapes for listing/filtering (`009`).
 - **Manual “run stage 3 on this single job”** and **rescoring** — not in v1.
 - **Per-user auth and enforcement** — MVP may be single-tenant; **schema** reserves **`user_id`** / slot ownership for later epics.
 
@@ -106,5 +106,5 @@ Plan, task backlog, and frozen contracts: [`plan.md`](./plan.md), [`tasks.md`](.
 4. One pipeline-run execution does **not** process the same job through stage 3 twice; selection order is **deterministic** and **documented** (see **`contracts/pipeline-run-job-status.md`**).
 5. **Temporal** retries do **not** double-consume the cap or corrupt **`(pipeline_run_id, job_id)`** outcomes.
 6. **`pipeline_runs`** carries **`slot_id`** (nullable only where migrations have not yet backfilled; **normative** for MVP slot-scoped runs) per contract.
-7. Per-job **manual** stage-3 rescoring is **out** of v1; **batch** continuation for cap backlog may be **`010`** — **policy** stays in this spec.
+7. Per-job **manual** stage-3 rescoring is **out** of v1; **batch** continuation for cap backlog may be **`009`** — **policy** stays in this spec.
 8. Retention cleanup removes **dependent per-run rows** when a `jobs` row is deleted (`006`).

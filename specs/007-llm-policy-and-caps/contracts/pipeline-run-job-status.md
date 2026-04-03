@@ -53,7 +53,7 @@ PASSED_STAGE_2 → (PASSED_STAGE_3 | REJECTED_STAGE_3)
 | Eligible pool | **(job, pipeline_run)** pairs in **`PASSED_STAGE_2`** for this run that have **no** terminal stage-3 outcome yet (**not** **`PASSED_STAGE_3`** / **`REJECTED_STAGE_3`**). |
 | Limit | At most **N** distinct **`job_id`** values sent to stage 3 in **one** execution of that run. |
 | Ordering | **Normative**: sort the **eligible** set by **`job_id` ascending** (lexicographic), then take the first **N**. **Same** eligible set → **same** selection order (product draft §4). |
-| Backlog | Eligible rows not selected remain **`PASSED_STAGE_2`** until a **later** execution or explicit **“process next batch”**-style action (`010` when implemented). |
+| Backlog | Eligible rows not selected remain **`PASSED_STAGE_2`** until a **later** execution or explicit **“process next batch”**-style action (`009` when implemented). |
 | Idempotency | Within **one** execution, the same **`job_id`** **must not** be sent to stage 3 **twice**. Under **Temporal retries**, the execution must **not** double-consume **N** or insert conflicting **terminal** rows for the same **`(pipeline_run_id, job_id)`**. |
 
 ---
@@ -76,7 +76,7 @@ Add a column (**normative name** for v1; **must** match migration + GORM):
 | ------ | ---- | ----- |
 | `id` | `uuid` or `bigserial` | PK — referenced as **`pipeline_run_id`** in child table. |
 | `created_at` | `timestamptz` | Recommended. |
-| `slot_id` | `uuid` | **Search slot** for this run. **NULL** allowed only in **legacy** rows before slot DDL is wired; **new** runs should always set this when the slot model is active. **FK** to `search_slots(id)` when that table exists (`010` / `002` follow-up — document in migration). |
+| `slot_id` | `uuid` | **Search slot** for this run. **NULL** allowed only in **legacy** rows before slot DDL is wired; **new** runs should always set this when the slot model is active. **FK** to `search_slots(id)` when that table exists (`009` / `002` follow-up — document in migration). |
 
 **Migration note**: If an early **`007`** migration shipped **without** **`slot_id`**, add it in a **follow-up** `ALTER TABLE` (see **`007` `tasks.md`** supplement) before relying on slot-scoped APIs.
 

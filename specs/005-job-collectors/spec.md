@@ -13,7 +13,7 @@ Per-source **`Collector`** implementations **fetch** listings and **normalize** 
 
 **Source of truth**: [`specs/000-epic-overview/product-concept-draft.md`](../000-epic-overview/product-concept-draft.md) — search slots, stage-1 broad ingest, reset rules, and multi-user **reservations** in schema.
 
-- **This epic** owns **HTTP fetch + normalization per board** (`pipeline.Collector`). It does **not** own **slot** lifecycle, the **immutable stage-1 broad keyword string**, **bound sources per slot**, **upsert**, **watermarks / delta refresh**, or **Redis ingest coordination** — those are **`006`** (and API shapes in **`009` / `010`** when implemented).
+- **This epic** owns **HTTP fetch + normalization per board** (`pipeline.Collector`). It does **not** own **slot** lifecycle, the **immutable stage-1 broad keyword string**, **bound sources per slot**, **upsert**, **watermarks / delta refresh**, or **Redis ingest coordination** — those are **`006`** (and API shapes in **`008` / `009`** when implemented).
 - **Orchestration** may run **one collector per bound source in parallel** for a slot’s stage-1 run; **failure of one source does not cancel others** unless a higher-level workflow defines otherwise — see **`contracts/collector.md`**.
 - **`Job.UserID`** is **not** filled from site HTML/API by MVP collectors; orchestration/persistence may set it when writing **slot-scoped** rows (see **`contracts/domain-mapping-mvp.md`**).
 
@@ -55,9 +55,9 @@ Canonical list in **`contracts/sources-inventory.md`**.
 MVP mapping and planned **`SalaryRaw` / `Tags` / `Position`**: **`contracts/domain-mapping-mvp.md`**.  
 Persistence extension for **`jobs`**: **`contracts/jobs-table-extension.md`**.
 
-## Temporary debug HTTP (before `010`)
+## Temporary debug HTTP (before `009`)
 
-To manually verify collectors without the public API spec, a **local-only** debug server lives under **`cmd/agent`**: flag **`-debug-http-addr`** or env **`JOBHOUND_DEBUG_HTTP_ADDR`** (see **`contracts/environment.md`**). It serves **`GET /health`** and **one POST route per MVP source** — `POST /debug/collectors/europe_remotely` and `POST /debug/collectors/working_nomads` — so each site can be exercised in isolation (e.g. Postman, curl). It is **not** the product HTTP API; **`specs/010-http-public-api`** remains the contract for public endpoints. Do not expose debug routes in production builds.
+To manually verify collectors without the public API spec, a **local-only** debug server lives under **`cmd/agent`**: flag **`-debug-http-addr`** or env **`JOBHOUND_DEBUG_HTTP_ADDR`** (see **`contracts/environment.md`**). It serves **`GET /health`** and **one POST route per MVP source** — `POST /debug/collectors/europe_remotely` and `POST /debug/collectors/working_nomads` — so each site can be exercised in isolation (e.g. Postman, curl). It is **not** the product HTTP API; **`specs/009-http-public-api`** remains the contract for public endpoints. Do not expose debug routes in production builds.
 
 **Implementation**: `internal/collectors/handlers/debughttp`.
 

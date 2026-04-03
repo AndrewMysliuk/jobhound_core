@@ -135,10 +135,10 @@ The job model can carry an optional **user** identifier for future isolation. **
 
 ## Out of scope
 
-- Real collectors beyond what later epics specify, full GORM/Postgres schema ( **`002`** ), Temporal workflows ( **`003`** ), public HTTP API (**`010`**).
+- Real collectors beyond what later epics specify, full GORM/Postgres schema ( **`002`** ), Temporal workflows ( **`003`** ), public HTTP API (**`009`**).
 - **Cross-site / fuzzy duplicate detection** and a single global canonical vacancy across sources.
 - Auth and user lifecycle; only optional field reservation on `Job` here.
-- **Slot CRUD and reset semantics** — narrative in product draft §5; technical contracts in **`009` / `010`** and storage epics.
+- **Slot CRUD and reset semantics** — narrative in product draft §5; technical contracts in **`008` / `009`** and storage epics.
 
 ## Dependencies
 

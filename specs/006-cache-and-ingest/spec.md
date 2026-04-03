@@ -20,7 +20,7 @@ Define **when** ingest hits external collectors vs reads from Postgres, **increm
 ## Non-goals
 
 - Notification delivery and idempotency (other specs).
-- Full public API contract (`010`).
+- Full public API contract (`009`).
 - Event scheduler UI.
 
 ## Identity and deduplication
@@ -78,7 +78,7 @@ Define **when** ingest hits external collectors vs reads from Postgres, **increm
 - **`002`**: Postgres schema, migrations; canonical `jobs` vs slot associations.
 - **`005`**: collectors; watermark wired when incremental behavior exists.
 - **`007`**: `pipeline_runs` (minimal, **`slot_id`** per contract); **`PASSED_STAGE_1`** on `jobs`; per-run rows and **ON DELETE CASCADE** from `pipeline_run_jobs` to `jobs` — ingest and retention **must** align with those migrations/contracts.
-- **`010`** (when implemented): HTTP API shapes for “pull new” / slot lifecycle — referenced for **refresh** UX, not required to freeze Redis/Postgres rules here.
+- **`009`** (when implemented): HTTP API shapes for “pull new” / slot lifecycle — referenced for **refresh** UX, not required to freeze Redis/Postgres rules here.
 
 ## Local / Docker
 

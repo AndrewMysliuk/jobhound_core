@@ -1,24 +1,24 @@
 # Feature: Manual search workflow
 
-**Feature Branch**: `009-manual-search-workflow`  
+**Feature Branch**: `008-manual-search-workflow`  
 **Created**: 2026-03-29  
-**Last Updated**: 2026-04-02  
+**Last Updated**: 2026-04-03  
 **Status**: Draft  
 
-**Product narrative**: [`../000-epic-overview/product-concept-draft.md`](../000-epic-overview/product-concept-draft.md) — **§2** (search **slot** as unit of work; **`slot_id`**; schema reserves **`user_id`**), **§3** (first ingest vs later **“pull new”** / incremental path—exact trigger shape lives here and in **`010`**), **§4** (stage-3 **cap, ordering, eligible pool, idempotency** apply to **each** manual execution), **§5** (filter/profile **reset wipes** dependent outcomes **before** or **as part of** the same user action; manual workflows **recompute** from PostgreSQL—**no** implicit full re-crawl when only filters changed), **§9** (core vertical: manual/API triggers before schedules **`008`**).
+**Product narrative**: [`../000-epic-overview/product-concept-draft.md`](../000-epic-overview/product-concept-draft.md) — **§2** (search **slot** as unit of work; **`slot_id`**; schema reserves **`user_id`**), **§3** (first ingest vs later **“pull new”** / incremental path—exact trigger shape lives here and in **`009`**), **§4** (stage-3 **cap, ordering, eligible pool, idempotency** apply to **each** manual execution), **§5** (filter/profile **reset wipes** dependent outcomes **before** or **as part of** the same user action; manual workflows **recompute** from PostgreSQL—**no** implicit full re-crawl when only filters changed), **§9** (core vertical: manual/API triggers first; scheduled auto-refresh stays **product backlog** per draft §8).
 
 ## Goal
 
-Provide **on-demand** orchestration (Temporal workflow **preferred** for parity with **`008`**) that runs the **same pipeline semantics** as scheduled execution: **slot-scoped** stage-1 ingest where requested, then **local** stages 2–3 per **`004`** / **`007`**, driven by an **API**, **CLI**, or internal call—not by a cron.
+Provide **on-demand** orchestration (Temporal workflow **preferred**) for **slot-scoped** stage-1 ingest where requested, then **local** stages 2–3 per **`004`** / **`007`**, driven by an **API**, **CLI**, or internal call—not by a cron.
 
-The outcome is a **stable request/response contract** (DTOs live in module `schema/` when implemented) so **`010`** can expose thin HTTP without redefining behavior.
+The outcome is a **stable request/response contract** (DTOs live in module `schema/` when implemented) so **`009`** can expose thin HTTP without redefining behavior.
 
 ## Clarifications (vs older “cache and/or fresh fetch” wording)
 
 - **“Manual”** means **user- or operator-initiated**, not **unscheduled** ad hoc SQL. It does **not** bypass **`006`** Redis lock/cooldown or watermark rules; every stage-1 touch for a source uses the **same** coordination path as other slots (draft §3).
 - **Fresh fetch** is **not** “re-import the whole universe by default”: later pulls are **incremental / smaller limit** relative to stored state (**`006`**). First successful ingest for a slot still establishes the **immutable** broad keyword string (draft §2).
 - **Filter edits** do **not** require re-hitting collectors (draft §5). A manual run after a filter change is either **stage 2+3 only** or **stage 3 only**, depending on what changed—see [contracts/manual-workflow.md](./contracts/manual-workflow.md).
-- **`009`** is the **core** way to run the engine before **`008`** exists; **`008`** should reuse activities/workflow steps where possible, differing mainly in **trigger** (schedule vs explicit start).
+- **`008`** is the **core** on-demand path to run the engine for MVP; a future scheduled-refresh epic (if added) should **reuse** the same activities/workflow steps, differing only in **trigger** (schedule vs explicit start).
 
 ## Scope
 
@@ -28,9 +28,9 @@ The outcome is a **stable request/response contract** (DTOs live in module `sche
 
 ## Out of scope
 
-- **Full public REST** surface and slot CRUD (**`010`**).
-- **Schedule definition** and append-only **tick history** (**`008`**)—manual runs may still log to **`pipeline_run`** / job status per **`007`** where that already exists.
-- **Observability** beyond what **`011`** adds later.
+- **Full public REST** surface and slot CRUD (**`009`**).
+- **Schedule definition** and append-only **tick history** (product backlog / no numbered epic)—manual runs may still log to **`pipeline_run`** / job status per **`007`** where that already exists.
+- **Observability** beyond what **`010`** adds later.
 
 ## Dependencies
 
@@ -46,4 +46,4 @@ Backlog and contract detail: [`tasks.md`](./tasks.md), [`contracts/manual-workfl
 
 ## Local / Docker
 
-Start workflows from **`cmd/worker`** tests, **`cmd/agent`** debug hooks, or a minimal internal caller against Compose **Temporal** + **Postgres**; exact HTTP entrypoints are **`010`**.
+Start workflows from **`cmd/worker`** tests, **`cmd/agent`** debug hooks, or a minimal internal caller against Compose **Temporal** + **Postgres**; exact HTTP entrypoints are **`009`**.
