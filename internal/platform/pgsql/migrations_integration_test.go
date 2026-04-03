@@ -181,6 +181,57 @@ func TestMigrations007PipelineTables_integration(t *testing.T) {
 	}
 }
 
+// TestMigrationsSlotJobs008_integration asserts slot_jobs shape, composite key columns, job_id index, and ON DELETE CASCADE (008).
+func TestMigrationsSlotJobs008_integration(t *testing.T) {
+	sqlDB := migrateUpAndOpenDB(t)
+	t.Cleanup(func() { _ = sqlDB.Close() })
+
+	ctx := context.Background()
+
+	sjCols, err := fetchTableColumns(sqlDB, "slot_jobs")
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertTableColumns(t, sjCols, map[string]struct {
+		dataType string
+		nullable string
+	}{
+		"slot_id":       {"uuid", "NO"},
+		"job_id":        {"text", "NO"},
+		"first_seen_at": {"timestamp with time zone", "NO"},
+	})
+
+	var nIdx int
+	err = sqlDB.QueryRowContext(ctx, `
+		SELECT COUNT(*) FROM pg_indexes
+		WHERE schemaname = 'public' AND tablename = 'slot_jobs'
+		  AND indexname = 'slot_jobs_job_id_idx'`).Scan(&nIdx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if nIdx != 1 {
+		t.Fatalf("slot_jobs_job_id_idx: got count %d want 1", nIdx)
+	}
+
+	var delRule string
+	err = sqlDB.QueryRowContext(ctx, `
+		SELECT rc.delete_rule
+		FROM information_schema.referential_constraints rc
+		JOIN information_schema.key_column_usage kcu
+		  ON kcu.constraint_catalog = rc.constraint_catalog
+		 AND kcu.constraint_schema = rc.constraint_schema
+		 AND kcu.constraint_name = rc.constraint_name
+		WHERE kcu.table_schema = 'public'
+		  AND kcu.table_name = 'slot_jobs'
+		  AND kcu.column_name = 'job_id'`).Scan(&delRule)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if delRule != "CASCADE" {
+		t.Fatalf("slot_jobs.job_id ON DELETE: got %q want CASCADE", delRule)
+	}
+}
+
 func migrateUpAndOpenDB(t *testing.T) *sql.DB {
 	t.Helper()
 	dsn := dsnForIntegration()

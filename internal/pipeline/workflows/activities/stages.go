@@ -49,17 +49,11 @@ func (a *Activities) RunPipelineStages(ctx context.Context, in pipelineschema.Pi
 	}, nil
 }
 
-// RunPersistedPipelineStages applies stage 1–2 in memory, persists REJECTED_STAGE_2 / PASSED_STAGE_2 per job
-// that passed stage 1 (004 omission model: stage-1 drops get no pipeline_run_jobs row), loads PASSED_STAGE_2
-// candidates for the run, selects at most N for stage 3 with optional Stage3SentJobIDs exclusion, scores via
-// [llm.Scorer], and persists PASSED_STAGE_3 / REJECTED_STAGE_3 using [pipeutils.TerminalRunJobStatusFromScoredJob].
-// LLM errors from Score abort the activity with error (004 / plan D5).
-func (a *Activities) RunPersistedPipelineStages(ctx context.Context, in pipelineschema.PersistedPipelineStagesInput) (*pipelineschema.PersistedPipelineStagesOutput, error) {
-	if a == nil || a.Scorer == nil {
-		return nil, fmt.Errorf("pipeline activities: nil Activities or Scorer")
-	}
-	if a.Runs == nil || a.Jobs == nil {
-		return nil, fmt.Errorf("pipeline activities: RunPersistedPipelineStages requires Runs and Jobs repositories")
+// RunPersistPipelineStage2 applies stage 1–2 in memory and persists REJECTED_STAGE_2 / PASSED_STAGE_2 per job
+// that passed stage 1 (004 omission model).
+func (a *Activities) RunPersistPipelineStage2(ctx context.Context, in pipelineschema.PersistPipelineStage2Input) (*pipelineschema.PersistPipelineStage2Output, error) {
+	if a == nil || a.Runs == nil {
+		return nil, fmt.Errorf("pipeline activities: RunPersistPipelineStage2 requires Runs repository")
 	}
 	if in.PipelineRunID <= 0 {
 		return nil, fmt.Errorf("pipeline activities: pipeline run id is required")
@@ -94,6 +88,26 @@ func (a *Activities) RunPersistedPipelineStages(ctx context.Context, in pipeline
 		}
 	}
 
+	return &pipelineschema.PersistPipelineStage2Output{
+		AfterBroad:    stage1,
+		AfterKeywords: stage2,
+	}, nil
+}
+
+// RunPersistPipelineStage3 loads PASSED_STAGE_2 candidates for the run (ordered by posted_at DESC per repository),
+// selects at most N for stage 3 with optional Stage3SentJobIDs exclusion, scores via [llm.Scorer], and persists
+// PASSED_STAGE_3 / REJECTED_STAGE_3. LLM errors abort the activity (004 / 007).
+func (a *Activities) RunPersistPipelineStage3(ctx context.Context, in pipelineschema.PersistPipelineStage3Input) (*pipelineschema.PersistPipelineStage3Output, error) {
+	if a == nil || a.Scorer == nil {
+		return nil, fmt.Errorf("pipeline activities: nil Activities or Scorer")
+	}
+	if a.Runs == nil || a.Jobs == nil {
+		return nil, fmt.Errorf("pipeline activities: RunPersistPipelineStage3 requires Runs and Jobs repositories")
+	}
+	if in.PipelineRunID <= 0 {
+		return nil, fmt.Errorf("pipeline activities: pipeline run id is required")
+	}
+
 	candidates, err := a.Runs.ListPassedStage2JobIDs(ctx, in.PipelineRunID)
 	if err != nil {
 		return nil, err
@@ -106,10 +120,7 @@ func (a *Activities) RunPersistedPipelineStages(ctx context.Context, in pipeline
 	}
 	selected := pipeutils.SelectStage3JobIDs(candidates, exclude, a.Stage3MaxJobsPerRun)
 
-	// Stage 3 + Temporal: [Repository.SetRunJobStatus] is idempotent for terminal rows; [GetRunJobStatus] skips
-	// duplicate LLM work when a retry runs after a successful persist. A crash between [llm.Scorer.Score] and
-	// SetRunJobStatus can still double-call the scorer unless the workflow passes [PersistedPipelineStagesInput.Stage3SentJobIDs]
-	// from a partial checkpoint (011+).
+	// SetRunJobStatus is idempotent for terminal rows; GetRunJobStatus skips duplicate LLM work on retry.
 	sentIDs := append([]string(nil), in.Stage3SentJobIDs...)
 	var scored []domain.ScoredJob
 	for _, id := range selected {
@@ -134,9 +145,7 @@ func (a *Activities) RunPersistedPipelineStages(ctx context.Context, in pipeline
 		sentIDs = append(sentIDs, id)
 	}
 
-	return &pipelineschema.PersistedPipelineStagesOutput{
-		AfterBroad:       stage1,
-		AfterKeywords:    stage2,
+	return &pipelineschema.PersistPipelineStage3Output{
 		Scored:           scored,
 		Stage3SentJobIDs: sentIDs,
 	}, nil

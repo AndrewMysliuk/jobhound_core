@@ -134,16 +134,52 @@ func (r *Repository) GetRunJobStatus(ctx context.Context, pipelineRunID int64, j
 	return st, true, nil
 }
 
-// ListPassedStage2JobIDs returns job ids in PASSED_STAGE_2 for this run.
-// Ordering is job_id ascending (007 §2 normative cap ordering).
+const sqlListPassedStage2JobIDs = `
+SELECT prj.job_id FROM pipeline_run_jobs AS prj
+INNER JOIN jobs ON jobs.id = prj.job_id
+WHERE prj.pipeline_run_id = ? AND prj.status = ?
+ORDER BY CASE WHEN jobs.posted_at IS NULL THEN 1 ELSE 0 END ASC, jobs.posted_at DESC, jobs.id ASC`
+
+// ListPassedStage2JobIDs returns job ids in PASSED_STAGE_2 for this run (posted_at DESC, NULLs last; tie-break id ASC).
 func (r *Repository) ListPassedStage2JobIDs(ctx context.Context, pipelineRunID int64) ([]string, error) {
 	var ids []string
-	err := r.get().WithContext(ctx).Model(&PipelineRunJob{}).
-		Where("pipeline_run_id = ? AND status = ?", pipelineRunID, string(pipeline.RunJobPassedStage2)).
-		Order("job_id ASC").
-		Pluck("job_id", &ids).Error
+	err := r.get().WithContext(ctx).Raw(sqlListPassedStage2JobIDs,
+		pipelineRunID, string(pipeline.RunJobPassedStage2)).Scan(&ids).Error
 	if err != nil {
 		return nil, err
 	}
 	return ids, nil
+}
+
+// InvalidateStage3SnapshotsForSlot implements [pipeline.PipelineRunRepository.InvalidateStage3SnapshotsForSlot].
+func (r *Repository) InvalidateStage3SnapshotsForSlot(ctx context.Context, slotID uuid.UUID) (int64, error) {
+	if slotID == uuid.Nil {
+		return 0, fmt.Errorf("slot id is required")
+	}
+	s := slotID.String()
+	db := r.get().WithContext(ctx)
+	sub := db.Model(&PipelineRun{}).Select("id").Where("slot_id = ?", s)
+	res := db.Model(&PipelineRunJob{}).
+		Where("pipeline_run_id IN (?)", sub).
+		Where("status IN ?", []string{
+			string(pipeline.RunJobPassedStage3),
+			string(pipeline.RunJobRejectedStage3),
+		}).
+		Update("status", string(pipeline.RunJobPassedStage2))
+	if res.Error != nil {
+		return 0, res.Error
+	}
+	return res.RowsAffected, nil
+}
+
+// InvalidateStage2And3SnapshotsForSlot implements [pipeline.PipelineRunRepository.InvalidateStage2And3SnapshotsForSlot].
+func (r *Repository) InvalidateStage2And3SnapshotsForSlot(ctx context.Context, slotID uuid.UUID) (int64, error) {
+	if slotID == uuid.Nil {
+		return 0, fmt.Errorf("slot id is required")
+	}
+	res := r.get().WithContext(ctx).Where("slot_id = ?", slotID.String()).Delete(&PipelineRun{})
+	if res.Error != nil {
+		return 0, res.Error
+	}
+	return res.RowsAffected, nil
 }

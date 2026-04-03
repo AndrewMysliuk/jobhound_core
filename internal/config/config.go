@@ -1,5 +1,7 @@
 package config
 
+// Epic 008 (manual-search-workflow) adds no new JOBHOUND_* keys — see specs/008-manual-search-workflow/contracts/environment.md.
+
 // Config is the single place for env-backed application and infrastructure settings.
 // Use Load() in cmd/* and pass nested structs (e.g. Database) into internal packages;
 // do not scatter os.Getenv across feature modules — add fields and parsing here instead.

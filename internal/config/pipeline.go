@@ -11,13 +11,13 @@ const (
 	EnvPipelineStage3MaxJobsPerRun = "JOBHOUND_PIPELINE_STAGE3_MAX_JOBS_PER_RUN"
 	// MaxPipelineStage3JobsPerRunUpperBound rejects absurd env values; does not change spec rules (at most N per execution).
 	MaxPipelineStage3JobsPerRunUpperBound = 10_000
-	// defaultPipelineStage3MaxJobsPerRun must match [github.com/andrewmysliuk/jobhound_core/internal/pipeline/utils.MaxStage3JobsPerPipelineRunExecution] (007).
-	defaultPipelineStage3MaxJobsPerRun = 5
+	// defaultPipelineStage3MaxJobsPerRun must match [github.com/andrewmysliuk/jobhound_core/internal/pipeline/utils.MaxStage3JobsPerPipelineRunExecution] (008 default cap).
+	defaultPipelineStage3MaxJobsPerRun = 20
 )
 
 // Pipeline holds optional overrides for pipeline-run execution (007).
 type Pipeline struct {
-	// Stage3MaxJobsPerRun is the cap N on distinct jobs entering stage 3 per pipeline-run execution (default 5, same as code constant in pipeline/utils).
+	// Stage3MaxJobsPerRun is the cap N on distinct jobs entering stage 3 per pipeline-run execution (default 20, same as code constant in pipeline/utils).
 	Stage3MaxJobsPerRun int
 }
 

@@ -97,6 +97,10 @@ func (a *IngestActivities) RunIngestSource(ctx context.Context, in ingestschema.
 		if err != nil {
 			return nil, err
 		}
+		// 008: slot membership after ingest; SaveIngest alone sets PASSED_STAGE_1 (007) when the row is written/updated.
+		if err := a.Jobs.UpsertSlotJob(ctx, in.SlotID, j.ID); err != nil {
+			return nil, err
+		}
 		if skipped {
 			out.JobsSkipped++
 		} else {

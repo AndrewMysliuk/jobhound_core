@@ -12,6 +12,7 @@ import (
 	"github.com/andrewmysliuk/jobhound_core/internal/ingest"
 	ingestschema "github.com/andrewmysliuk/jobhound_core/internal/ingest/schema"
 	"github.com/andrewmysliuk/jobhound_core/internal/jobs"
+	jobsstorage "github.com/andrewmysliuk/jobhound_core/internal/jobs/storage"
 	"github.com/andrewmysliuk/jobhound_core/internal/pipeline"
 	"github.com/andrewmysliuk/jobhound_core/internal/platform/pgsql"
 	"github.com/google/uuid"
@@ -61,6 +62,16 @@ func (m *memJobs) GetByID(context.Context, string) (domain.Job, error) {
 
 func (m *memJobs) DeleteJobsCreatedBeforeUTC(context.Context, time.Time) (int64, error) {
 	return 0, nil
+}
+
+func (m *memJobs) UpsertSlotJob(context.Context, uuid.UUID, string) error { return nil }
+
+func (m *memJobs) ListSlotJobsPassedStage1(context.Context, uuid.UUID) ([]domain.Job, error) {
+	return nil, nil
+}
+
+func (m *memJobs) ListPassedStage2JobsForRun(context.Context, int64) ([]domain.Job, error) {
+	return nil, nil
 }
 
 var _ jobs.JobRepository = (*memJobs)(nil)
@@ -180,4 +191,91 @@ func TestRunIngestSource_broadFilterSkipsNonPassing(t *testing.T) {
 	require.Equal(t, 1, out.JobsFilteredOut)
 	require.Equal(t, 1, out.JobsWritten)
 	require.Equal(t, 1, mj.saved)
+}
+
+func TestRunIngestSource_writesSlotJobMembership(t *testing.T) {
+	ctx := context.Background()
+	mr, err := miniredis.Run()
+	require.NoError(t, err)
+	t.Cleanup(mr.Close)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	t.Cleanup(func() { _ = rdb.Close() })
+
+	memName := strings.ReplaceAll(t.Name(), "/", "_")
+	db, err := gorm.Open(sqlite.Open("file:"+memName+"?mode=memory&cache=private"), &gorm.Config{})
+	require.NoError(t, err)
+	require.NoError(t, db.Exec("PRAGMA foreign_keys = ON").Error)
+	for _, s := range []string{
+		`CREATE TABLE jobs (
+			id TEXT PRIMARY KEY,
+			source TEXT NOT NULL DEFAULT '',
+			title TEXT NOT NULL DEFAULT '',
+			company TEXT NOT NULL DEFAULT '',
+			url TEXT NOT NULL DEFAULT '',
+			apply_url TEXT,
+			description TEXT NOT NULL DEFAULT '',
+			posted_at TIMESTAMP,
+			is_remote INTEGER,
+			country_code TEXT NOT NULL DEFAULT '',
+			salary_raw TEXT NOT NULL DEFAULT '',
+			tags TEXT NOT NULL DEFAULT '[]',
+			position TEXT,
+			user_id TEXT,
+			stage1_status TEXT,
+			created_at TIMESTAMP NOT NULL,
+			updated_at TIMESTAMP NOT NULL
+		)`,
+		`CREATE TABLE slot_jobs (
+			slot_id TEXT NOT NULL,
+			job_id TEXT NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+			first_seen_at TIMESTAMP NOT NULL,
+			PRIMARY KEY (slot_id, job_id)
+		)`,
+		`CREATE TABLE ingest_watermarks (
+			slot_id TEXT NOT NULL,
+			source_id TEXT NOT NULL,
+			cursor TEXT,
+			updated_at TIMESTAMP NOT NULL,
+			PRIMARY KEY (slot_id, source_id)
+		)`,
+	} {
+		require.NoError(t, db.Exec(s).Error)
+	}
+
+	src := "slotmemsrc"
+	testSlot := uuid.MustParse("88888888-8888-4888-8888-888888888888")
+	fixedNow := time.Date(2026, 4, 10, 12, 0, 0, 0, time.UTC)
+	jobsRepo := jobsstorage.NewRepository(pgsql.NewGetter(db))
+	acts := &IngestActivities{
+		Redis:      ingest.NewRedisCoordinator(rdb),
+		Jobs:       jobsRepo,
+		Watermarks: ingest.NewGormWatermarkStore(pgsql.NewGetter(db)),
+		Collectors: map[string]collectors.Collector{
+			ingest.NormalizeSourceID(src): stubMultiCollector{name: src},
+		},
+		BroadRules: pipeline.BroadFilterRules{},
+		Clock:      func() time.Time { return fixedNow },
+	}
+
+	out, err := acts.RunIngestSource(ctx, ingestschema.IngestSourceInput{SlotID: testSlot, SourceID: src, ExplicitRefresh: true})
+	require.NoError(t, err)
+	require.Equal(t, 1, out.JobsWritten)
+
+	var cnt int64
+	require.NoError(t, db.Raw(
+		`SELECT COUNT(*) FROM slot_jobs WHERE slot_id = ? AND job_id = 'fresh'`,
+		testSlot.String(),
+	).Scan(&cnt).Error)
+	require.Equal(t, int64(1), cnt)
+
+	var st *string
+	require.NoError(t, db.Raw(`SELECT stage1_status FROM jobs WHERE id = 'fresh'`).Scan(&st).Error)
+	require.NotNil(t, st)
+	require.Equal(t, jobs.Stage1StatusPassed, *st)
+
+	// Stage-2 input pool: slot_jobs ∩ jobs with PASSED_STAGE_1 (008 spec / contract §6).
+	passed, err := jobsRepo.ListSlotJobsPassedStage1(ctx, testSlot)
+	require.NoError(t, err)
+	require.Len(t, passed, 1)
+	require.Equal(t, "fresh", passed[0].ID)
 }

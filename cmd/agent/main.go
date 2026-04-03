@@ -20,6 +20,8 @@ import (
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/workingnomads"
 	"github.com/andrewmysliuk/jobhound_core/internal/config"
 	llmmock "github.com/andrewmysliuk/jobhound_core/internal/llm/mock"
+	manualschema "github.com/andrewmysliuk/jobhound_core/internal/manual/schema"
+	manual_workflows "github.com/andrewmysliuk/jobhound_core/internal/manual/workflows"
 	"github.com/andrewmysliuk/jobhound_core/internal/pipeline/impl"
 	"github.com/andrewmysliuk/jobhound_core/internal/pipeline/mock"
 )
@@ -28,6 +30,14 @@ const debugHTTPShutdownTimeout = 30 * time.Second
 
 func main() {
 	debugHTTPAddr := flag.String("debug-http-addr", "", "if set, listen for local debug HTTP (GET /health, per-source POST /debug/collectors/…); overrides "+config.EnvDebugHTTPAddr)
+	temporalManual := flag.Bool("temporal-manual-slot-run", false, "dial Temporal (JOBHOUND_TEMPORAL_ADDRESS) and run ManualSlotRunWorkflow; prints JSON aggregate to stdout; use -manual-* flags")
+	manualSlotID := flag.String("manual-slot-id", "", "slot UUID (required with -temporal-manual-slot-run)")
+	manualRunKind := flag.String("manual-run-kind", string(manualschema.RunKindPipelineStage2), "ManualSlotRunWorkflow run kind (e.g. PIPELINE_STAGE2)")
+	manualWorkflowID := flag.String("manual-workflow-id", "", "Temporal workflow ID (default: auto-generated)")
+	manualSourceIDs := flag.String("manual-source-ids", "", "comma-separated source ids for ingest kinds")
+	manualProfile := flag.String("manual-profile", "", "profile text when stage 3 runs")
+	manualPipelineRunID := flag.Int64("manual-pipeline-run-id", 0, "pipeline run id for PIPELINE_STAGE3 (>0)")
+	manualExplicitRefresh := flag.Bool("manual-explicit-refresh", false, "pass explicit refresh to ingest children when applicable")
 	flag.Parse()
 
 	ctx := context.Background()
@@ -35,6 +45,29 @@ func main() {
 	addr := strings.TrimSpace(*debugHTTPAddr)
 	if addr == "" {
 		addr = strings.TrimSpace(appCfg.DebugHTTPAddr)
+	}
+
+	if *temporalManual {
+		if addr != "" {
+			fmt.Fprintln(os.Stderr, "jobhound_core: use either -temporal-manual-slot-run or -debug-http-addr, not both")
+			os.Exit(1)
+		}
+		runCtx, cancel := context.WithTimeout(ctx, manual_workflows.DefaultManualSlotRunWorkflowTimeout+time.Minute)
+		defer cancel()
+		err := runTemporalManualSlotRun(runCtx, temporalManualOpts{
+			slotID:          *manualSlotID,
+			runKind:         *manualRunKind,
+			workflowID:      *manualWorkflowID,
+			sourceIDs:       *manualSourceIDs,
+			profile:         *manualProfile,
+			pipelineRunID:   *manualPipelineRunID,
+			explicitRefresh: *manualExplicitRefresh,
+		})
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
 	}
 
 	er, wn, err := bootstrap.MVPCollectors(ctx, nil, appCfg.DataDir)

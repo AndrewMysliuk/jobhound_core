@@ -3,8 +3,8 @@ package utils
 import "testing"
 
 func TestMaxStage3JobsPerPipelineRunExecution(t *testing.T) {
-	if MaxStage3JobsPerPipelineRunExecution != 5 {
-		t.Fatalf("cap N must be 5 per 007 contract, got %d", MaxStage3JobsPerPipelineRunExecution)
+	if MaxStage3JobsPerPipelineRunExecution != 20 {
+		t.Fatalf("cap N must be 20 per 008 default, got %d", MaxStage3JobsPerPipelineRunExecution)
 	}
 }
 
@@ -30,7 +30,7 @@ func TestSelectStage3JobIDs(t *testing.T) {
 	t.Run("dedup and order", func(t *testing.T) {
 		in := []string{"a", "b", "a", "c", "d", "e", "f"}
 		got := SelectStage3JobIDs(in, nil, 0)
-		want := []string{"a", "b", "c", "d", "e"}
+		want := []string{"a", "b", "c", "d", "e", "f"}
 		if len(got) != len(want) {
 			t.Fatalf("len %d want %d: %#v", len(got), len(want), got)
 		}

@@ -18,3 +18,12 @@ func TestDefaultActivityOptions_matchesReferenceContract(t *testing.T) {
 	require.Equal(t, time.Second, ao.RetryPolicy.InitialInterval)
 	require.Equal(t, 2.0, ao.RetryPolicy.BackoffCoefficient)
 }
+
+func TestPipelinePersistActivityOptions_extendsDefaultsForLLM(t *testing.T) {
+	t.Parallel()
+	def := DefaultActivityOptions()
+	persist := PipelinePersistActivityOptions()
+	require.Equal(t, def.RetryPolicy.MaximumAttempts, persist.RetryPolicy.MaximumAttempts)
+	require.Greater(t, persist.StartToCloseTimeout, def.StartToCloseTimeout)
+	require.Greater(t, persist.ScheduleToCloseTimeout, def.ScheduleToCloseTimeout)
+}

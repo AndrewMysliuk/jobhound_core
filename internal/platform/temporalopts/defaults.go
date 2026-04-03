@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"go.temporal.io/sdk/temporal"
+	"go.temporal.io/sdk/worker"
 	"go.temporal.io/sdk/workflow"
 )
 
@@ -21,4 +22,19 @@ func DefaultActivityOptions() workflow.ActivityOptions {
 			BackoffCoefficient: 2,
 		},
 	}
+}
+
+// PipelinePersistActivityOptions returns activity options for persisted stage-2/stage-3 pipeline work,
+// including LLM scoring. Parent workflows should use this when executing PersistPipelineStage2/3 activities (008).
+func PipelinePersistActivityOptions() workflow.ActivityOptions {
+	o := DefaultActivityOptions()
+	o.StartToCloseTimeout = 5 * time.Minute
+	o.ScheduleToCloseTimeout = 10 * time.Minute
+	return o
+}
+
+// DefaultWorkerOptions returns baseline [worker.Options] for cmd/worker (008 registers split pipeline activities;
+// activity execution timeouts for those types are set via [PipelinePersistActivityOptions] in workflow code).
+func DefaultWorkerOptions() worker.Options {
+	return worker.Options{}
 }

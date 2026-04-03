@@ -19,10 +19,10 @@ const PathWorkingNomads = "POST /debug/collectors/working_nomads"
 type HTTPHandler struct {
 	mux *http.ServeMux
 
-	europeRemotely          collectors.Collector
-	workingNomads           collectors.Collector
-	workingNomadsConcrete   *workingnomads.WorkingNomads
-	europeRemotelyConcrete  *europeremotely.EuropeRemotely
+	europeRemotely         collectors.Collector
+	workingNomads          collectors.Collector
+	workingNomadsConcrete  *workingnomads.WorkingNomads
+	europeRemotelyConcrete *europeremotely.EuropeRemotely
 }
 
 // NewHTTPHandler returns a handler with GET /health and POST /debug/collectors/* registered.
@@ -36,7 +36,7 @@ func NewHTTPHandler(
 	h := &HTTPHandler{
 		mux:                    http.NewServeMux(),
 		europeRemotely:         europeRemotely,
-		workingNomads:        workingNomads,
+		workingNomads:          workingNomads,
 		workingNomadsConcrete:  workingNomadsConcrete,
 		europeRemotelyConcrete: europeRemotelyConcrete,
 	}

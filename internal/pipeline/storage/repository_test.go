@@ -190,9 +190,17 @@ func TestRepository_ListPassedStage2JobIDs_orderAndFilter(t *testing.T) {
 	seedJob(t, db, "rej")
 	require.NoError(t, repo.SetRunJobStatus(ctx, runID, "rej", pipeline.RunJobRejectedStage2))
 
+	// posted_at DESC (008); m newest, z middle, a oldest
+	tm := time.Date(2026, 3, 3, 0, 0, 0, 0, time.UTC)
+	tz := time.Date(2026, 3, 2, 0, 0, 0, 0, time.UTC)
+	ta := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	require.NoError(t, db.Exec(`UPDATE jobs SET posted_at = ? WHERE id = 'm'`, tm).Error)
+	require.NoError(t, db.Exec(`UPDATE jobs SET posted_at = ? WHERE id = 'z'`, tz).Error)
+	require.NoError(t, db.Exec(`UPDATE jobs SET posted_at = ? WHERE id = 'a'`, ta).Error)
+
 	got, err := repo.ListPassedStage2JobIDs(ctx, runID)
 	require.NoError(t, err)
-	require.Equal(t, []string{"a", "m", "z"}, got)
+	require.Equal(t, []string{"m", "z", "a"}, got)
 }
 
 // 007 contract §2: eligible pool is PASSED_STAGE_2 only; terminal stage-3 rows must not appear (same row loses PASSED_STAGE_2 after transition).
@@ -258,4 +266,116 @@ func TestRepository_SetRunJobStatus_invalidStatusString(t *testing.T) {
 	repo := NewRepository(pgsql.NewGetter(db))
 	err := repo.SetRunJobStatus(context.Background(), 1, "j", pipeline.RunJobStatus("bogus"))
 	require.ErrorIs(t, err, ErrInvalidRunJobStatus)
+}
+
+func TestRepository_InvalidateStage3SnapshotsForSlot(t *testing.T) {
+	db := testDB(t)
+	repo := NewRepository(pgsql.NewGetter(db))
+	ctx := context.Background()
+
+	slotA := uuid.MustParse("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+	slotB := uuid.MustParse("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
+
+	runA, err := repo.CreateRun(ctx, &slotA)
+	require.NoError(t, err)
+	runB, err := repo.CreateRun(ctx, &slotB)
+	require.NoError(t, err)
+	runLegacy, err := repo.CreateRun(ctx, nil)
+	require.NoError(t, err)
+
+	for _, id := range []string{"j1", "j2", "j3", "j4", "j5", "j6"} {
+		seedJob(t, db, id)
+	}
+
+	require.NoError(t, repo.SetRunJobStatus(ctx, runA, "j1", pipeline.RunJobPassedStage2))
+	require.NoError(t, repo.SetRunJobStatus(ctx, runA, "j1", pipeline.RunJobPassedStage3))
+	require.NoError(t, repo.SetRunJobStatus(ctx, runA, "j2", pipeline.RunJobPassedStage2))
+	require.NoError(t, repo.SetRunJobStatus(ctx, runA, "j2", pipeline.RunJobRejectedStage3))
+	require.NoError(t, repo.SetRunJobStatus(ctx, runA, "j3", pipeline.RunJobPassedStage2))
+	require.NoError(t, repo.SetRunJobStatus(ctx, runA, "j4", pipeline.RunJobRejectedStage2))
+
+	require.NoError(t, repo.SetRunJobStatus(ctx, runB, "j5", pipeline.RunJobPassedStage2))
+	require.NoError(t, repo.SetRunJobStatus(ctx, runB, "j5", pipeline.RunJobPassedStage3))
+
+	require.NoError(t, repo.SetRunJobStatus(ctx, runLegacy, "j6", pipeline.RunJobPassedStage2))
+	require.NoError(t, repo.SetRunJobStatus(ctx, runLegacy, "j6", pipeline.RunJobRejectedStage3))
+
+	n, err := repo.InvalidateStage3SnapshotsForSlot(ctx, slotA)
+	require.NoError(t, err)
+	require.Equal(t, int64(2), n)
+
+	var st1, st2, st3, st4 string
+	require.NoError(t, db.Raw(`SELECT status FROM pipeline_run_jobs WHERE pipeline_run_id = ? AND job_id = 'j1'`, runA).Scan(&st1).Error)
+	require.NoError(t, db.Raw(`SELECT status FROM pipeline_run_jobs WHERE pipeline_run_id = ? AND job_id = 'j2'`, runA).Scan(&st2).Error)
+	require.NoError(t, db.Raw(`SELECT status FROM pipeline_run_jobs WHERE pipeline_run_id = ? AND job_id = 'j3'`, runA).Scan(&st3).Error)
+	require.NoError(t, db.Raw(`SELECT status FROM pipeline_run_jobs WHERE pipeline_run_id = ? AND job_id = 'j4'`, runA).Scan(&st4).Error)
+	require.Equal(t, string(pipeline.RunJobPassedStage2), st1)
+	require.Equal(t, string(pipeline.RunJobPassedStage2), st2)
+	require.Equal(t, string(pipeline.RunJobPassedStage2), st3)
+	require.Equal(t, string(pipeline.RunJobRejectedStage2), st4)
+
+	var stB string
+	require.NoError(t, db.Raw(`SELECT status FROM pipeline_run_jobs WHERE pipeline_run_id = ? AND job_id = 'j5'`, runB).Scan(&stB).Error)
+	require.Equal(t, string(pipeline.RunJobPassedStage3), stB)
+
+	var stLegacy string
+	require.NoError(t, db.Raw(`SELECT status FROM pipeline_run_jobs WHERE pipeline_run_id = ? AND job_id = 'j6'`, runLegacy).Scan(&stLegacy).Error)
+	require.Equal(t, string(pipeline.RunJobRejectedStage3), stLegacy)
+
+	_, err = repo.InvalidateStage3SnapshotsForSlot(ctx, uuid.Nil)
+	require.Error(t, err)
+}
+
+func TestRepository_InvalidateStage2And3SnapshotsForSlot(t *testing.T) {
+	db := testDB(t)
+	repo := NewRepository(pgsql.NewGetter(db))
+	ctx := context.Background()
+
+	slotA := uuid.MustParse("cccccccc-cccc-4ccc-8ccc-cccccccccccc")
+	slotB := uuid.MustParse("dddddddd-dddd-4ddd-8ddd-dddddddddddd")
+
+	r1, err := repo.CreateRun(ctx, &slotA)
+	require.NoError(t, err)
+	r2, err := repo.CreateRun(ctx, &slotA)
+	require.NoError(t, err)
+	rOther, err := repo.CreateRun(ctx, &slotB)
+	require.NoError(t, err)
+
+	seedJob(t, db, "p1")
+	seedJob(t, db, "p2")
+	seedJob(t, db, "p3")
+	require.NoError(t, repo.SetRunJobStatus(ctx, r1, "p1", pipeline.RunJobPassedStage2))
+	require.NoError(t, repo.SetRunJobStatus(ctx, r2, "p2", pipeline.RunJobRejectedStage2))
+	require.NoError(t, repo.SetRunJobStatus(ctx, rOther, "p3", pipeline.RunJobPassedStage2))
+	require.NoError(t, repo.SetRunJobStatus(ctx, rOther, "p3", pipeline.RunJobPassedStage3))
+
+	del, err := repo.InvalidateStage2And3SnapshotsForSlot(ctx, slotA)
+	require.NoError(t, err)
+	require.Equal(t, int64(2), del)
+
+	var cntA int64
+	require.NoError(t, db.Raw(`SELECT COUNT(*) FROM pipeline_runs WHERE slot_id = ?`, slotA.String()).Scan(&cntA).Error)
+	require.Zero(t, cntA)
+
+	var cntJobs int64
+	require.NoError(t, db.Raw(`SELECT COUNT(*) FROM pipeline_run_jobs WHERE pipeline_run_id IN (?, ?)`, r1, r2).Scan(&cntJobs).Error)
+	require.Zero(t, cntJobs)
+
+	var stOther string
+	require.NoError(t, db.Raw(`SELECT status FROM pipeline_run_jobs WHERE pipeline_run_id = ? AND job_id = 'p3'`, rOther).Scan(&stOther).Error)
+	require.Equal(t, string(pipeline.RunJobPassedStage3), stOther)
+
+	_, err = repo.InvalidateStage2And3SnapshotsForSlot(ctx, uuid.Nil)
+	require.Error(t, err)
+}
+
+func TestRepository_InvalidateStage3SnapshotsForSlot_emptySlot(t *testing.T) {
+	db := testDB(t)
+	repo := NewRepository(pgsql.NewGetter(db))
+	ctx := context.Background()
+
+	slot := uuid.MustParse("eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee")
+	n, err := repo.InvalidateStage3SnapshotsForSlot(ctx, slot)
+	require.NoError(t, err)
+	require.Zero(t, n)
 }

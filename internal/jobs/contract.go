@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/andrewmysliuk/jobhound_core/internal/domain"
+	"github.com/google/uuid"
 )
 
 // Stage1StatusPassed is the jobs.stage1_status value after broad stage 1 (007 pipeline-run-job-status.md §3).
@@ -22,4 +23,13 @@ type JobRepository interface {
 	// DeleteJobsCreatedBeforeUTC hard-deletes jobs with created_at strictly before cutoff (UTC).
 	// Dependent pipeline_run_jobs rows must be removed via ON DELETE CASCADE (007) or equivalent.
 	DeleteJobsCreatedBeforeUTC(ctx context.Context, cutoff time.Time) (deleted int64, err error)
+
+	// UpsertSlotJob inserts (slot_id, job_id) if absent; no-op when the pair exists (008 slot_jobs).
+	// Caller must ensure the job row exists (e.g. after SaveIngest).
+	UpsertSlotJob(ctx context.Context, slotID uuid.UUID, jobID string) error
+	// ListSlotJobsPassedStage1 returns jobs linked to the slot with stage1_status PASSED_STAGE_1 (008 stage-2 pool).
+	ListSlotJobsPassedStage1(ctx context.Context, slotID uuid.UUID) ([]domain.Job, error)
+	// ListPassedStage2JobsForRun returns full job rows for pipeline_run_jobs in PASSED_STAGE_2 for this run,
+	// ordered by jobs.posted_at descending (008 stage-3 batch selection; NULL posted_at last).
+	ListPassedStage2JobsForRun(ctx context.Context, pipelineRunID int64) ([]domain.Job, error)
 }

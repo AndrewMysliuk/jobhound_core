@@ -2,6 +2,7 @@ package pipeline_activities
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -73,7 +74,7 @@ func seedJobRow(t *testing.T, db *gorm.DB, id, description string) {
 		id, description, now, now, now).Error)
 }
 
-func TestRunPersistedPipelineStages_persistsStage2AndScoresCappedBatch(t *testing.T) {
+func TestRunPersistPipelineStage2_and_3_persistsAndScoresCappedBatch(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	db := testSQLite(t)
@@ -82,9 +83,11 @@ func TestRunPersistedPipelineStages_persistsStage2AndScoresCappedBatch(t *testin
 	jobRepo := storage.NewRepository(getter)
 
 	now := time.Date(2026, 3, 1, 12, 0, 0, 0, time.UTC)
-	ids := []string{"j1", "j2", "j3", "j4", "j5", "j6", "j7"}
-	for _, id := range ids {
-		seedJobRow(t, db, id, "backend golang remote")
+	const nJobs = 22
+	ids := make([]string, nJobs)
+	for i := 0; i < nJobs; i++ {
+		ids[i] = fmt.Sprintf("j%02d", i)
+		seedJobRow(t, db, ids[i], "backend golang remote")
 	}
 
 	slotID := uuid.MustParse("55555555-5555-4555-8555-555555555555")
@@ -117,7 +120,7 @@ func TestRunPersistedPipelineStages_persistsStage2AndScoresCappedBatch(t *testin
 		}
 	}
 
-	out, err := a.RunPersistedPipelineStages(ctx, pipelineschema.PersistedPipelineStagesInput{
+	stage2In := pipelineschema.PersistPipelineStage2Input{
 		PipelineRunID:      runID,
 		BroadFilterKeyHash: broadHash,
 		Jobs:               jobs,
@@ -127,12 +130,16 @@ func TestRunPersistedPipelineStages_persistsStage2AndScoresCappedBatch(t *testin
 			CountryAllowlist: []string{"de"},
 		},
 		KeywordRules: pipeline.KeywordRules{Include: []string{"backend"}},
-		Profile:      "cv",
+	}
+	_, err = a.RunPersistPipelineStage2(ctx, stage2In)
+	require.NoError(t, err)
+
+	out, err := a.RunPersistPipelineStage3(ctx, pipelineschema.PersistPipelineStage3Input{
+		PipelineRunID: runID,
+		Profile:       "cv",
 	})
 	require.NoError(t, err)
-	require.Len(t, out.AfterBroad, 7)
-	require.Len(t, out.AfterKeywords, 7)
-	require.Len(t, out.Scored, pipeutils.MaxStage3JobsPerPipelineRunExecution, "cap N per execution")
+	require.Len(t, out.Scored, pipeutils.MaxStage3JobsPerPipelineRunExecution, "default cap 20 per 008")
 
 	var nPassed2 int64
 	require.NoError(t, db.Model(&pipelinestorage.PipelineRunJob{}).
@@ -144,7 +151,7 @@ func TestRunPersistedPipelineStages_persistsStage2AndScoresCappedBatch(t *testin
 	require.NoError(t, db.Model(&pipelinestorage.PipelineRunJob{}).
 		Where("pipeline_run_id = ? AND status IN ?", runID, []string{string(pipeline.RunJobPassedStage3), string(pipeline.RunJobRejectedStage3)}).
 		Count(&nTerm).Error)
-	require.Equal(t, int64(5), nTerm)
+	require.Equal(t, int64(20), nTerm)
 
 	var gotHash *string
 	require.NoError(t, db.Raw(`SELECT broad_filter_key_hash FROM pipeline_runs WHERE id = ?`, runID).Scan(&gotHash).Error)
@@ -152,7 +159,7 @@ func TestRunPersistedPipelineStages_persistsStage2AndScoresCappedBatch(t *testin
 	require.Equal(t, broadHash, *gotHash)
 }
 
-func TestRunPersistedPipelineStages_stage3RejectScore(t *testing.T) {
+func TestRunPersistPipelineStage3_stage3RejectScore(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	db := testSQLite(t)
@@ -177,7 +184,7 @@ func TestRunPersistedPipelineStages_stage3RejectScore(t *testing.T) {
 		Jobs:   jobRepo,
 	}
 
-	_, err = a.RunPersistedPipelineStages(ctx, pipelineschema.PersistedPipelineStagesInput{
+	_, err = a.RunPersistPipelineStage2(ctx, pipelineschema.PersistPipelineStage2Input{
 		PipelineRunID: runID,
 		Jobs: []domain.Job{{
 			ID: "a", Title: "Go", Description: "backend",
@@ -189,7 +196,12 @@ func TestRunPersistedPipelineStages_stage3RejectScore(t *testing.T) {
 			CountryAllowlist: []string{"de"},
 		},
 		KeywordRules: pipeline.KeywordRules{Include: []string{"backend"}},
-		Profile:      "cv",
+	})
+	require.NoError(t, err)
+
+	_, err = a.RunPersistPipelineStage3(ctx, pipelineschema.PersistPipelineStage3Input{
+		PipelineRunID: runID,
+		Profile:       "cv",
 	})
 	require.NoError(t, err)
 

@@ -21,23 +21,33 @@ type PipelineStagesOutput struct {
 	Scored        []domain.ScoredJob
 }
 
-// PersistedPipelineStagesInput drives stage 1–3 with 007 per-run persistence and stage-3 cap.
-type PersistedPipelineStagesInput struct {
+// PersistPipelineStage2Input drives in-memory stage 1–2 and persists REJECTED_STAGE_2 / PASSED_STAGE_2 per job
+// that passed stage 1 (004 omission model: stage-1 drops get no pipeline_run_jobs row).
+type PersistPipelineStage2Input struct {
 	PipelineRunID int64
 	Jobs          []domain.Job
 	BroadRules    pipeline.BroadFilterRules
 	KeywordRules  pipeline.KeywordRules
-	Profile       string
 	// BroadFilterKeyHash is optional SHA-256 hex of the canonical broad filter key (006); persisted on pipeline_runs when non-empty.
 	BroadFilterKeyHash string
+}
+
+// PersistPipelineStage2Output holds stage 1–2 job lists after persistence.
+type PersistPipelineStage2Output struct {
+	AfterBroad    []domain.Job
+	AfterKeywords []domain.Job
+}
+
+// PersistPipelineStage3Input drives stage-3 scoring for one pipeline run (after stage 2 has persisted).
+type PersistPipelineStage3Input struct {
+	PipelineRunID int64
+	Profile       string
 	// Stage3SentJobIDs is optional idempotency for Temporal retries: job IDs already sent to the scorer in this workflow execution.
 	Stage3SentJobIDs []string
 }
 
-// PersistedPipelineStagesOutput mirrors [PipelineStagesOutput] and returns Stage3SentJobIDs for workflow retry bookkeeping.
-type PersistedPipelineStagesOutput struct {
-	AfterBroad       []domain.Job
-	AfterKeywords    []domain.Job
+// PersistPipelineStage3Output returns scored jobs and Stage3SentJobIDs for workflow retry bookkeeping.
+type PersistPipelineStage3Output struct {
 	Scored           []domain.ScoredJob
 	Stage3SentJobIDs []string
 }

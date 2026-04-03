@@ -1,4 +1,4 @@
-// Command worker runs the Temporal worker: registers ingest, jobs, pipeline, and reference workflows/activities.
+// Command worker runs the Temporal worker: registers ingest, jobs, pipeline, and manual workflows/activities.
 package main
 
 import (
@@ -20,10 +20,11 @@ import (
 	"github.com/andrewmysliuk/jobhound_core/internal/llm"
 	"github.com/andrewmysliuk/jobhound_core/internal/llm/anthropic"
 	llmmock "github.com/andrewmysliuk/jobhound_core/internal/llm/mock"
+	manual_workflows "github.com/andrewmysliuk/jobhound_core/internal/manual/workflows"
 	pipelinestorage "github.com/andrewmysliuk/jobhound_core/internal/pipeline/storage"
 	pipeline_workflows "github.com/andrewmysliuk/jobhound_core/internal/pipeline/workflows"
 	"github.com/andrewmysliuk/jobhound_core/internal/platform/pgsql"
-	reference_workflows "github.com/andrewmysliuk/jobhound_core/internal/reference/workflows"
+	"github.com/andrewmysliuk/jobhound_core/internal/platform/temporalopts"
 	"github.com/redis/go-redis/v9"
 	"go.temporal.io/sdk/client"
 	"go.temporal.io/sdk/worker"
@@ -47,7 +48,7 @@ func main() {
 	}
 	defer c.Close()
 
-	w := worker.New(c, cfg.TaskQueue, worker.Options{})
+	w := worker.New(c, cfg.TaskQueue, temporalopts.DefaultWorkerOptions())
 
 	appCfg := config.Load()
 	var scorer llm.Scorer
@@ -104,6 +105,10 @@ func main() {
 		}
 	}
 	pipeline_workflows.RegisterActivities(w, actDeps)
+	manual_workflows.Register(w, manual_workflows.WorkerDeps{
+		Runs: actDeps.RunRepo,
+		Jobs: actDeps.JobsRepo,
+	})
 	jobs_workflows.RegisterRetention(w, jobs_workflows.RetentionWorkerDeps{Jobs: actDeps.JobsRepo})
 	ingest_workflows.Register(w, ingest_workflows.WorkerDeps{
 		Redis:                  ingestRedis,
@@ -121,8 +126,6 @@ func main() {
 			log.Printf("temporal worker: job retention schedule: %v (worker continues; use Temporal UI/CLI or bin/retention run)", err)
 		}
 	}
-
-	reference_workflows.Register(w)
 
 	log.Printf("temporal worker: polling queue %q namespace %q address %s", cfg.TaskQueue, cfg.Namespace, cfg.Address)
 	if err := w.Run(worker.InterruptCh()); err != nil {

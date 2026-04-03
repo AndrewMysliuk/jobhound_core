@@ -1,14 +1,15 @@
 package utils
 
-// MaxStage3JobsPerPipelineRunExecution is the cap N on distinct job IDs that may enter stage 3
-// in a single pipeline-run execution (007 plan D3, pipeline-run-job-status.md §2).
-const MaxStage3JobsPerPipelineRunExecution = 5
+// MaxStage3JobsPerPipelineRunExecution is the default cap N on distinct job IDs that may enter stage 3
+// in a single pipeline-run execution (008 contract: up to 20; overridable via config / activity field).
+const MaxStage3JobsPerPipelineRunExecution = 20
 
 // SelectStage3JobIDs returns up to maxPerExecution distinct job IDs from candidates for one stage-3
 // batch in a pipeline-run execution. If maxPerExecution <= 0, [MaxStage3JobsPerPipelineRunExecution] is used.
 //
-// Ordering (007 §2): candidates must be sorted by job_id ascending (lexicographic). The slice is scanned
-// in order; the first occurrence of each non-empty job_id is kept; later duplicates are skipped.
+// Ordering: candidates must be pre-ordered by product rules (008: jobs.posted_at DESC from
+// [pipeline.PipelineRunRepository.ListPassedStage2JobIDs]). The slice is scanned in order; the first
+// occurrence of each non-empty job_id is kept; later duplicates are skipped.
 // Empty strings are ignored. Same eligible ordering → same selection (deterministic for retries/UI).
 //
 // exclude holds job IDs already sent to stage 3 in this execution (e.g. activity retries); those

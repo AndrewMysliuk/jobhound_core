@@ -8,6 +8,7 @@ import (
 	"github.com/andrewmysliuk/jobhound_core/internal/domain"
 	"github.com/andrewmysliuk/jobhound_core/internal/jobs"
 	jobutils "github.com/andrewmysliuk/jobhound_core/internal/jobs/utils"
+	"github.com/google/uuid"
 )
 
 type retentionJobsStub struct {
@@ -26,6 +27,16 @@ func (r *retentionJobsStub) GetByID(context.Context, string) (domain.Job, error)
 func (r *retentionJobsStub) DeleteJobsCreatedBeforeUTC(_ context.Context, cutoff time.Time) (int64, error) {
 	r.cutoff = cutoff
 	return r.n, nil
+}
+
+func (r *retentionJobsStub) UpsertSlotJob(context.Context, uuid.UUID, string) error { return nil }
+
+func (r *retentionJobsStub) ListSlotJobsPassedStage1(context.Context, uuid.UUID) ([]domain.Job, error) {
+	return nil, nil
+}
+
+func (r *retentionJobsStub) ListPassedStage2JobsForRun(context.Context, int64) ([]domain.Job, error) {
+	return nil, nil
 }
 
 var _ jobs.JobRepository = (*retentionJobsStub)(nil)
