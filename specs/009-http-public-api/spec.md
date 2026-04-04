@@ -325,5 +325,7 @@ On snapshot **reset** per **§5**, manual marks in the wiped scope are cleared w
 
 ## Related
 
+- [`plan.md`](./plan.md), [`tasks.md`](./tasks.md), [`checklists/requirements.md`](./checklists/requirements.md)  
+- [`contracts/http-public-api.md`](./contracts/http-public-api.md) (routes, error codes, JSON fields, Temporal mapping), [`contracts/environment.md`](./contracts/environment.md)  
 - [`../000-epic-overview/spec.md`](../000-epic-overview/spec.md)  
 - [`../008-manual-search-workflow/spec.md`](../008-manual-search-workflow/spec.md) and [`contracts/manual-workflow.md`](../008-manual-search-workflow/contracts/manual-workflow.md) — aligned with this document for HTTP triggers and stage-3 batch sizing.
