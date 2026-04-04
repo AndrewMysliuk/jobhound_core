@@ -21,6 +21,7 @@ func testJobsDBWithPipelineFK(t *testing.T) *gorm.DB {
 			pipeline_run_id INTEGER NOT NULL REFERENCES pipeline_runs(id) ON DELETE CASCADE,
 			job_id TEXT NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
 			status TEXT NOT NULL,
+			stage3_rationale TEXT,
 			PRIMARY KEY (pipeline_run_id, job_id)
 		)`,
 	}

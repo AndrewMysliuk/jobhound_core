@@ -27,6 +27,8 @@ type ManualSlotRunWorkflowInput struct {
 
 	// PipelineRunID when Kind is RunKindPipelineStage3: existing run whose PASSED_STAGE_2 rows feed stage 3.
 	PipelineRunID *int64
+	// Stage3MaxJobs optional HTTP cap (1–100) for PIPELINE_STAGE3; 0 = use worker/policy default only.
+	Stage3MaxJobs int
 }
 
 // Validate checks required fields for the selected run kind.

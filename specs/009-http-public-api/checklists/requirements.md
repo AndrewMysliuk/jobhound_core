@@ -25,7 +25,7 @@
 
 - [ ] **`plan.md`** phases and **`tasks.md`** sections align with **`spec.md`** and [`contracts/http-public-api.md`](../contracts/http-public-api.md)
 - [ ] Constitution alignment (thin **`cmd/api`**, **`handlers/`** + **`schema/`**, **`internal/config`**) reflected in **`plan.md`** constitution check
-- [ ] **`contracts/environment.md`** lists every new **`JOBHOUND_*`** for **`009`** and matches **`internal/config`** after implementation
+- [x] **`contracts/environment.md`** lists every new **`JOBHOUND_*`** for **`009`** and matches **`internal/config`** after implementation
 - [ ] Resolved decisions **D3–D6** in **`plan.md`** are closed in code (stage `error` shape, `stage_3_rationale`, `max_jobs` zero case, empty include/exclude)
 
 ## Notes

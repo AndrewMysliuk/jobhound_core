@@ -53,6 +53,7 @@ func testDB(t *testing.T) *gorm.DB {
 			pipeline_run_id INTEGER NOT NULL REFERENCES pipeline_runs(id) ON DELETE CASCADE,
 			job_id TEXT NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
 			status TEXT NOT NULL,
+			stage3_rationale TEXT,
 			PRIMARY KEY (pipeline_run_id, job_id)
 		)`,
 	}
@@ -128,12 +129,19 @@ func TestRepository_SetRunJobStatus_stage2Then3(t *testing.T) {
 
 	require.NoError(t, repo.SetRunJobStatus(ctx, runID, "job-a", pipeline.RunJobPassedStage2))
 	require.NoError(t, repo.SetRunJobStatus(ctx, runID, "job-a", pipeline.RunJobPassedStage3))
+	require.NoError(t, repo.SetRunJobStage3Rationale(ctx, runID, "job-a", "  good fit  "))
 
 	var status string
 	require.NoError(t, db.Raw(
 		`SELECT status FROM pipeline_run_jobs WHERE pipeline_run_id = ? AND job_id = ?`,
 		runID, "job-a").Scan(&status).Error)
 	require.Equal(t, string(pipeline.RunJobPassedStage3), status)
+	var rat *string
+	require.NoError(t, db.Raw(
+		`SELECT stage3_rationale FROM pipeline_run_jobs WHERE pipeline_run_id = ? AND job_id = ?`,
+		runID, "job-a").Scan(&rat).Error)
+	require.NotNil(t, rat)
+	require.Equal(t, "good fit", *rat)
 }
 
 func TestRepository_SetRunJobStatus_invalidTransition(t *testing.T) {
@@ -300,6 +308,9 @@ func TestRepository_InvalidateStage3SnapshotsForSlot(t *testing.T) {
 	require.NoError(t, repo.SetRunJobStatus(ctx, runLegacy, "j6", pipeline.RunJobPassedStage2))
 	require.NoError(t, repo.SetRunJobStatus(ctx, runLegacy, "j6", pipeline.RunJobRejectedStage3))
 
+	require.NoError(t, repo.SetRunJobStage3Rationale(ctx, runA, "j1", "inv-should-clear"))
+	require.NoError(t, repo.SetRunJobStage3Rationale(ctx, runA, "j2", "also-clear"))
+
 	n, err := repo.InvalidateStage3SnapshotsForSlot(ctx, slotA)
 	require.NoError(t, err)
 	require.Equal(t, int64(2), n)
@@ -313,6 +324,12 @@ func TestRepository_InvalidateStage3SnapshotsForSlot(t *testing.T) {
 	require.Equal(t, string(pipeline.RunJobPassedStage2), st2)
 	require.Equal(t, string(pipeline.RunJobPassedStage2), st3)
 	require.Equal(t, string(pipeline.RunJobRejectedStage2), st4)
+
+	var ratJ1, ratJ2 *string
+	require.NoError(t, db.Raw(`SELECT stage3_rationale FROM pipeline_run_jobs WHERE pipeline_run_id = ? AND job_id = 'j1'`, runA).Scan(&ratJ1).Error)
+	require.NoError(t, db.Raw(`SELECT stage3_rationale FROM pipeline_run_jobs WHERE pipeline_run_id = ? AND job_id = 'j2'`, runA).Scan(&ratJ2).Error)
+	require.Nil(t, ratJ1)
+	require.Nil(t, ratJ2)
 
 	var stB string
 	require.NoError(t, db.Raw(`SELECT status FROM pipeline_run_jobs WHERE pipeline_run_id = ? AND job_id = 'j5'`, runB).Scan(&stB).Error)
@@ -378,4 +395,51 @@ func TestRepository_InvalidateStage3SnapshotsForSlot_emptySlot(t *testing.T) {
 	n, err := repo.InvalidateStage3SnapshotsForSlot(ctx, slot)
 	require.NoError(t, err)
 	require.Zero(t, n)
+}
+
+func TestRepository_ManualPatchStage2Bucket(t *testing.T) {
+	db := testDB(t)
+	repo := NewRepository(pgsql.NewGetter(db))
+	ctx := context.Background()
+	runID, err := repo.CreateRun(ctx, nil)
+	require.NoError(t, err)
+	seedJob(t, db, "mj")
+	require.NoError(t, repo.SetRunJobStatus(ctx, runID, "mj", pipeline.RunJobPassedStage2))
+
+	require.NoError(t, repo.ManualPatchStage2Bucket(ctx, runID, "mj", false))
+	var st string
+	require.NoError(t, db.Raw(`SELECT status FROM pipeline_run_jobs WHERE pipeline_run_id = ? AND job_id = 'mj'`, runID).Scan(&st).Error)
+	require.Equal(t, string(pipeline.RunJobRejectedStage2), st)
+
+	require.NoError(t, repo.ManualPatchStage2Bucket(ctx, runID, "mj", true))
+	require.NoError(t, db.Raw(`SELECT status FROM pipeline_run_jobs WHERE pipeline_run_id = ? AND job_id = 'mj'`, runID).Scan(&st).Error)
+	require.Equal(t, string(pipeline.RunJobPassedStage2), st)
+
+	err = repo.ManualPatchStage2Bucket(ctx, runID, "missing", true)
+	require.ErrorIs(t, err, pipeline.ErrManualPatchNotInScope)
+}
+
+func TestRepository_ManualPatchStage3Bucket(t *testing.T) {
+	db := testDB(t)
+	repo := NewRepository(pgsql.NewGetter(db))
+	ctx := context.Background()
+	runID, err := repo.CreateRun(ctx, nil)
+	require.NoError(t, err)
+	seedJob(t, db, "m3")
+	require.NoError(t, repo.SetRunJobStatus(ctx, runID, "m3", pipeline.RunJobPassedStage2))
+	require.NoError(t, repo.SetRunJobStatus(ctx, runID, "m3", pipeline.RunJobRejectedStage3))
+	require.NoError(t, repo.SetRunJobStage3Rationale(ctx, runID, "m3", "llm said no"))
+
+	require.NoError(t, repo.ManualPatchStage3Bucket(ctx, runID, "m3", true))
+	var st string
+	require.NoError(t, db.Raw(`SELECT status FROM pipeline_run_jobs WHERE pipeline_run_id = ? AND job_id = 'm3'`, runID).Scan(&st).Error)
+	require.Equal(t, string(pipeline.RunJobPassedStage3), st)
+	var cleared *string
+	require.NoError(t, db.Raw(`SELECT stage3_rationale FROM pipeline_run_jobs WHERE pipeline_run_id = ? AND job_id = 'm3'`, runID).Scan(&cleared).Error)
+	require.Nil(t, cleared)
+
+	seedJob(t, db, "m2only")
+	require.NoError(t, repo.SetRunJobStatus(ctx, runID, "m2only", pipeline.RunJobPassedStage2))
+	err = repo.ManualPatchStage3Bucket(ctx, runID, "m2only", true)
+	require.ErrorIs(t, err, pipeline.ErrManualPatchNotInScope)
 }

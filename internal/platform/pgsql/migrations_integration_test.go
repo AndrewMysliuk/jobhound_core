@@ -232,6 +232,25 @@ func TestMigrationsSlotJobs008_integration(t *testing.T) {
 	}
 }
 
+// TestMigrationsSlots009_integration asserts slots table shape (009 HTTP API).
+func TestMigrationsSlots009_integration(t *testing.T) {
+	sqlDB := migrateUpAndOpenDB(t)
+	t.Cleanup(func() { _ = sqlDB.Close() })
+
+	sCols, err := fetchTableColumns(sqlDB, "slots")
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertTableColumns(t, sCols, map[string]struct {
+		dataType string
+		nullable string
+	}{
+		"id":         {"uuid", "NO"},
+		"name":       {"text", "NO"},
+		"created_at": {"timestamp with time zone", "NO"},
+	})
+}
+
 func migrateUpAndOpenDB(t *testing.T) *sql.DB {
 	t.Helper()
 	dsn := dsnForIntegration()

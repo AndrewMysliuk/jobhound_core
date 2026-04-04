@@ -84,6 +84,7 @@ func ManualSlotRunWorkflow(ctx workflow.Context, in manualschema.ManualSlotRunWo
 		in3 := pipelineschema.PersistPipelineStage3Input{
 			PipelineRunID: runID,
 			Profile:       in.Profile,
+			MaxJobs:       in.Stage3MaxJobs,
 		}
 		var s3out pipelineschema.PersistPipelineStage3Output
 		if err := workflow.ExecuteActivity(ctxPipe, manualschema.PersistPipelineStage3ActivityName, in3).Get(ctxPipe, &s3out); err != nil {

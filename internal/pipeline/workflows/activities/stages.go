@@ -118,7 +118,15 @@ func (a *Activities) RunPersistPipelineStage3(ctx context.Context, in pipelinesc
 			exclude[id] = struct{}{}
 		}
 	}
-	selected := pipeutils.SelectStage3JobIDs(candidates, exclude, a.Stage3MaxJobsPerRun)
+	policy := a.Stage3MaxJobsPerRun
+	if policy <= 0 {
+		policy = pipeutils.MaxStage3JobsPerPipelineRunExecution
+	}
+	capN := policy
+	if in.MaxJobs > 0 && in.MaxJobs < capN {
+		capN = in.MaxJobs
+	}
+	selected := pipeutils.SelectStage3JobIDs(candidates, exclude, capN)
 
 	// SetRunJobStatus is idempotent for terminal rows; GetRunJobStatus skips duplicate LLM work on retry.
 	sentIDs := append([]string(nil), in.Stage3SentJobIDs...)
@@ -139,6 +147,9 @@ func (a *Activities) RunPersistPipelineStage3(ctx context.Context, in pipelinesc
 		}
 		terminal := pipeutils.TerminalRunJobStatusFromScoredJob(sj)
 		if err := a.Runs.SetRunJobStatus(ctx, in.PipelineRunID, id, terminal); err != nil {
+			return nil, err
+		}
+		if err := a.Runs.SetRunJobStage3Rationale(ctx, in.PipelineRunID, id, sj.Reason); err != nil {
 			return nil, err
 		}
 		scored = append(scored, sj)

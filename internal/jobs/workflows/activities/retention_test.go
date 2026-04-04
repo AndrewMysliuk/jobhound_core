@@ -39,6 +39,18 @@ func (r *retentionJobsStub) ListPassedStage2JobsForRun(context.Context, int64) (
 	return nil, nil
 }
 
+func (r *retentionJobsStub) ListSlotStage1Jobs(context.Context, uuid.UUID, int, int) ([]jobs.JobListEntry, int64, error) {
+	return nil, 0, nil
+}
+
+func (r *retentionJobsStub) ListPipelineRunStage2Jobs(context.Context, uuid.UUID, int64, jobs.ListBucket, int, int) ([]jobs.JobListEntry, int64, error) {
+	return nil, 0, nil
+}
+
+func (r *retentionJobsStub) ListPipelineRunStage3Jobs(context.Context, uuid.UUID, int64, jobs.ListBucket, int, int) ([]jobs.JobListEntry, int64, error) {
+	return nil, 0, nil
+}
+
 var _ jobs.JobRepository = (*retentionJobsStub)(nil)
 
 func TestRunJobRetention_requiresJobs(t *testing.T) {

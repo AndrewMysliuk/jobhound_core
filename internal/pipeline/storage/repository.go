@@ -114,6 +114,23 @@ func (r *Repository) SetRunJobStatus(ctx context.Context, pipelineRunID int64, j
 	}
 }
 
+// SetRunJobStage3Rationale implements [pipeline.PipelineRunRepository.SetRunJobStage3Rationale].
+func (r *Repository) SetRunJobStage3Rationale(ctx context.Context, pipelineRunID int64, jobID string, rationale string) error {
+	if pipelineRunID <= 0 || jobID == "" {
+		return fmt.Errorf("pipeline run id and job id are required")
+	}
+	rat := strings.TrimSpace(rationale)
+	var v any
+	if rat == "" {
+		v = nil
+	} else {
+		v = rat
+	}
+	return r.get().WithContext(ctx).Model(&PipelineRunJob{}).
+		Where("pipeline_run_id = ? AND job_id = ?", pipelineRunID, jobID).
+		Update("stage3_rationale", v).Error
+}
+
 // GetRunJobStatus implements [pipeline.PipelineRunRepository.GetRunJobStatus].
 func (r *Repository) GetRunJobStatus(ctx context.Context, pipelineRunID int64, jobID string) (pipeline.RunJobStatus, bool, error) {
 	if jobID == "" {
@@ -165,7 +182,10 @@ func (r *Repository) InvalidateStage3SnapshotsForSlot(ctx context.Context, slotI
 			string(pipeline.RunJobPassedStage3),
 			string(pipeline.RunJobRejectedStage3),
 		}).
-		Update("status", string(pipeline.RunJobPassedStage2))
+		Updates(map[string]any{
+			"status":           string(pipeline.RunJobPassedStage2),
+			"stage3_rationale": nil,
+		})
 	if res.Error != nil {
 		return 0, res.Error
 	}
@@ -182,4 +202,76 @@ func (r *Repository) InvalidateStage2And3SnapshotsForSlot(ctx context.Context, s
 		return 0, res.Error
 	}
 	return res.RowsAffected, nil
+}
+
+// LatestPipelineRunIDForSlot implements [pipeline.PipelineRunRepository.LatestPipelineRunIDForSlot].
+func (r *Repository) LatestPipelineRunIDForSlot(ctx context.Context, slotID uuid.UUID) (int64, bool, error) {
+	if slotID == uuid.Nil {
+		return 0, false, fmt.Errorf("slot id is required")
+	}
+	var run PipelineRun
+	err := r.get().WithContext(ctx).
+		Where("slot_id = ?", slotID.String()).
+		Order("id DESC").
+		First(&run).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return 0, false, nil
+	}
+	if err != nil {
+		return 0, false, err
+	}
+	return run.ID, true, nil
+}
+
+// ManualPatchStage2Bucket implements [pipeline.PipelineRunRepository.ManualPatchStage2Bucket].
+func (r *Repository) ManualPatchStage2Bucket(ctx context.Context, pipelineRunID int64, jobID string, passed bool) error {
+	if pipelineRunID <= 0 || jobID == "" {
+		return fmt.Errorf("pipeline run id and job id are required")
+	}
+	want := pipeline.RunJobRejectedStage2
+	if passed {
+		want = pipeline.RunJobPassedStage2
+	}
+	res := r.get().WithContext(ctx).Model(&PipelineRunJob{}).
+		Where("pipeline_run_id = ? AND job_id = ?", pipelineRunID, jobID).
+		Where("status IN ?", []string{
+			string(pipeline.RunJobRejectedStage2),
+			string(pipeline.RunJobPassedStage2),
+		}).
+		Update("status", string(want))
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return pipeline.ErrManualPatchNotInScope
+	}
+	return nil
+}
+
+// ManualPatchStage3Bucket implements [pipeline.PipelineRunRepository.ManualPatchStage3Bucket].
+func (r *Repository) ManualPatchStage3Bucket(ctx context.Context, pipelineRunID int64, jobID string, passed bool) error {
+	if pipelineRunID <= 0 || jobID == "" {
+		return fmt.Errorf("pipeline run id and job id are required")
+	}
+	want := pipeline.RunJobRejectedStage3
+	if passed {
+		want = pipeline.RunJobPassedStage3
+	}
+	res := r.get().WithContext(ctx).Model(&PipelineRunJob{}).
+		Where("pipeline_run_id = ? AND job_id = ?", pipelineRunID, jobID).
+		Where("status IN ?", []string{
+			string(pipeline.RunJobPassedStage3),
+			string(pipeline.RunJobRejectedStage3),
+		}).
+		Updates(map[string]any{
+			"status":           string(want),
+			"stage3_rationale": nil,
+		})
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return pipeline.ErrManualPatchNotInScope
+	}
+	return nil
 }

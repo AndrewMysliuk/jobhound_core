@@ -42,6 +42,8 @@ type PersistPipelineStage2Output struct {
 type PersistPipelineStage3Input struct {
 	PipelineRunID int64
 	Profile       string
+	// MaxJobs when > 0 caps this execution together with the worker policy (min(client, policy); 009 HTTP).
+	MaxJobs int
 	// Stage3SentJobIDs is optional idempotency for Temporal retries: job IDs already sent to the scorer in this workflow execution.
 	Stage3SentJobIDs []string
 }

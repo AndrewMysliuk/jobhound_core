@@ -9,6 +9,7 @@ import (
 	"github.com/andrewmysliuk/jobhound_core/internal/jobs"
 	"github.com/andrewmysliuk/jobhound_core/internal/pipeline"
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
 
@@ -16,7 +17,7 @@ const sqlListPassedStage2JobsForRun = `
 SELECT jobs.* FROM jobs
 INNER JOIN pipeline_run_jobs ON pipeline_run_jobs.job_id = jobs.id
 WHERE pipeline_run_jobs.pipeline_run_id = ? AND pipeline_run_jobs.status = ?
-ORDER BY CASE WHEN jobs.posted_at IS NULL THEN 1 ELSE 0 END ASC, jobs.posted_at DESC`
+ORDER BY CASE WHEN jobs.posted_at IS NULL THEN 1 ELSE 0 END ASC, jobs.posted_at DESC, jobs.id ASC`
 
 // UpsertSlotJob implements [jobs.JobRepository.UpsertSlotJob].
 func (r *Repository) UpsertSlotJob(ctx context.Context, slotID uuid.UUID, jobID string) error {
@@ -74,4 +75,144 @@ func (r *Repository) ListPassedStage2JobsForRun(ctx context.Context, pipelineRun
 		out = append(out, models[i].ToDomain())
 	}
 	return out, nil
+}
+
+// jobListScanRow is a jobs row plus slot_jobs.first_seen_at (aliased for Scan).
+type jobListScanRow struct {
+	Job
+	SlotFirstSeenAt    time.Time `gorm:"column:sj_first_seen"`
+	PRJStage3Rationale *string   `gorm:"column:prj_stage3_rationale"`
+}
+
+func jobListOrderSQL(jt string) string {
+	return "CASE WHEN " + jt + ".posted_at IS NULL THEN 1 ELSE 0 END ASC, " + jt + ".posted_at DESC, " + jt + ".id ASC"
+}
+
+func stage2ListStatuses(bucket jobs.ListBucket) []string {
+	switch bucket {
+	case jobs.ListBucketPassed:
+		return []string{string(pipeline.RunJobPassedStage2)}
+	case jobs.ListBucketFailed:
+		return []string{string(pipeline.RunJobRejectedStage2)}
+	default:
+		return []string{string(pipeline.RunJobPassedStage2), string(pipeline.RunJobRejectedStage2)}
+	}
+}
+
+func stage3ListStatuses(bucket jobs.ListBucket) []string {
+	switch bucket {
+	case jobs.ListBucketPassed:
+		return []string{string(pipeline.RunJobPassedStage3)}
+	case jobs.ListBucketFailed:
+		return []string{string(pipeline.RunJobRejectedStage3)}
+	default:
+		return []string{string(pipeline.RunJobPassedStage3), string(pipeline.RunJobRejectedStage3)}
+	}
+}
+
+func (r *Repository) stage1JobListBase(ctx context.Context, slotID uuid.UUID) *gorm.DB {
+	jt := Job{}.TableName()
+	return r.get().WithContext(ctx).Table(jt).
+		Joins("INNER JOIN slot_jobs ON slot_jobs.job_id = "+jt+".id AND slot_jobs.slot_id = ?", slotID).
+		Where(jt+".stage1_status = ?", jobs.Stage1StatusPassed)
+}
+
+func (r *Repository) stage2JobListBase(ctx context.Context, slotID uuid.UUID, runID int64, bucket jobs.ListBucket) *gorm.DB {
+	jt := Job{}.TableName()
+	return r.get().WithContext(ctx).Table(jt).
+		Joins("INNER JOIN slot_jobs ON slot_jobs.job_id = "+jt+".id AND slot_jobs.slot_id = ?", slotID).
+		Joins("INNER JOIN pipeline_run_jobs prj ON prj.job_id = "+jt+".id").
+		Where("prj.pipeline_run_id = ? AND prj.status IN ?", runID, stage2ListStatuses(bucket))
+}
+
+func (r *Repository) stage3JobListBase(ctx context.Context, slotID uuid.UUID, runID int64, bucket jobs.ListBucket) *gorm.DB {
+	jt := Job{}.TableName()
+	return r.get().WithContext(ctx).Table(jt).
+		Joins("INNER JOIN slot_jobs ON slot_jobs.job_id = "+jt+".id AND slot_jobs.slot_id = ?", slotID).
+		Joins("INNER JOIN pipeline_run_jobs prj ON prj.job_id = "+jt+".id").
+		Where("prj.pipeline_run_id = ? AND prj.status IN ?", runID, stage3ListStatuses(bucket))
+}
+
+func (r *Repository) countAndListJobEntries(base *gorm.DB, jt string, offset, limit int, stage3RationaleSelect string) ([]jobs.JobListEntry, int64, error) {
+	var total int64
+	if err := base.Session(&gorm.Session{}).Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	sel := jt + ".*, slot_jobs.first_seen_at AS sj_first_seen"
+	if stage3RationaleSelect != "" {
+		sel += ", " + stage3RationaleSelect
+	}
+	var rows []jobListScanRow
+	err := base.Session(&gorm.Session{}).
+		Select(sel).
+		Order(jobListOrderSQL(jt)).
+		Offset(offset).
+		Limit(limit).
+		Scan(&rows).Error
+	if err != nil {
+		return nil, 0, err
+	}
+	out := make([]jobs.JobListEntry, 0, len(rows))
+	for i := range rows {
+		ent := jobs.JobListEntry{
+			Job:         rows[i].ToDomain(),
+			FirstSeenAt: rows[i].SlotFirstSeenAt.UTC(),
+		}
+		if rows[i].PRJStage3Rationale != nil && *rows[i].PRJStage3Rationale != "" {
+			ent.Stage3Rationale = rows[i].PRJStage3Rationale
+		}
+		out = append(out, ent)
+	}
+	return out, total, nil
+}
+
+// ListSlotStage1Jobs implements [jobs.JobRepository.ListSlotStage1Jobs].
+func (r *Repository) ListSlotStage1Jobs(ctx context.Context, slotID uuid.UUID, offset, limit int) ([]jobs.JobListEntry, int64, error) {
+	if slotID == uuid.Nil {
+		return nil, 0, fmt.Errorf("slot id is required")
+	}
+	if limit <= 0 {
+		return nil, 0, fmt.Errorf("limit must be positive")
+	}
+	if offset < 0 {
+		return nil, 0, fmt.Errorf("offset must be non-negative")
+	}
+	jt := Job{}.TableName()
+	return r.countAndListJobEntries(r.stage1JobListBase(ctx, slotID), jt, offset, limit, "")
+}
+
+// ListPipelineRunStage2Jobs implements [jobs.JobRepository.ListPipelineRunStage2Jobs].
+func (r *Repository) ListPipelineRunStage2Jobs(ctx context.Context, slotID uuid.UUID, pipelineRunID int64, bucket jobs.ListBucket, offset, limit int) ([]jobs.JobListEntry, int64, error) {
+	if slotID == uuid.Nil {
+		return nil, 0, fmt.Errorf("slot id is required")
+	}
+	if pipelineRunID <= 0 {
+		return nil, 0, fmt.Errorf("pipeline run id is required")
+	}
+	if limit <= 0 {
+		return nil, 0, fmt.Errorf("limit must be positive")
+	}
+	if offset < 0 {
+		return nil, 0, fmt.Errorf("offset must be non-negative")
+	}
+	jt := Job{}.TableName()
+	return r.countAndListJobEntries(r.stage2JobListBase(ctx, slotID, pipelineRunID, bucket), jt, offset, limit, "")
+}
+
+// ListPipelineRunStage3Jobs implements [jobs.JobRepository.ListPipelineRunStage3Jobs].
+func (r *Repository) ListPipelineRunStage3Jobs(ctx context.Context, slotID uuid.UUID, pipelineRunID int64, bucket jobs.ListBucket, offset, limit int) ([]jobs.JobListEntry, int64, error) {
+	if slotID == uuid.Nil {
+		return nil, 0, fmt.Errorf("slot id is required")
+	}
+	if pipelineRunID <= 0 {
+		return nil, 0, fmt.Errorf("pipeline run id is required")
+	}
+	if limit <= 0 {
+		return nil, 0, fmt.Errorf("limit must be positive")
+	}
+	if offset < 0 {
+		return nil, 0, fmt.Errorf("offset must be non-negative")
+	}
+	jt := Job{}.TableName()
+	return r.countAndListJobEntries(r.stage3JobListBase(ctx, slotID, pipelineRunID, bucket), jt, offset, limit, "prj.stage3_rationale AS prj_stage3_rationale")
 }

@@ -74,6 +74,18 @@ func (m *memJobs) ListPassedStage2JobsForRun(context.Context, int64) ([]domain.J
 	return nil, nil
 }
 
+func (m *memJobs) ListSlotStage1Jobs(context.Context, uuid.UUID, int, int) ([]jobs.JobListEntry, int64, error) {
+	return nil, 0, nil
+}
+
+func (m *memJobs) ListPipelineRunStage2Jobs(context.Context, uuid.UUID, int64, jobs.ListBucket, int, int) ([]jobs.JobListEntry, int64, error) {
+	return nil, 0, nil
+}
+
+func (m *memJobs) ListPipelineRunStage3Jobs(context.Context, uuid.UUID, int64, jobs.ListBucket, int, int) ([]jobs.JobListEntry, int64, error) {
+	return nil, 0, nil
+}
+
 var _ jobs.JobRepository = (*memJobs)(nil)
 
 func TestRunIngestSource_incrementalWatermark(t *testing.T) {

@@ -30,6 +30,8 @@ type PipelineRunRepository interface {
 	// SetBroadFilterKeyHash stores the SHA-256 hex broad filter key on the run (006); empty hash is a no-op.
 	SetBroadFilterKeyHash(ctx context.Context, pipelineRunID int64, hash string) error
 	SetRunJobStatus(ctx context.Context, pipelineRunID int64, jobID string, status RunJobStatus) error
+	// SetRunJobStage3Rationale stores LLM rationale for a row already in a terminal stage-3 status (009 GET …/stages/3/jobs).
+	SetRunJobStage3Rationale(ctx context.Context, pipelineRunID int64, jobID string, rationale string) error
 	// GetRunJobStatus loads the per-run row; ok is false when missing.
 	GetRunJobStatus(ctx context.Context, pipelineRunID int64, jobID string) (status RunJobStatus, ok bool, err error)
 	// ListPassedStage2JobIDs returns job_id for rows in PASSED_STAGE_2 only (eligible for stage-3 cap).
@@ -43,4 +45,13 @@ type PipelineRunRepository interface {
 	// InvalidateStage2And3SnapshotsForSlot deletes all pipeline_runs for the slot (CASCADE removes pipeline_run_jobs).
 	// Use when stage-2 (keyword) rules change (008: stage 3 depends on stage 2).
 	InvalidateStage2And3SnapshotsForSlot(ctx context.Context, slotID uuid.UUID) (runsDeleted int64, err error)
+	// LatestPipelineRunIDForSlot returns the newest pipeline_runs.id for the slot (by surrogate id), or ok=false when none.
+	LatestPipelineRunIDForSlot(ctx context.Context, slotID uuid.UUID) (runID int64, ok bool, err error)
+
+	// ManualPatchStage2Bucket sets PASSED_STAGE_2 or REJECTED_STAGE_2 when a row exists for run+job with a stage-2 outcome (009 PATCH).
+	// Returns ErrManualPatchNotInScope when no matching row.
+	ManualPatchStage2Bucket(ctx context.Context, pipelineRunID int64, jobID string, passed bool) error
+	// ManualPatchStage3Bucket sets PASSED_STAGE_3 or REJECTED_STAGE_3 when a row exists with a terminal stage-3 outcome (009 PATCH).
+	// Returns ErrManualPatchNotInScope when no matching row.
+	ManualPatchStage3Bucket(ctx context.Context, pipelineRunID int64, jobID string, passed bool) error
 }

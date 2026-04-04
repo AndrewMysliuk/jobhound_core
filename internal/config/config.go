@@ -7,6 +7,7 @@ package config
 // do not scatter os.Getenv across feature modules — add fields and parsing here instead.
 type Config struct {
 	Database Database
+	API      API
 	Ingest   Ingest
 	Pipeline Pipeline
 	// DataDir is the directory containing countries.json (see EnvDataDir). Empty means use "data" relative to the process working directory.
@@ -33,6 +34,7 @@ func Load() Config {
 	}
 	return Config{
 		Database:        LoadDatabaseFromEnv(),
+		API:             LoadAPIFromEnv(),
 		Ingest:          LoadIngestFromEnv(),
 		Pipeline:        LoadPipelineFromEnv(),
 		DataDir:         loadDataDirFromEnv(),

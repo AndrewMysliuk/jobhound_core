@@ -60,6 +60,7 @@ func testSlotJobsDB(t *testing.T) *gorm.DB {
 			pipeline_run_id INTEGER NOT NULL REFERENCES pipeline_runs(id) ON DELETE CASCADE,
 			job_id TEXT NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
 			status TEXT NOT NULL,
+			stage3_rationale TEXT,
 			PRIMARY KEY (pipeline_run_id, job_id)
 		)`,
 	} {
@@ -231,5 +232,111 @@ func TestRepository_ListPassedStage2JobsForRun_requiresRunID(t *testing.T) {
 	repo := NewRepository(pgsql.NewGetter(db))
 	if _, err := repo.ListPassedStage2JobsForRun(ctx, 0); err == nil {
 		t.Fatal("expected error")
+	}
+}
+
+func TestRepository_ListSlotStage1Jobs_paginationAndTotal(t *testing.T) {
+	ctx := context.Background()
+	slotA := uuid.MustParse("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+	now := time.Date(2026, 4, 1, 12, 0, 0, 0, time.UTC)
+	passed := jobs.Stage1StatusPassed
+	db := testSlotJobsDB(t)
+	repo := NewRepository(pgsql.NewGetter(db))
+	tA := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	tB := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
+	for _, row := range []struct {
+		id   string
+		post *time.Time
+	}{
+		{"ja", &tA},
+		{"jb", &tB},
+		{"jc", &tA},
+	} {
+		if err := db.Exec(`
+			INSERT INTO jobs (id, source, title, company, url, description, tags, posted_at, stage1_status, created_at, updated_at)
+			VALUES (?, 's', 't', 'c', 'u', 'd', '[]', ?, ?, ?, ?)`,
+			row.id, row.post, passed, now, now).Error; err != nil {
+			t.Fatal(err)
+		}
+		if err := repo.UpsertSlotJob(ctx, slotA, row.id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, total, err := repo.ListSlotStage1Jobs(ctx, slotA, 0, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total != 3 {
+		t.Fatalf("total %d want 3", total)
+	}
+	if len(got) != 2 {
+		t.Fatalf("len %d want 2", len(got))
+	}
+	// posted_at DESC: jb (May) first; then March tie-break id ASC → ja, jc
+	if got[0].Job.ID != "jb" || got[1].Job.ID != "ja" {
+		t.Fatalf("order got %q %q want jb ja", got[0].Job.ID, got[1].Job.ID)
+	}
+	got2, _, err := repo.ListSlotStage1Jobs(ctx, slotA, 2, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got2) != 1 || got2[0].Job.ID != "jc" {
+		t.Fatalf("page2 got %+v", got2)
+	}
+}
+
+func TestRepository_ListPipelineRunStage2Jobs_bucketFilter(t *testing.T) {
+	ctx := context.Background()
+	slotA := uuid.MustParse("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+	now := time.Date(2026, 4, 1, 12, 0, 0, 0, time.UTC)
+	passed := jobs.Stage1StatusPassed
+	db := testSlotJobsDB(t)
+	repo := NewRepository(pgsql.NewGetter(db))
+	if err := db.Exec(`
+		INSERT INTO jobs (id, source, title, company, url, description, tags, posted_at, stage1_status, created_at, updated_at)
+		VALUES ('jp', 's', 't', 'c', 'u', 'd', '[]', ?, ?, ?, ?)`,
+		now, passed, now, now).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec(`
+		INSERT INTO jobs (id, source, title, company, url, description, tags, posted_at, stage1_status, created_at, updated_at)
+		VALUES ('jr', 's', 't', 'c', 'u', 'd', '[]', ?, ?, ?, ?)`,
+		now, passed, now, now).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.UpsertSlotJob(ctx, slotA, "jp"); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.UpsertSlotJob(ctx, slotA, "jr"); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec(`INSERT INTO pipeline_runs (id, created_at, slot_id) VALUES (1, ?, ?)`, now, slotA.String()).Error; err != nil {
+		t.Fatal(err)
+	}
+	stP := string(pipeline.RunJobPassedStage2)
+	stR := string(pipeline.RunJobRejectedStage2)
+	if err := db.Exec(`INSERT INTO pipeline_run_jobs (pipeline_run_id, job_id, status) VALUES (1, 'jp', ?), (1, 'jr', ?)`, stP, stR).Error; err != nil {
+		t.Fatal(err)
+	}
+	all, total, err := repo.ListPipelineRunStage2Jobs(ctx, slotA, 1, jobs.ListBucketAll, 0, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total != 2 || len(all) != 2 {
+		t.Fatalf("all: total=%d len=%d", total, len(all))
+	}
+	passedOnly, totalP, err := repo.ListPipelineRunStage2Jobs(ctx, slotA, 1, jobs.ListBucketPassed, 0, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if totalP != 1 || len(passedOnly) != 1 || passedOnly[0].Job.ID != "jp" {
+		t.Fatalf("passed: %+v", passedOnly)
+	}
+	failedOnly, totalF, err := repo.ListPipelineRunStage2Jobs(ctx, slotA, 1, jobs.ListBucketFailed, 0, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if totalF != 1 || len(failedOnly) != 1 || failedOnly[0].Job.ID != "jr" {
+		t.Fatalf("failed: %+v", failedOnly)
 	}
 }
