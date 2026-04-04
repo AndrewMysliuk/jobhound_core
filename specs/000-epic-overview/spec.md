@@ -13,7 +13,7 @@
 
 ## Product summary
 
-Personal job agent built around **search slots** (product constant **3–5** per user later; **single-tenant** operationally for MVP): each slot has an immutable **stage-1 broad keyword string** after the first successful ingest, **bound sources**, and **slot-scoped** vacancy rows and pipeline outcomes (`slot_id`; schema **reserves `user_id`** for registration and isolation without rewriting ownership).
+Personal job agent built around **search slots** (**3** slots in HTTP MVP **`009`**; long-term constant **3–5** per user when multi-user lands; **single-tenant** operationally for MVP): each slot has an immutable **stage-1 broad keyword string** after the first successful ingest, **all configured sources** on the backend (client supplies only the keyword in **`009`**), and **slot-scoped** vacancy rows and pipeline outcomes (`slot_id`; schema **reserves `user_id`** for registration and isolation without rewriting ownership).
 
 **Three stages** (see draft §1–§4): **(1)** broad external ingest and optional delta refresh; **(2)** local narrow filters (include/exclude; optional date TBD) on the stage-1 pool only; **(3)** LLM on rows that passed stage 2, with **cap, deterministic ordering, eligible pool, and idempotency** per draft §4 (epics **`004` / `007`**). **Manual marks** stay coarse (same passed/failed buckets as the pipeline) plus a small correction path; **reset** when filters change wipes dependent outcomes per draft §5.
 

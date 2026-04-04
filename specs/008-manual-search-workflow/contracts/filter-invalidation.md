@@ -16,6 +16,8 @@ The interface surface is `PipelineRunRepository` in `internal/pipeline/contract.
 
 ## Integration with **`009`**
 
-**Where to call**: not fixed by **`008`**. Recommended: invoke the appropriate method from **`009`** after **successful persistence** of the slot filter change (stage-2 vs stage-3), so snapshot data never disagrees with the rules the user just saved. Deferring invalidation to the **first activity** of a subsequent manual run is allowed if the product batches configuration writes, but clients must then tolerate stale `pipeline_run_id` / snapshot references until that run starts.
+**HTTP MVP** (**[`009`](../../009-http-public-api/spec.md)**): stage-2 **include/exclude** are sent on **`POST /api/v1/slots/{id}/stages/2/run`** (no separate “save filters” route). Run **`InvalidateStage2And3SnapshotsForSlot`** (and persist the new filter parameters) in the **API handler or first activity** of **`PIPELINE_STAGE2`** before recomputing stage 2. Stage-3-only invalidation applies when **`PUT /profile`** (or future stage-3 policy fields) completes—then **`POST …/stages/3/run`** with **`max_jobs`**.
 
-**Which method**: map UI or API “what changed” to the table above; stage-2 edits must use `InvalidateStage2And3SnapshotsForSlot`.
+Deferring invalidation entirely to the **first activity** of the workflow is allowed if snapshot helpers are only reachable from the worker; clients must tolerate stale snapshot references until the run starts.
+
+**Which method**: map “what changed” to the storage table above; stage-2 runs must use `InvalidateStage2And3SnapshotsForSlot`.

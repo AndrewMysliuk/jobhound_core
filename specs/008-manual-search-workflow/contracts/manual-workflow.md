@@ -5,9 +5,7 @@
 
 ## 1. Purpose
 
-Define the **on-demand** path for a **search slot** (`slot_id` UUID): optional **stage-1 ingest** (parallel per `source_id`), then **persisted stage 2** and **persisted stage 3** as **separate** Temporal workflows or activities, plus response shapes for **`009`**.
-
-Triggers: explicit (API, CLI, tests)—**not** cron.
+Define the **on-demand** path for a **search slot** (`slot_id` UUID): optional **stage-1 ingest** (parallel per `source_id`), then **persisted stage 2** and **persisted stage 3** as **separate** Temporal workflows or activities, plus response shapes for **`009`**. Triggers are explicit (API, CLI, tests)—**not** cron. **Public HTTP MVP** behavior is normative in **`009`** (stage 1 only on slot create; no re-ingest on existing slot; stages 2 and 3 are **separate** API calls).
 
 DTOs live under module **`schema/`** (e.g. `internal/manual/schema` or split across `ingest/schema`, `pipeline/schema`).
 
@@ -23,17 +21,17 @@ Logical **run kind** selects which steps execute. Go names are implementation de
 
 | Run kind (logical) | Stage-1 ingest | Stage 2 (snapshot) | Stage 3 (snapshot) | Notes |
 |--------------------|----------------|--------------------|---------------------|--------|
-| `INGEST_SOURCES` | Yes, **parallel** per `source_id` | No | No | **`006`** lock / cooldown / watermarks; **`IngestSourceInput.SlotID`** required; writes **`slot_jobs`** + **`PASSED_STAGE_1`** where applicable. |
-| `PIPELINE_STAGE2` | No | Yes | No | Pool = **`slot_jobs`** ∩ **`jobs`** with **`stage1_status = PASSED_STAGE_1`**. Produces stage-2 pass/fail snapshot. |
-| `PIPELINE_STAGE3` | No | No | Yes | Pool = **`PASSED_STAGE_2`** for the active **`pipeline_run_id`**. LLM batch: **up to 20** jobs, ordered by **`jobs.posted_at`** descending; tie-break unspecified. |
-| `PIPELINE_STAGE2_THEN_STAGE3` | No | Yes | Yes | After stage 2 completes, run stage 3 on the new stage-2 snapshot. |
-| `INGEST_THEN_PIPELINE` | Yes (parallel per source) | Yes | Yes | Parent “full run”: ingest → stage 2 → stage 3. |
-| `DELTA_INGEST_THEN_PIPELINE` | Yes (**incremental** per **`006`**) | Yes | Yes | Default “pull new” after first ingest. |
+| `INGEST_SOURCES` | Yes, **parallel** per `source_id` | No | No | **`006`** lock / cooldown / watermarks; **`IngestSourceInput.SlotID`** required; writes **`slot_jobs`** + **`PASSED_STAGE_1`** where applicable. Used when **`009`** creates a slot (HTTP does **not** expose re-ingest on the same `slot_id`). |
+| `PIPELINE_STAGE2` | No | Yes | No | Pool = **`slot_jobs`** ∩ **`jobs`** with **`stage1_status = PASSED_STAGE_1`**. Produces stage-2 pass/fail snapshot. **`009`**: maps to **`POST …/stages/2/run`**; wipes stages **2+3** first; does **not** start stage 3. |
+| `PIPELINE_STAGE3` | No | No | Yes | Pool = **`PASSED_STAGE_2`** for the active **`pipeline_run_id`**. LLM batch: up to **`max_jobs`** (HTTP: **1–100** from **`009`**; **`007`** may cap further—use **min** of policy and request). Order: **`posted_at`** DESC, **`job_id`** ASC. |
+| `PIPELINE_STAGE2_THEN_STAGE3` | No | Yes | Yes | After stage 2 completes, run stage 3 on the new stage-2 snapshot. For **CLI/tests** or future product; **not** the default **`009`** flow (client calls stage 2 and 3 separately). |
+| `INGEST_THEN_PIPELINE` | Yes (parallel per source) | Yes | Yes | Parent “full run”: ingest → stage 2 → stage 3. **Not** the **`009`** browser MVP (no single HTTP action for 1→2→3). |
+| `DELTA_INGEST_THEN_PIPELINE` | Yes (**incremental** per **`006`**) | Yes | Yes | “Pull new” + pipeline. **Not** exposed in public HTTP MVP **`009`** (no repeat ingest on existing slot until product adds it). |
 
-**Invalidation** (when user changes slot filters)—see root **`spec.md`** and **[`filter-invalidation.md`](./filter-invalidation.md)** (storage APIs + **`009`** integration note):
+**Invalidation** (when user changes slot filters)—see root **`spec.md`** and **[`filter-invalidation.md`](./filter-invalidation.md)**:
 
-- **Stage-3 rules only** → delete **stage-3** snapshot data only; then a run may use `PIPELINE_STAGE3` or `PIPELINE_STAGE2_THEN_STAGE3` depending on product (usually **`PIPELINE_STAGE3`** if stage 2 unchanged).
-- **Stage-2 rules** → delete **stage-2 and stage-3** snapshots; recompute with `PIPELINE_STAGE2` or `PIPELINE_STAGE2_THEN_STAGE3` / full pipeline as needed.
+- **Stage-3 rules only** → delete **stage-3** snapshot data only; then use **`PIPELINE_STAGE3`** (HTTP: **`POST …/stages/3/run`** with **`max_jobs`**).
+- **Stage-2 rules** → delete **stage-2 and stage-3** snapshots; **`009`** uses **`PIPELINE_STAGE2`** only for the next run (client triggers **`PIPELINE_STAGE3`** separately). Composite kinds may still run **2 then 3** in one workflow for non-HTTP callers.
 
 **Manual** never bypasses **`006`** for ingest.
 
@@ -51,7 +49,7 @@ Logical **run kind** selects which steps execute. Go names are implementation de
 
 ### 4.2 Parent “manual slot run” workflow (to implement)
 
-1. Input: **`slot_id`**, optional **`user_id`**, **run kind**, parameters (sources, `ExplicitRefresh`, **`004`** rules, profile text, optional **`pipeline_run_id`** for stage-3-only).
+1. Input: **`slot_id`**, optional **`user_id`**, **run kind**, parameters (sources, `ExplicitRefresh`, **`004`** rules **`include`/`exclude`** for stage 2, profile text, **`max_jobs`** for stage 3 from HTTP, optional **`pipeline_run_id`** for stage-3-only).
 2. **Ingest kinds**: start **child** `IngestSourceWorkflow` per `source_id` **in parallel**; aggregate per-source outputs.
 3. When stage 2 or 3 runs: **`CreateRun(ctx, &slotID)`** when a new **`pipeline_runs`** row is required; pass **`pipeline_run_id`** into stage-2 and/or stage-3 units as defined by **`007`**.
 4. **Order**: stage 2 **before** stage 3 when both run in one parent execution.
@@ -85,7 +83,7 @@ Temporal **registration strings** and **run kinds** below match `github.com/andr
 | `pipeline_run_id` | int64, optional | When stage 2 and/or 3 persisted under a run. |
 | `ingest` | map or array per `source_id` | **`ingest/schema.IngestSourceOutput`** where ingest ran. |
 | `stage2` | object, optional | Counts: passed vs rejected (snapshot sizes). |
-| `stage3` | object, optional | Counts: scored / cap (**20** per batch rule in spec), passed vs rejected at stage 3. |
+| `stage3` | object, optional | Counts: scored / cap (**`max_jobs`** effective batch per **`009`** / **`007`**), passed vs rejected at stage 3. |
 | `error_summary` | string, optional | User-safe; no raw stacks. |
 
 JSON tags are defined on `internal/manual/schema.ManualSlotRunAggregate` and nested types.
@@ -93,7 +91,7 @@ JSON tags are defined on `internal/manual/schema.ManualSlotRunAggregate` and nes
 ## 6. Job input set (frozen for `008`)
 
 - **After stage 1**: jobs linked via **`slot_jobs`** with **`jobs.stage1_status = PASSED_STAGE_1`** (see root **`spec.md`**).
-- **Stage 3 eligible set**: **`PASSED_STAGE_2`** rows for the relevant **`pipeline_run_id`** (**`007`**), ordered by **`posted_at`** DESC for LLM selection (**top 20**).
+- **Stage 3 eligible set**: **`PASSED_STAGE_2`** rows for the relevant **`pipeline_run_id`** (**`007`**), ordered by **`posted_at`** DESC, **`job_id`** ASC; take up to the effective **`max_jobs`** for that execution (**`009`** + **`007`**).
 
 **`JobRepository`** gains (or a sibling repo gains) **slot-scoped** queries joining **`slot_jobs`** and **`jobs`**.
 
