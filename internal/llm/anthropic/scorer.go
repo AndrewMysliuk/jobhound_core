@@ -9,8 +9,10 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 
-	"github.com/andrewmysliuk/jobhound_core/internal/domain"
+	"github.com/andrewmysliuk/jobhound_core/internal/domain/schema"
+	llmschema "github.com/andrewmysliuk/jobhound_core/internal/llm/schema"
 	llmutils "github.com/andrewmysliuk/jobhound_core/internal/llm/utils"
 )
 
@@ -20,7 +22,32 @@ const (
 	defaultScoreMaxTokens = 256
 )
 
-// Scorer calls Claude and maps responses to domain.ScoredJob using llm/utils.ParseScoringJSON.
+var (
+	scoringSchemaAPIJSON json.RawMessage
+	scoringSchemaAPIErr  error
+	scoringSchemaAPIOnce sync.Once
+)
+
+// scoringSchemaForAPI returns the JSON Schema object for Anthropic output_config (no $schema key; some APIs reject it).
+func scoringSchemaForAPI() (json.RawMessage, error) {
+	scoringSchemaAPIOnce.Do(func() {
+		var m map[string]any
+		if err := json.Unmarshal(llmschema.JobScoringJSON, &m); err != nil {
+			scoringSchemaAPIErr = err
+			return
+		}
+		delete(m, "$schema")
+		b, err := json.Marshal(m)
+		if err != nil {
+			scoringSchemaAPIErr = err
+			return
+		}
+		scoringSchemaAPIJSON = b
+	})
+	return scoringSchemaAPIJSON, scoringSchemaAPIErr
+}
+
+// Scorer calls Claude with structured JSON output (output_config) and maps to schema.ScoredJob.
 type Scorer struct {
 	APIKey     string
 	Model      string
@@ -52,12 +79,16 @@ func (s *Scorer) baseURL() string {
 }
 
 // Score implements llm.Scorer.
-func (s *Scorer) Score(ctx context.Context, profile string, job domain.Job) (domain.ScoredJob, error) {
+func (s *Scorer) Score(ctx context.Context, profile string, job schema.Job) (schema.ScoredJob, error) {
 	if strings.TrimSpace(s.APIKey) == "" {
-		return domain.ScoredJob{}, fmt.Errorf("anthropic: empty API key")
+		return schema.ScoredJob{}, fmt.Errorf("anthropic: empty API key")
 	}
 	if strings.TrimSpace(s.Model) == "" {
-		return domain.ScoredJob{}, fmt.Errorf("anthropic: empty model")
+		return schema.ScoredJob{}, fmt.Errorf("anthropic: empty model")
+	}
+	apiSchema, err := scoringSchemaForAPI()
+	if err != nil {
+		return schema.ScoredJob{}, fmt.Errorf("anthropic: scoring schema: %w", err)
 	}
 	body, err := json.Marshal(messagesRequest{
 		Model:     s.Model,
@@ -65,13 +96,19 @@ func (s *Scorer) Score(ctx context.Context, profile string, job domain.Job) (dom
 		Messages: []messageItem{
 			{Role: "user", Content: buildUserPrompt(profile, job)},
 		},
+		OutputConfig: &outputConfigParam{
+			Format: jsonSchemaOutputFormatParam{
+				Type:   "json_schema",
+				Schema: apiSchema,
+			},
+		},
 	})
 	if err != nil {
-		return domain.ScoredJob{}, err
+		return schema.ScoredJob{}, err
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.baseURL()+"/v1/messages", bytes.NewReader(body))
 	if err != nil {
-		return domain.ScoredJob{}, err
+		return schema.ScoredJob{}, err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("x-api-key", s.APIKey)
@@ -79,29 +116,32 @@ func (s *Scorer) Score(ctx context.Context, profile string, job domain.Job) (dom
 
 	resp, err := s.httpClient().Do(req)
 	if err != nil {
-		return domain.ScoredJob{}, err
+		return schema.ScoredJob{}, err
 	}
 	defer resp.Body.Close()
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return domain.ScoredJob{}, err
+		return schema.ScoredJob{}, err
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return domain.ScoredJob{}, fmt.Errorf("anthropic: API %s: %s", resp.Status, truncateForErr(respBody))
+		return schema.ScoredJob{}, fmt.Errorf("anthropic: API %s: %s", resp.Status, truncateForErr(respBody))
 	}
 	text, err := extractAssistantText(respBody)
 	if err != nil {
-		return domain.ScoredJob{}, err
+		return schema.ScoredJob{}, err
 	}
-	score, rationale, err := parseScoringFromAssistantText(text)
+	if err := llmutils.ValidateJSONDocument(llmschema.JobScoringJSON, []byte(text)); err != nil {
+		return schema.ScoredJob{}, fmt.Errorf("anthropic: scoring output: %w", err)
+	}
+	score, rationale, err := llmutils.ParseScoringJSON([]byte(text))
 	if err != nil {
-		return domain.ScoredJob{}, err
+		return schema.ScoredJob{}, err
 	}
-	return domain.ScoredJob{Job: job, Score: score, Reason: rationale}, nil
+	return schema.ScoredJob{Job: job, Score: score, Reason: rationale}, nil
 }
 
-func buildUserPrompt(profile string, job domain.Job) string {
-	return fmt.Sprintf(`You are a job relevance scorer. Respond with ONLY a JSON object (no markdown fences, no text before or after) with exactly these keys: "score" (integer 0-100) and "rationale" (short string).
+func buildUserPrompt(profile string, job schema.Job) string {
+	return fmt.Sprintf(`You are a job relevance scorer. Return a JSON object matching the requested schema only.
 
 User profile:
 %s
@@ -115,9 +155,19 @@ Description:
 }
 
 type messagesRequest struct {
-	Model     string        `json:"model"`
-	MaxTokens int           `json:"max_tokens"`
-	Messages  []messageItem `json:"messages"`
+	Model        string             `json:"model"`
+	MaxTokens    int                `json:"max_tokens"`
+	Messages     []messageItem      `json:"messages"`
+	OutputConfig *outputConfigParam `json:"output_config,omitempty"`
+}
+
+type outputConfigParam struct {
+	Format jsonSchemaOutputFormatParam `json:"format"`
+}
+
+type jsonSchemaOutputFormatParam struct {
+	Type   string          `json:"type"`
+	Schema json.RawMessage `json:"schema"`
 }
 
 type messageItem struct {
@@ -150,19 +200,6 @@ func extractAssistantText(respBody []byte) (string, error) {
 		return "", fmt.Errorf("anthropic: empty assistant text")
 	}
 	return out, nil
-}
-
-func parseScoringFromAssistantText(s string) (score int, rationale string, err error) {
-	s = strings.TrimSpace(s)
-	if sc, r, e := llmutils.ParseScoringJSON([]byte(s)); e == nil {
-		return sc, r, nil
-	}
-	start := strings.Index(s, "{")
-	end := strings.LastIndex(s, "}")
-	if start >= 0 && end > start {
-		return llmutils.ParseScoringJSON([]byte(s[start : end+1]))
-	}
-	return 0, "", fmt.Errorf("anthropic: scoring JSON not found in assistant output")
 }
 
 func truncateForErr(b []byte) string {

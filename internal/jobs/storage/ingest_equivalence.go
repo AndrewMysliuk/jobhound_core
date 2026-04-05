@@ -4,12 +4,12 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/andrewmysliuk/jobhound_core/internal/domain"
+	"github.com/andrewmysliuk/jobhound_core/internal/domain/schema"
 )
 
 // jobEqualForIngestSkip compares persisted vacancy fields used for ingest skip (006 spec.md):
-// all fields except description; excludes created_at/updated_at (not on domain.Job).
-func jobEqualForIngestSkip(a, b domain.Job) bool {
+// all fields except description; excludes created_at/updated_at (not on schema.Job).
+func jobEqualForIngestSkip(a, b schema.Job) bool {
 	if a.ID != b.ID || a.Source != b.Source || a.Title != b.Title || a.Company != b.Company ||
 		a.URL != b.URL || a.ApplyURL != b.ApplyURL || a.SalaryRaw != b.SalaryRaw || a.CountryCode != b.CountryCode {
 		return false

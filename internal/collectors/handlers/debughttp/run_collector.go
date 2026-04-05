@@ -10,7 +10,7 @@ import (
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/europeremotely"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/workingnomads"
-	"github.com/andrewmysliuk/jobhound_core/internal/domain"
+	"github.com/andrewmysliuk/jobhound_core/internal/domain/schema"
 	"github.com/andrewmysliuk/jobhound_core/internal/platform/logging"
 	"github.com/rs/zerolog"
 )
@@ -48,7 +48,7 @@ func runCollectorDebug(w http.ResponseWriter, r *http.Request, logH zerolog.Logg
 		return
 	}
 
-	var jobs []domain.Job
+	var jobs []schema.Job
 	var fetchErr error
 	var upstreamFetched int
 

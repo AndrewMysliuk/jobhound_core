@@ -17,5 +17,8 @@ func ParseScoringJSON(data []byte) (score int, rationale string, err error) {
 	if v.Score == nil || v.Rationale == nil {
 		return 0, "", fmt.Errorf("llm utils: scoring JSON: missing required score or rationale")
 	}
+	if *v.Score < 0 || *v.Score > 100 {
+		return 0, "", fmt.Errorf("llm utils: scoring JSON: score out of range [0,100]")
+	}
 	return *v.Score, *v.Rationale, nil
 }

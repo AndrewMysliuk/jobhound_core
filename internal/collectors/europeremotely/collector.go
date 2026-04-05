@@ -13,7 +13,8 @@ import (
 	"time"
 
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/utils"
-	"github.com/andrewmysliuk/jobhound_core/internal/domain"
+	"github.com/andrewmysliuk/jobhound_core/internal/domain/schema"
+	domainutils "github.com/andrewmysliuk/jobhound_core/internal/domain/utils"
 )
 
 // SourceName is the normative Job.Source value (contracts/collector.md).
@@ -50,7 +51,7 @@ type EuropeRemotely struct {
 func (*EuropeRemotely) Name() string { return SourceName }
 
 // Fetch implements collectors.Collector.
-func (c *EuropeRemotely) Fetch(ctx context.Context) ([]domain.Job, error) {
+func (c *EuropeRemotely) Fetch(ctx context.Context) ([]schema.Job, error) {
 	if strings.TrimSpace(c.FeedURL) == "" {
 		return nil, fmt.Errorf("europe remotely: empty FeedURL")
 	}
@@ -75,7 +76,7 @@ func (c *EuropeRemotely) Fetch(ctx context.Context) ([]domain.Job, error) {
 	}
 
 	seen := make(map[string]struct{})
-	var jobs []domain.Job
+	var jobs []schema.Job
 	page := 1
 	for {
 		if page > maxFeedPages {
@@ -136,7 +137,7 @@ func (c *EuropeRemotely) Fetch(ctx context.Context) ([]domain.Job, error) {
 			}
 			postedAt := resolvePostedAt(nowFn(), card.postedDisplay, detail.postedDisplay, warn)
 
-			j := domain.Job{
+			j := schema.Job{
 				Source:      SourceName,
 				Title:       title,
 				Company:     company,
@@ -150,7 +151,7 @@ func (c *EuropeRemotely) Fetch(ctx context.Context) ([]domain.Job, error) {
 				Tags:        detail.tags,
 				Position:    utils.InferPosition(title, detail.description, detail.tags),
 			}
-			if err := domain.AssignStableID(&j); err != nil {
+			if err := domainutils.AssignStableID(&j); err != nil {
 				return nil, fmt.Errorf("stable id: %w", err)
 			}
 			jobs = append(jobs, j)

@@ -3,13 +3,13 @@ package utils
 import (
 	"context"
 
-	"github.com/andrewmysliuk/jobhound_core/internal/domain"
+	"github.com/andrewmysliuk/jobhound_core/internal/domain/schema"
 	"github.com/andrewmysliuk/jobhound_core/internal/llm"
 )
 
 // ScoreJobs runs stage 3 on each job in order. It stops and returns the first error from the scorer.
-func ScoreJobs(ctx context.Context, profile string, jobs []domain.Job, scorer llm.Scorer) ([]domain.ScoredJob, error) {
-	out := make([]domain.ScoredJob, 0, len(jobs))
+func ScoreJobs(ctx context.Context, profile string, jobs []schema.Job, scorer llm.Scorer) ([]schema.ScoredJob, error) {
+	out := make([]schema.ScoredJob, 0, len(jobs))
 	for _, j := range jobs {
 		sj, err := scorer.Score(ctx, profile, j)
 		if err != nil {

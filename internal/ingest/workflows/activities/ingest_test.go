@@ -8,10 +8,11 @@ import (
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors"
-	"github.com/andrewmysliuk/jobhound_core/internal/domain"
+	"github.com/andrewmysliuk/jobhound_core/internal/domain/schema"
 	"github.com/andrewmysliuk/jobhound_core/internal/ingest"
 	ingestschema "github.com/andrewmysliuk/jobhound_core/internal/ingest/schema"
 	"github.com/andrewmysliuk/jobhound_core/internal/jobs"
+	jobschema "github.com/andrewmysliuk/jobhound_core/internal/jobs/schema"
 	jobsstorage "github.com/andrewmysliuk/jobhound_core/internal/jobs/storage"
 	"github.com/andrewmysliuk/jobhound_core/internal/pipeline"
 	"github.com/andrewmysliuk/jobhound_core/internal/platform/logging"
@@ -29,36 +30,36 @@ type stubIncrCollector struct {
 
 func (s stubIncrCollector) Name() string { return s.name }
 
-func (stubIncrCollector) Fetch(context.Context) ([]domain.Job, error) {
+func (stubIncrCollector) Fetch(context.Context) ([]schema.Job, error) {
 	panic("Fetch should not run for incremental collector in this test")
 }
 
-func (stubIncrCollector) FetchIncremental(_ context.Context, cursor string) ([]domain.Job, string, error) {
+func (stubIncrCollector) FetchIncremental(_ context.Context, cursor string) ([]schema.Job, string, error) {
 	next := "v2"
 	if cursor == "v2" {
 		next = "v3"
 	}
 	// PostedAt inside default 7d window when Clock is fixed to 2026-04-02 (see test).
-	j := domain.Job{
+	j := schema.Job{
 		ID: "j1", Source: "src", Title: "t", Company: "c", URL: "https://u",
 		Description: "d", PostedAt: time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC),
 	}
-	return []domain.Job{j}, next, nil
+	return []schema.Job{j}, next, nil
 }
 
 type memJobs struct {
 	saved int
 }
 
-func (m *memJobs) Save(context.Context, domain.Job) error { return nil }
+func (m *memJobs) Save(context.Context, schema.Job) error { return nil }
 
-func (m *memJobs) SaveIngest(context.Context, domain.Job) (bool, error) {
+func (m *memJobs) SaveIngest(context.Context, schema.Job) (bool, error) {
 	m.saved++
 	return false, nil
 }
 
-func (m *memJobs) GetByID(context.Context, string) (domain.Job, error) {
-	return domain.Job{}, nil
+func (m *memJobs) GetByID(context.Context, string) (schema.Job, error) {
+	return schema.Job{}, nil
 }
 
 func (m *memJobs) DeleteJobsCreatedBeforeUTC(context.Context, time.Time) (int64, error) {
@@ -67,23 +68,23 @@ func (m *memJobs) DeleteJobsCreatedBeforeUTC(context.Context, time.Time) (int64,
 
 func (m *memJobs) UpsertSlotJob(context.Context, uuid.UUID, string) error { return nil }
 
-func (m *memJobs) ListSlotJobsPassedStage1(context.Context, uuid.UUID) ([]domain.Job, error) {
+func (m *memJobs) ListSlotJobsPassedStage1(context.Context, uuid.UUID) ([]schema.Job, error) {
 	return nil, nil
 }
 
-func (m *memJobs) ListPassedStage2JobsForRun(context.Context, int64) ([]domain.Job, error) {
+func (m *memJobs) ListPassedStage2JobsForRun(context.Context, int64) ([]schema.Job, error) {
 	return nil, nil
 }
 
-func (m *memJobs) ListSlotStage1Jobs(context.Context, uuid.UUID, int, int) ([]jobs.JobListEntry, int64, error) {
+func (m *memJobs) ListSlotStage1Jobs(context.Context, uuid.UUID, int, int) ([]jobschema.JobListEntry, int64, error) {
 	return nil, 0, nil
 }
 
-func (m *memJobs) ListPipelineRunStage2Jobs(context.Context, uuid.UUID, int64, jobs.ListBucket, int, int) ([]jobs.JobListEntry, int64, error) {
+func (m *memJobs) ListPipelineRunStage2Jobs(context.Context, uuid.UUID, int64, jobschema.ListBucket, int, int) ([]jobschema.JobListEntry, int64, error) {
 	return nil, 0, nil
 }
 
-func (m *memJobs) ListPipelineRunStage3Jobs(context.Context, uuid.UUID, int64, jobs.ListBucket, int, int) ([]jobs.JobListEntry, int64, error) {
+func (m *memJobs) ListPipelineRunStage3Jobs(context.Context, uuid.UUID, int64, jobschema.ListBucket, int, int) ([]jobschema.JobListEntry, int64, error) {
 	return nil, 0, nil
 }
 
@@ -148,20 +149,20 @@ type stubMultiCollector struct {
 
 func (s stubMultiCollector) Name() string { return s.name }
 
-func (stubMultiCollector) Fetch(context.Context) ([]domain.Job, error) {
+func (stubMultiCollector) Fetch(context.Context) ([]schema.Job, error) {
 	panic("Fetch not used")
 }
 
-func (stubMultiCollector) FetchIncremental(_ context.Context, _ string) ([]domain.Job, string, error) {
-	old := domain.Job{
+func (stubMultiCollector) FetchIncremental(_ context.Context, _ string) ([]schema.Job, string, error) {
+	old := schema.Job{
 		ID: "old", Source: "src", Title: "t", Company: "c", URL: "https://old",
 		Description: "d", PostedAt: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC),
 	}
-	fresh := domain.Job{
+	fresh := schema.Job{
 		ID: "fresh", Source: "src", Title: "t", Company: "c", URL: "https://fresh",
 		Description: "d", PostedAt: time.Date(2026, 4, 9, 0, 0, 0, 0, time.UTC),
 	}
-	return []domain.Job{old, fresh}, "next", nil
+	return []schema.Job{old, fresh}, "next", nil
 }
 
 func TestRunIngestSource_broadFilterSkipsNonPassing(t *testing.T) {
@@ -287,7 +288,7 @@ func TestRunIngestSource_writesSlotJobMembership(t *testing.T) {
 	var st *string
 	require.NoError(t, db.Raw(`SELECT stage1_status FROM jobs WHERE id = 'fresh'`).Scan(&st).Error)
 	require.NotNil(t, st)
-	require.Equal(t, jobs.Stage1StatusPassed, *st)
+	require.Equal(t, jobschema.Stage1StatusPassed, *st)
 
 	// Stage-2 input pool: slot_jobs ∩ jobs with PASSED_STAGE_1 (008 spec / contract §6).
 	passed, err := jobsRepo.ListSlotJobsPassedStage1(ctx, testSlot)

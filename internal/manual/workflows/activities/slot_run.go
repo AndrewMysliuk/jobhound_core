@@ -5,7 +5,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/andrewmysliuk/jobhound_core/internal/domain"
+	"github.com/andrewmysliuk/jobhound_core/internal/domain/schema"
 	"github.com/andrewmysliuk/jobhound_core/internal/jobs"
 	manualschema "github.com/andrewmysliuk/jobhound_core/internal/manual/schema"
 	"github.com/andrewmysliuk/jobhound_core/internal/pipeline"
@@ -42,7 +42,7 @@ func (a *Activities) CreatePipelineRun(ctx context.Context, slotID uuid.UUID) (i
 }
 
 // ListSlotJobsPassedStage1 loads the stage-2 input pool (008 §6).
-func (a *Activities) ListSlotJobsPassedStage1(ctx context.Context, slotID uuid.UUID) ([]domain.Job, error) {
+func (a *Activities) ListSlotJobsPassedStage1(ctx context.Context, slotID uuid.UUID) ([]schema.Job, error) {
 	if a == nil || a.Jobs == nil {
 		return nil, fmt.Errorf("manual activities: ListSlotJobsPassedStage1 requires Jobs")
 	}

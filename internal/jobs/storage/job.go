@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/andrewmysliuk/jobhound_core/internal/domain"
+	"github.com/andrewmysliuk/jobhound_core/internal/domain/schema"
 )
 
 // Job is the GORM model for the jobs table.
@@ -34,9 +34,9 @@ func (Job) TableName() string {
 	return "jobs"
 }
 
-// NewJobModel maps domain.Job to the GORM row shape (contracts/jobs-schema.md).
+// NewJobModel maps schema.Job to the GORM row shape (contracts/jobs-schema.md).
 // CreatedAt/UpdatedAt are left zero until persistence sets them.
-func NewJobModel(j domain.Job) Job {
+func NewJobModel(j schema.Job) Job {
 	m := Job{
 		ID:          j.ID,
 		Source:      j.Source,
@@ -97,9 +97,9 @@ func decodeJobTags(b []byte) []string {
 	return tags
 }
 
-// ToDomain maps this row to domain.Job (contracts/jobs-schema.md).
-func (m *Job) ToDomain() domain.Job {
-	j := domain.Job{
+// ToDomain maps this row to schema.Job (contracts/jobs-schema.md).
+func (m *Job) ToDomain() schema.Job {
+	j := schema.Job{
 		ID:          m.ID,
 		Source:      m.Source,
 		Title:       m.Title,

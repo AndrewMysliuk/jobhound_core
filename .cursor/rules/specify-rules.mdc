@@ -21,43 +21,80 @@ Spec-driven workflow via `.specify` and `/speckit.*` commands. Update this file 
 ## Project Structure
 
 ```text
-cmd/agent/              # agent binary (composition + long-running agent; not the future public API binary)
-cmd/worker/             # Temporal worker: config dial, register each module’s workflows
-cmd/migrate/            # SQL migrations CLI
-cmd/retention/          # retention CLI (when used)
-# cmd/api/              # add when product HTTP API exists; thin composition like omg-bo cmd/api (Group → NewHTTPHandler)
-internal/domain/        # shared domain types (e.g. Job)
-internal/config/        # env keys + typed loaders only; feature code must not os.Getenv shared knobs
+cmd/agent/               # agent binary (composition + long-running agent; not the future public API binary)
+cmd/worker/              # Temporal worker: config dial, register each module's workflows
+cmd/migrate/             # SQL migrations CLI
+cmd/retention/           # retention CLI (when used)
+# cmd/api/               # add when product HTTP API exists; thin composition (Group -> NewHTTPHandler)
+internal/domain/schema/  # shared kernel types: Job, ScoredJob (import path often aliased e.g. `jobdata` when `package schema` collides)
+internal/domain/utils/   # shared kernel: StableJobID, NormalizeListingURL, AssignStableID (alias e.g. `domainutils` inside `package utils`)
+internal/config/         # env keys + typed loaders only; feature code must not os.Getenv shared knobs
 internal/platform/pgsql/ # GORM Postgres + pool; GormGetter; integration migration tests
-internal/collectors/    # Collector contract + sources + schema/ (module DTOs at collectors root, not under handlers/)
-internal/collectors/handlers/debughttp/  # dev-only HTTP (omg-bo-style handler layout)
-internal/jobs/          # jobs module: contract, schema/, impl/, storage/, workflows/ as needed
-internal/llm/           # contract, providers, mock/, utils/ — no loose helpers at module root
-internal/pipeline/      # contract, stage types at root; stage impl in utils/; impl/ if needed
-internal/reference/     # optional demos
-tests/integration/      # optional; `integration` build tag
-migrations/             # SQL migration files
+internal/collectors/     # Collector contract + sources + schema/ (module data model at collectors root, not under handlers/)
+internal/collectors/handlers/debughttp/  # dev-only HTTP handler layout
+internal/jobs/           # jobs module: contract, schema/, impl/, storage/, workflows/ as needed
+internal/llm/            # contract, providers, mock/, utils/ — no loose helpers at module root
+internal/pipeline/       # contract, stage types at root; stage impl in utils/; impl/ if needed
+internal/reference/      # optional demos
+internal/publicapi/      # product HTTP: handlers/, schema/, utils/ (path/query + JSON Schema validate)
+tests/integration/       # optional; `integration` build tag
+migrations/              # SQL migration files
 ```
 
-**Collectors `schema/`**: module-local DTOs (**`internal/collectors/schema/`** only — same level as `contract.go`, `handlers/`, `bootstrap/`). Do **not** nest `schema/` under `handlers/debughttp` or other adapters.
+**Collectors `schema/`**: module-local **data model** — structs, enums, named constants, wire payloads, errors as for any feature module (`internal/collectors/schema/` only — same level as `contract.go`, `handlers/`, `bootstrap/`). Do not nest `schema/` under `handlers/debughttp` or other adapters.
 
-**Debug HTTP today**: `internal/collectors/handlers/debughttp/` is **not** the product API. Layout matches **omg-bo** handlers (stdlib `net/http` instead of Gin): **`handler.go`** with **`NewHTTPHandler(...)`** and **`registerRoutes()`**; **one `.go` file per route**; shared **`helpers.go`** / **`response.go`**. JSON request types for debug POST live in **`internal/collectors/schema/`** (imported by handlers). Wire from composition roots like omg-bo → handlers: **`cmd/agent`** → **`debughttp.NewHTTPHandler(...)`**. When **`cmd/api`** exists, product routes live there with the same pattern. One-line package comment on `debughttp` stating dev-only.
+**Debug HTTP today**: `internal/collectors/handlers/debughttp/` is not the product API. Layout: `handler.go` with `NewHTTPHandler(...)` and `registerRoutes()`; one `.go` file per route; shared `helpers.go` / `response.go`. Debug POST request types (and other collector wire/model types) live in `internal/collectors/schema/`. Wire from `cmd/agent` -> `debughttp.NewHTTPHandler(...)`. One-line package comment stating dev-only.
 
-**Module layout (non-negotiable for feature code)**:
+## Module Layout (non-negotiable for feature code)
 
-- **`contract.go`** (module root) — exported interfaces only.
-- **`impl/`** — application service / use cases (folder name is **`impl`**, not `service`). Wire depends on `contract` + `storage` + other modules’ contracts.
-- **`storage/`** — persistence only; this name only (**no** `repository/`).
-- **`schema/`** — request/response DTOs, handler/workflow payload types, module-local errors (same role as `omg-bo/internal/<feature>/schema`; no shared “global schema” repo — keep types inside the module).
-- **`handlers/`** — **omg-bo style**: one file per route/handler, plus **`handler.go`** with `registerRoutes()` (or equivalent) so the full route list is obvious at a glance; shared `helpers.go` / `response.go` only when small.
-- **`workflows/`** — **omg-api style**: type embedding the worker registrar, `New...` constructor that **explicitly** calls `RegisterWorkflow` for each workflow (readable inventory); `activities/` for activity structs and methods.
-- **`utils/`** — small shared helpers for that module only; **not** fat domain logic (that belongs in `impl/` or `pipeline/utils/` as already specified).
+- **`contract.go`** (module root) — exported interfaces and sentinel errors only. May be split by concern (`api.go`, `errors.go`, `temporal.go`). **No standalone helper functions at the module root** — those go in `utils/`, even if two lines.
+- **`impl/`** — application service / use cases only (folder name is `impl`, not `service`). **No Temporal SDK imports** (`go.temporal.io/sdk/...`) inside `impl/` — Temporal-to-domain mapping belongs in `workflows/`.
+- **`storage/`** — persistence only; this name only (no `repository/`).
+- **`schema/`** — module-local **data model** (not “HTTP DTOs only”): structs, **enums**, **named constants** that belong to the model (status values, keys, caps when they are contract data), request/response bodies, handler/workflow/activity payloads, module-local **exported errors** where they are part of the surface. **Pure functions** stay in **`utils/`** or **`impl/`**. No global schema repo — types stay in the module.
+- **`handlers/`** — one file per route, plus `handler.go` (registerRoutes — full route inventory at a glance); `helpers.go` for ALL shared parsing helpers (path values, query params, pagination, stage digits, etc.); `response.go` for all write helpers. **Never define package-level functions inside a route file** — if it is not a method on the handler struct, it goes in `helpers.go` or `response.go`. **Exception: `internal/publicapi/handlers`** — **all** shared HTTP helpers (path/query, JSON read/write, CORS) live in **`internal/publicapi/utils/`**; embeds stay in **`handlers/json_schema/`** + **`schemas_embed.go`**; call **`publicapi/utils.ReadValidatedJSON`** etc. from route files (see Canonical Patterns).
+- **`workflows/`** — **required** when the module uses Temporal (not optional). `New...` constructor explicitly calls `RegisterWorkflow` for every workflow. Temporal-to-domain mapping helpers go in `workflows/mappers.go` (or `workflows/utils/`). `activities/` for activity structs and methods.
+- **`utils/`** — small helpers for that module only. Standalone functions that would otherwise float at the module root belong here.
 
-**Modules**: do not park bulk helpers at the module root. **Temporal** connection lives in `internal/config`; workflow/activity code under `internal/<feature>/workflows/`. See `.specify/memory/constitution.md` for the folder table.
+Temporal connection lives in `internal/config`; workflow/activity code under `internal/<feature>/workflows/`. Full pattern catalogue: `.specify/memory/constitution.md`.
+
+## Canonical Patterns
+
+### Enum types
+
+Every exported string-based enum type in `schema/` must have all of the following — a bare `Valid() bool` is not sufficient:
+
+- `String() string` — returns the raw string value
+- `Equals(str string) bool` — returns `string(e) == str`
+- `Pointer() *T` — returns a pointer (for optional fields)
+- `FromValue(str string) (T, error)` — parse with a descriptive error listing valid values
+- Package-level `ValuesT() []T` — all known values
+- Package-level `FromStringT(str string) (T, error)` — delegates to `FromValue`
+
+### HTTP request validation
+
+**`internal/publicapi` (product API):** embed JSON Schema next to routes — `//go:embed json_schema/<name>.schema.json` in the `handlers` package (same workflow as `omg-ap` `pkg/transactions/handlers`: `ValidateRequestBySchema` there, here **`publicapi/utils.ValidateJSONInstance`** + **`publicapi/utils.ReadValidatedJSON`**). Then decode into a typed struct in **`publicapi/schema/`** with `DisallowUnknownFields()`. Do not hand-roll the same rules in handler `if` chains when a schema can express them.
+
+Other feature modules: typed request/response (and other wire) structs in **`schema/`** + `DisallowUnknownFields()`; add embedded JSON Schema when structural validation is non-trivial.
+
+**Forbidden**: `map[string]json.RawMessage` with per-field existence checks (`if _, has := raw["field"]; !has`). Never in handler code.
+
+## Anti-Pattern Reference
+
+| Anti-pattern | Correct approach |
+|---|---|
+| `map[string]json.RawMessage` + per-field existence checks in handler | Typed struct in `schema/` + `publicapi/utils.ReadJSON` / JSON schema validate |
+| Package-level function defined inside a route file (`get_foo.go`, `post_bar.go`) | Move to `helpers.go` or `response.go` (or `internal/publicapi/utils/` for public API: path/query, JSON read/write, CORS) |
+| `Valid() bool` as the only method on an enum type | Full canonical enum: `String` / `Equals` / `Pointer` / `FromValue` / `Values` / `FromString` |
+| Standalone helper function at module root (e.g. `func DefaultSourceIDs()` in `slots/sources.go`) | Move to `internal/<module>/utils/` |
+| Temporal SDK (`go.temporal.io/sdk/...`) imported inside `impl/` | Move to `workflows/mappers.go` or `workflows/utils/` |
+| `workflows/` folder absent when module uses Temporal | `workflows/` is required, not optional |
+| Describing a pattern as "do it like <project>" | Name the pattern explicitly (e.g. "Canonical Enum", "schema-first JSON validation") |
+| Dedicated `*_test.go` for trivial `utils/`, schema-only, or enum-only code | Test **handlers**, **`impl/`**, or **`storage/`**; thin helpers are exercised indirectly |
 
 ## Testing
 
 - **Unit**: `*_test.go` next to the code, **same package** as the implementation (idiomatic Go).
+- **Scope**: unit tests belong at **boundaries** — a **concrete HTTP handler/route** (mux-level), an **`impl/`** service, or **`storage/`** persistence. **Do not** maintain tests whose only purpose is **`utils/`** helpers, bare **`schema/`** types, or **enum** plumbing (unless behavior is non-trivial). Cover thin helpers **through** handler or service tests.
 - **Integration**: `//go:build integration`; run `make test-integration` or `go test -tags=integration ./...` (needs env such as `JOBHOUND_DATABASE_URL` for DB tests, `JOBHOUND_TEMPORAL_ADDRESS` + running worker for Temporal integration tests where applicable).
 - Do not rely on `export_test.go` or external `tests/unit/...` trees for ordinary package tests.
 
@@ -80,12 +117,16 @@ migrations/             # SQL migration files
 
 ## Recent Changes
 
+- 2026-04-05: **`internal/domain`** — `schema/` + `utils/` kernel layout (was flat `package domain`).
+- 2026-04-05: **`schema/`** — defined as full module **data model** (structs, enums, named model constants, payloads, errors); not limited to HTTP DTOs. Constitution v1.8.0 aligned.
+- 2026-04-05: **Testing** — unit tests at handler / `impl` / `storage` only; no standalone tests for trivial `publicapi/utils`, schema-only, or enum-only code
+- 2026-04-05: **`internal/publicapi`**: HTTP helpers (path/query, JSON read/write, CORS) in `publicapi/utils/`; POST/PUT/PATCH bodies validated with embedded JSON Schema (`handlers/json_schema/`) + `jsonschema/v6` + `utils.ReadValidatedJSON` (aligned with `omg-ap` handler embed + schema-first validate)
+- 2026-04-05: Added Canonical Patterns (Enum, HTTP validation) and Anti-Pattern Reference; tightened module layout rules (no helpers at module root, `impl/` no Temporal SDK, `workflows/` required, no package-level functions in route files)
 - 2026-04-01: `internal/collectors/schema/` at module root (not under `handlers/`); debughttp imports it; `cmd/agent` uses `NewHTTPHandler`
-- 2026-04-01: `internal/collectors/handlers/debughttp` split like omg-bo — `handler.go` + `registerRoutes` + per-route files; `cmd/agent` uses `NewHTTPHandler`
-- 2026-04-01: Module conventions aligned with omg-bo/omg-api — `handlers/` (registry + one file per route), `schema/` inside module, `impl/` + `storage/` only, workflows with explicit `RegisterWorkflow` in `New`; debug HTTP documented under `collectors/handlers`; comment minimalism
+- 2026-04-01: `internal/collectors/handlers/debughttp` split — `handler.go` + `registerRoutes` + per-route files; `cmd/agent` uses `NewHTTPHandler`
+- 2026-04-01: Module conventions aligned — `handlers/` (registry + one file per route), `schema/` inside module, `impl/` + `storage/` only, workflows with explicit `RegisterWorkflow` in `New`; comment minimalism
+- 2026-04-03: Removed `008-events-and-run-history`; renumbered `009`->`008` (manual workflow), `010`->`009` (HTTP API), `011`->`010` (observability); epic index `000`-`010`
 - 2026-03-29: Constitution v1.3 — testing policy (colocated unit tests; `integration` build tag; optional `tests/integration/`)
-- 2026-04-03: Removed `008-events-and-run-history`; renumbered `009`→`008` (manual workflow), `010`→`009` (HTTP API), `011`→`010` (observability); epic index `000`–`010`
-- 2026-04-02: Epics renumbered (`010` HTTP API, `011` observability); Telegram epic removed from MVP index
 - 2026-03-29: `specs/` epic index + Postgres/Temporal architecture
 - 2026-03-29: Module layout under `internal/` (`jobs`, `pipeline`, `db`, `domain`) + `cmd/agent`, `cmd/worker`, `cmd/migrate`
 - 2026-03-29: Constitution v1.4 — `internal/config` as single source for env-backed settings

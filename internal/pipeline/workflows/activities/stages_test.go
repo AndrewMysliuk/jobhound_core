@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/andrewmysliuk/jobhound_core/internal/domain"
+	"github.com/andrewmysliuk/jobhound_core/internal/domain/schema"
 	llmmock "github.com/andrewmysliuk/jobhound_core/internal/llm/mock"
 	"github.com/andrewmysliuk/jobhound_core/internal/pipeline"
 	pipelineschema "github.com/andrewmysliuk/jobhound_core/internal/pipeline/schema"
@@ -16,7 +16,7 @@ import (
 func TestActivities_RunPipelineStages(t *testing.T) {
 	t.Parallel()
 	now := time.Date(2026, 3, 1, 12, 0, 0, 0, time.UTC)
-	jobs := []domain.Job{
+	jobs := []schema.Job{
 		{
 			ID: "a", Title: "Go Dev", Description: "backend",
 			PostedAt: now.Add(-24 * time.Hour), Remote: ptr(true), CountryCode: "DE",

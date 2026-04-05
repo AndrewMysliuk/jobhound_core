@@ -1,4 +1,5 @@
-package impl
+// Package workflows holds Temporal workflow registration and Temporal-to-domain mapping for the slots module.
+package workflows
 
 import (
 	"errors"
@@ -9,9 +10,9 @@ import (
 	"go.temporal.io/sdk/client"
 )
 
-// workflowExecutionRunning reports whether DescribeWorkflow shows a RUNNING execution.
-// NotFound → false, nil error (no active workflow with that id).
-func workflowExecutionRunning(desc *client.WorkflowExecutionDescription, err error) (bool, error) {
+// WorkflowExecutionRunning reports whether DescribeWorkflow shows a RUNNING execution.
+// A NotFound error is treated as "not running" (no active workflow with that ID).
+func WorkflowExecutionRunning(desc *client.WorkflowExecutionDescription, err error) (bool, error) {
 	if err != nil {
 		var nf *serviceerror.NotFound
 		if errors.As(err, &nf) {
@@ -22,7 +23,21 @@ func workflowExecutionRunning(desc *client.WorkflowExecutionDescription, err err
 	return desc.Status == enumspb.WORKFLOW_EXECUTION_STATUS_RUNNING, nil
 }
 
-// stageFullFromDescribe maps Temporal workflow execution state to the public API stage card (§2.3).
+// Stage1FromDescribe maps a Temporal execution description to a stage 1 (ingest) card.
+func Stage1FromDescribe(desc *client.WorkflowExecutionDescription, err error) schema.StageFull {
+	return stageFullFromDescribe(desc, err, "ingest_failed", "ingest workflow did not complete successfully")
+}
+
+// Stage2FromDescribe maps a Temporal execution description to a stage 2 (keyword filter) card.
+func Stage2FromDescribe(desc *client.WorkflowExecutionDescription, err error) schema.StageFull {
+	return stageFullFromDescribe(desc, err, "stage2_failed", "stage 2 workflow did not complete successfully")
+}
+
+// Stage3FromDescribe maps a Temporal execution description to a stage 3 (LLM scoring) card.
+func Stage3FromDescribe(desc *client.WorkflowExecutionDescription, err error) schema.StageFull {
+	return stageFullFromDescribe(desc, err, "stage3_failed", "stage 3 workflow did not complete successfully")
+}
+
 func stageFullFromDescribe(desc *client.WorkflowExecutionDescription, err error, failedCode, failedMessage string) schema.StageFull {
 	if err != nil {
 		var nf *serviceerror.NotFound
@@ -59,16 +74,4 @@ func stageFullFromDescribe(desc *client.WorkflowExecutionDescription, err error,
 	default:
 		return schema.StageFull{State: schema.StageStateIdle}
 	}
-}
-
-func stage1FromDescribe(desc *client.WorkflowExecutionDescription, err error) schema.StageFull {
-	return stageFullFromDescribe(desc, err, "ingest_failed", "ingest workflow did not complete successfully")
-}
-
-func stage2FromDescribe(desc *client.WorkflowExecutionDescription, err error) schema.StageFull {
-	return stageFullFromDescribe(desc, err, "stage2_failed", "stage 2 workflow did not complete successfully")
-}
-
-func stage3FromDescribe(desc *client.WorkflowExecutionDescription, err error) schema.StageFull {
-	return stageFullFromDescribe(desc, err, "stage3_failed", "stage 3 workflow did not complete successfully")
 }

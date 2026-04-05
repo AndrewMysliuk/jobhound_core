@@ -1,7 +1,7 @@
 package utils
 
 import (
-	"github.com/andrewmysliuk/jobhound_core/internal/domain"
+	"github.com/andrewmysliuk/jobhound_core/internal/domain/schema"
 	"github.com/andrewmysliuk/jobhound_core/internal/pipeline"
 )
 
@@ -11,7 +11,7 @@ import (
 const Stage3PassScoreMinimum = 60
 
 // TerminalRunJobStatusFromScoredJob maps a successful stage-3 score to a per-run terminal status.
-func TerminalRunJobStatusFromScoredJob(sj domain.ScoredJob) pipeline.RunJobStatus {
+func TerminalRunJobStatusFromScoredJob(sj schema.ScoredJob) pipeline.RunJobStatus {
 	if sj.Score >= Stage3PassScoreMinimum {
 		return pipeline.RunJobPassedStage3
 	}

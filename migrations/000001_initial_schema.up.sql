@@ -1,7 +1,8 @@
--- Initial schema (consolidated): jobs, pipeline runs, ingest watermarks.
+-- Consolidated initial schema (former 000001–000005): jobs, pipeline, watermarks, slots, slot_jobs, user_profile.
 -- See specs/002-postgres-gorm-migrations/contracts/jobs-schema.md,
 -- specs/006-cache-and-ingest/contracts/ingest-watermark-and-filter-key.md,
--- specs/007-llm-policy-and-caps/contracts/pipeline-run-job-status.md.
+-- specs/007-llm-policy-and-caps/contracts/pipeline-run-job-status.md,
+-- specs/008-manual-search-workflow (slot_jobs), specs/009-http-public-api (slots, user_profile, stage3_rationale).
 
 CREATE TABLE jobs (
     id TEXT PRIMARY KEY,
@@ -32,11 +33,19 @@ CREATE INDEX IF NOT EXISTS jobs_source_posted_at_idx ON jobs (source, posted_at)
 CREATE INDEX IF NOT EXISTS jobs_passed_stage1_source_posted_at_idx ON jobs (source, posted_at)
     WHERE stage1_status = 'PASSED_STAGE_1';
 
+CREATE TABLE slots (
+    id UUID PRIMARY KEY,
+    name TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX slots_created_at_idx ON slots (created_at);
+
 CREATE TABLE pipeline_runs (
     id BIGSERIAL PRIMARY KEY,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     broad_filter_key_hash TEXT NULL,
-    slot_id UUID NULL
+    slot_id UUID NULL REFERENCES slots (id) ON DELETE CASCADE
 );
 
 CREATE INDEX pipeline_runs_slot_id_idx ON pipeline_runs (slot_id);
@@ -45,6 +54,7 @@ CREATE TABLE pipeline_run_jobs (
     pipeline_run_id BIGINT NOT NULL REFERENCES pipeline_runs (id) ON DELETE CASCADE,
     job_id TEXT NOT NULL REFERENCES jobs (id) ON DELETE CASCADE,
     status TEXT NOT NULL,
+    stage3_rationale TEXT NULL,
     CONSTRAINT pipeline_run_jobs_status_check CHECK (
         status IN (
             'REJECTED_STAGE_2',
@@ -59,9 +69,26 @@ CREATE TABLE pipeline_run_jobs (
 CREATE INDEX pipeline_run_jobs_run_id_status_idx ON pipeline_run_jobs (pipeline_run_id, status);
 
 CREATE TABLE ingest_watermarks (
-    slot_id UUID NOT NULL,
+    slot_id UUID NOT NULL REFERENCES slots (id) ON DELETE CASCADE,
     source_id TEXT NOT NULL,
     cursor TEXT,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (slot_id, source_id)
 );
+
+CREATE TABLE slot_jobs (
+    slot_id UUID NOT NULL REFERENCES slots (id) ON DELETE CASCADE,
+    job_id TEXT NOT NULL REFERENCES jobs (id) ON DELETE CASCADE,
+    first_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (slot_id, job_id)
+);
+
+CREATE INDEX IF NOT EXISTS slot_jobs_job_id_idx ON slot_jobs (job_id);
+
+CREATE TABLE user_profile (
+    id SMALLINT PRIMARY KEY CHECK (id = 1),
+    text TEXT NOT NULL DEFAULT '',
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+INSERT INTO user_profile (id, text) VALUES (1, '');

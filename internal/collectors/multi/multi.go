@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors"
-	"github.com/andrewmysliuk/jobhound_core/internal/domain"
+	"github.com/andrewmysliuk/jobhound_core/internal/domain/schema"
 	"github.com/andrewmysliuk/jobhound_core/internal/platform/logging"
 	"github.com/rs/zerolog"
 )
@@ -28,11 +28,11 @@ type All struct {
 func (*All) Name() string { return "mvp_sources" }
 
 // Fetch implements collectors.Collector.
-func (a *All) Fetch(ctx context.Context) ([]domain.Job, error) {
+func (a *All) Fetch(ctx context.Context) ([]schema.Job, error) {
 	if a == nil {
 		return nil, fmt.Errorf("multi.All: nil receiver")
 	}
-	var jobs []domain.Job
+	var jobs []schema.Job
 	var errs []error
 	for _, c := range a.Collectors {
 		if c == nil {

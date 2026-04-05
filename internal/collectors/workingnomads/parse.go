@@ -7,7 +7,8 @@ import (
 	"time"
 
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/utils"
-	"github.com/andrewmysliuk/jobhound_core/internal/domain"
+	"github.com/andrewmysliuk/jobhound_core/internal/domain/schema"
+	domainutils "github.com/andrewmysliuk/jobhound_core/internal/domain/utils"
 )
 
 const listingURLPrefix = "https://www.workingnomads.com/jobs/"
@@ -46,32 +47,32 @@ type searchResponse struct {
 	} `json:"hits"`
 }
 
-func jobFromSource(countries *utils.CountryResolver, src jobSource) (domain.Job, error) {
+func jobFromSource(countries *utils.CountryResolver, src jobSource) (schema.Job, error) {
 	if src.Expired {
-		return domain.Job{}, errSkipHit
+		return schema.Job{}, errSkipHit
 	}
 	slug := strings.TrimSpace(src.Slug)
 	if slug == "" {
-		return domain.Job{}, fmt.Errorf("working nomads: empty slug")
+		return schema.Job{}, fmt.Errorf("working nomads: empty slug")
 	}
 	rawListing := listingURLPrefix + slug
 	listingURL, err := utils.CanonicalListingURL(rawListing)
 	if err != nil {
-		return domain.Job{}, fmt.Errorf("listing URL: %w", err)
+		return schema.Job{}, fmt.Errorf("listing URL: %w", err)
 	}
 	applyURL, err := applyURLForWN(&src)
 	if err != nil {
-		return domain.Job{}, err
+		return schema.Job{}, err
 	}
 	postedAt, err := parsePubDate(strings.TrimSpace(src.PubDate))
 	if err != nil {
-		return domain.Job{}, fmt.Errorf("pub_date: %w", err)
+		return schema.Job{}, fmt.Errorf("pub_date: %w", err)
 	}
 	descPlain := utils.StripHTMLToPlainText(src.Description)
 	tags := boardTags(src)
 	title := strings.TrimSpace(src.Title)
 	company := strings.TrimSpace(src.Company)
-	j := domain.Job{
+	j := schema.Job{
 		Source:      SourceName,
 		Title:       title,
 		Company:     company,
@@ -85,8 +86,8 @@ func jobFromSource(countries *utils.CountryResolver, src jobSource) (domain.Job,
 		Tags:        tags,
 		Position:    utils.InferPosition(title, descPlain, tags),
 	}
-	if err := domain.AssignStableID(&j); err != nil {
-		return domain.Job{}, fmt.Errorf("stable id: %w", err)
+	if err := domainutils.AssignStableID(&j); err != nil {
+		return schema.Job{}, fmt.Errorf("stable id: %w", err)
 	}
 	return j, nil
 }

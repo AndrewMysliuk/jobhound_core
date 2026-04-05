@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors"
-	"github.com/andrewmysliuk/jobhound_core/internal/domain"
+	"github.com/andrewmysliuk/jobhound_core/internal/domain/schema"
 )
 
 // Collector returns no jobs.
@@ -12,7 +12,7 @@ type Collector struct{}
 
 func (Collector) Name() string { return "noop" }
 
-func (Collector) Fetch(context.Context) ([]domain.Job, error) { return nil, nil }
+func (Collector) Fetch(context.Context) ([]schema.Job, error) { return nil, nil }
 
 // Dedup always reports not sent; MarkSent is a no-op.
 type Dedup struct{}
@@ -24,7 +24,7 @@ func (Dedup) MarkSent(context.Context, string) error { return nil }
 // Notifier succeeds without doing I/O.
 type Notifier struct{}
 
-func (Notifier) Send(context.Context, []domain.ScoredJob) error { return nil }
+func (Notifier) Send(context.Context, []schema.ScoredJob) error { return nil }
 
 // SessionProvider returns an empty path (collectors.SessionProvider test double).
 type SessionProvider struct{}

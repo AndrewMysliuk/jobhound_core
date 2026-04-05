@@ -10,6 +10,7 @@ require (
 	github.com/jackc/pgx/v5 v5.6.0
 	github.com/redis/go-redis/v9 v9.18.0
 	github.com/rs/zerolog v1.34.0
+	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
 	github.com/stretchr/testify v1.11.1
 	go.temporal.io/api v1.62.2
 	go.temporal.io/sdk v1.41.1

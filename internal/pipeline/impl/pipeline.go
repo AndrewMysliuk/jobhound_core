@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors"
-	"github.com/andrewmysliuk/jobhound_core/internal/domain"
+	"github.com/andrewmysliuk/jobhound_core/internal/domain/schema"
 	"github.com/andrewmysliuk/jobhound_core/internal/llm"
 	"github.com/andrewmysliuk/jobhound_core/internal/pipeline"
 	pipeutils "github.com/andrewmysliuk/jobhound_core/internal/pipeline/utils"
@@ -68,7 +68,7 @@ func (p *Pipeline) Run(ctx context.Context) error {
 		return err
 	}
 
-	var toSend []domain.ScoredJob
+	var toSend []schema.ScoredJob
 	for _, sj := range scored {
 		sent, err := p.Dedup.WasSent(ctx, sj.Job.ID)
 		if err != nil {

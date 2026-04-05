@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "score": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "rationale": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "required": ["score", "rationale"],
+  "additionalProperties": false
+}

@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors"
-	"github.com/andrewmysliuk/jobhound_core/internal/domain"
+	"github.com/andrewmysliuk/jobhound_core/internal/domain/schema"
 	"github.com/andrewmysliuk/jobhound_core/internal/ingest"
 	ingestschema "github.com/andrewmysliuk/jobhound_core/internal/ingest/schema"
 	"github.com/andrewmysliuk/jobhound_core/internal/jobs"
@@ -74,7 +74,7 @@ func (a *IngestActivities) RunIngestSource(ctx context.Context, in ingestschema.
 	}
 	defer func() { _ = release(ctx) }()
 
-	var list []domain.Job
+	var list []schema.Job
 	var usedIncr bool
 	var nextCursor string
 	if inc, ok := col.(collectors.IncrementalCollector); ok {

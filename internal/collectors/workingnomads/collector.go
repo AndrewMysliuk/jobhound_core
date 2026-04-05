@@ -12,7 +12,7 @@ import (
 	"strings"
 
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/utils"
-	"github.com/andrewmysliuk/jobhound_core/internal/domain"
+	"github.com/andrewmysliuk/jobhound_core/internal/domain/schema"
 )
 
 // SourceName is the normative Job.Source value (contracts/collector.md).
@@ -64,7 +64,7 @@ type WorkingNomads struct {
 func (*WorkingNomads) Name() string { return SourceName }
 
 // Fetch implements collectors.Collector.
-func (c *WorkingNomads) Fetch(ctx context.Context) ([]domain.Job, error) {
+func (c *WorkingNomads) Fetch(ctx context.Context) ([]schema.Job, error) {
 	client := c.HTTPClient
 	if client == nil {
 		client = utils.NewHTTPClient()
@@ -90,7 +90,7 @@ func (c *WorkingNomads) Fetch(ctx context.Context) ([]domain.Job, error) {
 		srcFields = defaultWNSource
 	}
 
-	var all []domain.Job
+	var all []schema.Job
 	from := 0
 	for {
 		reqBody := esSearchRequest{

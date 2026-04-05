@@ -17,8 +17,8 @@ import (
 	profileimpl "github.com/andrewmysliuk/jobhound_core/internal/profile/impl"
 	profilestorage "github.com/andrewmysliuk/jobhound_core/internal/profile/storage"
 	publicapihandlers "github.com/andrewmysliuk/jobhound_core/internal/publicapi/handlers"
-	"github.com/andrewmysliuk/jobhound_core/internal/slots"
 	slotsimpl "github.com/andrewmysliuk/jobhound_core/internal/slots/impl"
+	slotsutils "github.com/andrewmysliuk/jobhound_core/internal/slots/utils"
 	slotstorage "github.com/andrewmysliuk/jobhound_core/internal/slots/storage"
 	"go.temporal.io/sdk/client"
 )
@@ -63,7 +63,7 @@ func main() {
 	pipeRuns := pipelinestorage.NewRepository(getter)
 	profileRepo := profilestorage.NewRepository(getter)
 	profileSvc := profileimpl.NewService(profileRepo, pipeRuns, slotRepo, log)
-	slotSvc := slotsimpl.NewService(slotRepo, jobRepo, pipeRuns, profileSvc, tc, temporalCfg.TaskQueue, slots.DefaultIngestSourceIDs(), log)
+	slotSvc := slotsimpl.NewService(slotRepo, jobRepo, pipeRuns, profileSvc, tc, temporalCfg.TaskQueue, slotsutils.DefaultIngestSourceIDs(), log)
 
 	handler := publicapihandlers.NewHTTPHandler(appCfg.API.CORSAllowedOrigins, publicapihandlers.Deps{
 		Slots:   slotSvc,

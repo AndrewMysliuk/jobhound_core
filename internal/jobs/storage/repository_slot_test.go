@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/andrewmysliuk/jobhound_core/internal/jobs"
+	"github.com/andrewmysliuk/jobhound_core/internal/jobs/schema"
 	"github.com/andrewmysliuk/jobhound_core/internal/pipeline"
 	"github.com/andrewmysliuk/jobhound_core/internal/platform/pgsql"
 	"github.com/google/uuid"
@@ -76,7 +76,7 @@ func TestRepository_slotQueries_tableDriven(t *testing.T) {
 	slotA := uuid.MustParse("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
 	slotB := uuid.MustParse("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
 	now := time.Date(2026, 4, 1, 12, 0, 0, 0, time.UTC)
-	passed := jobs.Stage1StatusPassed
+	passed := schema.Stage1StatusPassed
 
 	t.Run("empty_slot_returns_no_jobs", func(t *testing.T) {
 		db := testSlotJobsDB(t)
@@ -239,7 +239,7 @@ func TestRepository_ListSlotStage1Jobs_paginationAndTotal(t *testing.T) {
 	ctx := context.Background()
 	slotA := uuid.MustParse("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
 	now := time.Date(2026, 4, 1, 12, 0, 0, 0, time.UTC)
-	passed := jobs.Stage1StatusPassed
+	passed := schema.Stage1StatusPassed
 	db := testSlotJobsDB(t)
 	repo := NewRepository(pgsql.NewGetter(db))
 	tA := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
@@ -289,7 +289,7 @@ func TestRepository_ListPipelineRunStage2Jobs_bucketFilter(t *testing.T) {
 	ctx := context.Background()
 	slotA := uuid.MustParse("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
 	now := time.Date(2026, 4, 1, 12, 0, 0, 0, time.UTC)
-	passed := jobs.Stage1StatusPassed
+	passed := schema.Stage1StatusPassed
 	db := testSlotJobsDB(t)
 	repo := NewRepository(pgsql.NewGetter(db))
 	if err := db.Exec(`
@@ -318,21 +318,21 @@ func TestRepository_ListPipelineRunStage2Jobs_bucketFilter(t *testing.T) {
 	if err := db.Exec(`INSERT INTO pipeline_run_jobs (pipeline_run_id, job_id, status) VALUES (1, 'jp', ?), (1, 'jr', ?)`, stP, stR).Error; err != nil {
 		t.Fatal(err)
 	}
-	all, total, err := repo.ListPipelineRunStage2Jobs(ctx, slotA, 1, jobs.ListBucketAll, 0, 10)
+	all, total, err := repo.ListPipelineRunStage2Jobs(ctx, slotA, 1, schema.ListBucketAll, 0, 10)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if total != 2 || len(all) != 2 {
 		t.Fatalf("all: total=%d len=%d", total, len(all))
 	}
-	passedOnly, totalP, err := repo.ListPipelineRunStage2Jobs(ctx, slotA, 1, jobs.ListBucketPassed, 0, 10)
+	passedOnly, totalP, err := repo.ListPipelineRunStage2Jobs(ctx, slotA, 1, schema.ListBucketPassed, 0, 10)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if totalP != 1 || len(passedOnly) != 1 || passedOnly[0].Job.ID != "jp" {
 		t.Fatalf("passed: %+v", passedOnly)
 	}
-	failedOnly, totalF, err := repo.ListPipelineRunStage2Jobs(ctx, slotA, 1, jobs.ListBucketFailed, 0, 10)
+	failedOnly, totalF, err := repo.ListPipelineRunStage2Jobs(ctx, slotA, 1, schema.ListBucketFailed, 0, 10)
 	if err != nil {
 		t.Fatal(err)
 	}

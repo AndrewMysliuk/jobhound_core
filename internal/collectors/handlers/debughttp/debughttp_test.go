@@ -15,12 +15,12 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/europeremotely"
-	"github.com/andrewmysliuk/jobhound_core/internal/domain"
+	"github.com/andrewmysliuk/jobhound_core/internal/domain/schema"
 )
 
 type stubCollector struct {
 	name string
-	jobs []domain.Job
+	jobs []schema.Job
 	err  error
 }
 
@@ -31,7 +31,7 @@ func (s stubCollector) Name() string {
 	return "stub"
 }
 
-func (s stubCollector) Fetch(context.Context) ([]domain.Job, error) {
+func (s stubCollector) Fetch(context.Context) ([]schema.Job, error) {
 	if s.err != nil {
 		return nil, s.err
 	}
@@ -63,7 +63,7 @@ func TestEuropeRemotely_ok(t *testing.T) {
 	t.Parallel()
 	er := stubCollector{
 		name: "europe_remotely",
-		jobs: []domain.Job{
+		jobs: []schema.Job{
 			{ID: "a", Title: "T1", Source: "europe_remotely"},
 		},
 	}
@@ -95,7 +95,7 @@ func TestWorkingNomads_ok(t *testing.T) {
 	er := stubCollector{name: "europe_remotely"}
 	wn := stubCollector{
 		name: "working_nomads",
-		jobs: []domain.Job{
+		jobs: []schema.Job{
 			{ID: "b", Title: "T2", Source: "working_nomads"},
 			{ID: "c", Title: "T3", Source: "working_nomads"},
 		},
@@ -144,9 +144,9 @@ func TestEuropeRemotely_fetchError(t *testing.T) {
 
 func TestEuropeRemotely_defaultLimitTruncates(t *testing.T) {
 	t.Parallel()
-	jobs := make([]domain.Job, 250)
+	jobs := make([]schema.Job, 250)
 	for i := range jobs {
-		jobs[i] = domain.Job{ID: fmt.Sprintf("id-%d", i), Title: "T", Source: "europe_remotely"}
+		jobs[i] = schema.Job{ID: fmt.Sprintf("id-%d", i), Title: "T", Source: "europe_remotely"}
 	}
 	er := stubCollector{name: "europe_remotely", jobs: jobs}
 	wn := stubCollector{name: "working_nomads"}

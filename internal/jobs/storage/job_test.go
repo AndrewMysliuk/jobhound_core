@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/andrewmysliuk/jobhound_core/internal/domain"
+	"github.com/andrewmysliuk/jobhound_core/internal/domain/schema"
 )
 
 func strPtr(s string) *string { return &s }
@@ -54,7 +54,7 @@ func stringSliceEqual(a, b []string) bool {
 	return true
 }
 
-func domainJobEqual(a, b domain.Job) bool {
+func domainJobEqual(a, b schema.Job) bool {
 	if a.ID != b.ID || a.Source != b.Source || a.Title != b.Title || a.Company != b.Company ||
 		a.URL != b.URL || a.ApplyURL != b.ApplyURL || a.Description != b.Description ||
 		a.SalaryRaw != b.SalaryRaw {
@@ -100,7 +100,7 @@ func TestNewJobModel(t *testing.T) {
 
 	cases := []struct {
 		name         string
-		in           domain.Job
+		in           schema.Job
 		wantApplyURL *string
 		wantPostedAt *time.Time
 		wantIsRemote *bool
@@ -109,7 +109,7 @@ func TestNewJobModel(t *testing.T) {
 	}{
 		{
 			name:         "empty optional fields stay nil pointers",
-			in:           domain.Job{},
+			in:           schema.Job{},
 			wantApplyURL: nil,
 			wantPostedAt: nil,
 			wantIsRemote: nil,
@@ -118,7 +118,7 @@ func TestNewJobModel(t *testing.T) {
 		},
 		{
 			name:         "apply_url set when non-empty",
-			in:           domain.Job{ApplyURL: "https://apply.example/1"},
+			in:           schema.Job{ApplyURL: "https://apply.example/1"},
 			wantApplyURL: strPtr("https://apply.example/1"),
 			wantPostedAt: nil,
 			wantIsRemote: nil,
@@ -127,52 +127,52 @@ func TestNewJobModel(t *testing.T) {
 		},
 		{
 			name:         "apply_url empty leaves nil",
-			in:           domain.Job{ApplyURL: ""},
+			in:           schema.Job{ApplyURL: ""},
 			wantApplyURL: nil,
 		},
 		{
 			name:         "posted_at zero leaves nil",
-			in:           domain.Job{PostedAt: time.Time{}},
+			in:           schema.Job{PostedAt: time.Time{}},
 			wantPostedAt: nil,
 		},
 		{
 			name:         "posted_at non-zero is copied",
-			in:           domain.Job{PostedAt: posted},
+			in:           schema.Job{PostedAt: posted},
 			wantPostedAt: &posted,
 		},
 		{
 			name:         "remote true",
-			in:           domain.Job{Remote: boolPtr(true)},
+			in:           schema.Job{Remote: boolPtr(true)},
 			wantIsRemote: boolPtr(true),
 		},
 		{
 			name:         "remote false",
-			in:           domain.Job{Remote: boolPtr(false)},
+			in:           schema.Job{Remote: boolPtr(false)},
 			wantIsRemote: boolPtr(false),
 		},
 		{
 			name:        "country code",
-			in:          domain.Job{CountryCode: "de"},
+			in:          schema.Job{CountryCode: "de"},
 			wantCountry: "de",
 		},
 		{
 			name:        "salary tags position",
-			in:          domain.Job{SalaryRaw: "50-70k", Tags: []string{"rust"}, Position: strPtr("backend")},
+			in:          schema.Job{SalaryRaw: "50-70k", Tags: []string{"rust"}, Position: strPtr("backend")},
 			wantCountry: "",
 		},
 		{
 			name:       "user_id nil stays nil",
-			in:         domain.Job{UserID: nil},
+			in:         schema.Job{UserID: nil},
 			wantUserID: nil,
 		},
 		{
 			name:       "user_id empty string pointer omitted in row",
-			in:         domain.Job{UserID: strPtr("")},
+			in:         schema.Job{UserID: strPtr("")},
 			wantUserID: nil,
 		},
 		{
 			name:       "user_id non-empty is copied",
-			in:         domain.Job{UserID: &uid},
+			in:         schema.Job{UserID: &uid},
 			wantUserID: &uid,
 		},
 	}
@@ -221,47 +221,47 @@ func TestJob_ToDomain(t *testing.T) {
 	cases := []struct {
 		name string
 		m    Job
-		want domain.Job
+		want schema.Job
 	}{
 		{
 			name: "posted_at nil maps to zero time",
 			m:    Job{PostedAt: nil},
-			want: domain.Job{PostedAt: time.Time{}},
+			want: schema.Job{PostedAt: time.Time{}},
 		},
 		{
 			name: "posted_at set",
 			m:    Job{PostedAt: &posted},
-			want: domain.Job{PostedAt: posted},
+			want: schema.Job{PostedAt: posted},
 		},
 		{
 			name: "apply_url nil is empty string",
 			m:    Job{ApplyURL: nil},
-			want: domain.Job{ApplyURL: ""},
+			want: schema.Job{ApplyURL: ""},
 		},
 		{
 			name: "apply_url non-nil including empty",
 			m:    Job{ApplyURL: &empty},
-			want: domain.Job{ApplyURL: ""},
+			want: schema.Job{ApplyURL: ""},
 		},
 		{
 			name: "apply_url value",
 			m:    Job{ApplyURL: &apply},
-			want: domain.Job{ApplyURL: apply},
+			want: schema.Job{ApplyURL: apply},
 		},
 		{
 			name: "user_id nil",
 			m:    Job{UserID: nil},
-			want: domain.Job{UserID: nil},
+			want: schema.Job{UserID: nil},
 		},
 		{
 			name: "user_id empty string omitted in domain",
 			m:    Job{UserID: &empty},
-			want: domain.Job{UserID: nil},
+			want: schema.Job{UserID: nil},
 		},
 		{
 			name: "user_id set",
 			m:    Job{UserID: &uid},
-			want: domain.Job{UserID: &uid},
+			want: schema.Job{UserID: &uid},
 		},
 		{
 			name: "full row",
@@ -269,7 +269,7 @@ func TestJob_ToDomain(t *testing.T) {
 				ID: "id1", Source: "src", Title: "t", Company: "co", URL: "https://list",
 				ApplyURL: &apply, Description: "desc", PostedAt: &posted, UserID: &uid,
 			},
-			want: domain.Job{
+			want: schema.Job{
 				ID: "id1", Source: "src", Title: "t", Company: "co", URL: "https://list",
 				ApplyURL: apply, Description: "desc", PostedAt: posted, UserID: &uid,
 			},
@@ -292,54 +292,54 @@ func TestJobModel_roundTrip(t *testing.T) {
 
 	cases := []struct {
 		name string
-		in   domain.Job
-		want domain.Job // normalized expectation after model round-trip
+		in   schema.Job
+		want schema.Job // normalized expectation after model round-trip
 	}{
 		{
 			name: "minimal",
-			in:   domain.Job{},
-			want: domain.Job{},
+			in:   schema.Job{},
+			want: schema.Job{},
 		},
 		{
 			name: "all fields",
-			in: domain.Job{
+			in: schema.Job{
 				ID: "j1", Source: "board", Title: "Eng", Company: "Co", URL: "https://job",
 				ApplyURL: "https://ats", Description: "text", PostedAt: posted, UserID: &uid,
 			},
-			want: domain.Job{
+			want: schema.Job{
 				ID: "j1", Source: "board", Title: "Eng", Company: "Co", URL: "https://job",
 				ApplyURL: "https://ats", Description: "text", PostedAt: posted, UserID: &uid,
 			},
 		},
 		{
 			name: "optional apply and times zero",
-			in: domain.Job{
+			in: schema.Job{
 				ID: "x", Source: "s", Title: "t", Company: "c", URL: "u", Description: "d",
 			},
-			want: domain.Job{
+			want: schema.Job{
 				ID: "x", Source: "s", Title: "t", Company: "c", URL: "u", Description: "d",
 			},
 		},
 		{
 			name: "user_id empty pointer normalized away",
-			in:   domain.Job{ID: "only", UserID: strPtr("")},
-			want: domain.Job{ID: "only", UserID: nil},
+			in:   schema.Job{ID: "only", UserID: strPtr("")},
+			want: schema.Job{ID: "only", UserID: nil},
 		},
 		{
 			name: "remote and country",
-			in: domain.Job{
+			in: schema.Job{
 				ID: "j2", Remote: boolPtr(true), CountryCode: "US",
 			},
-			want: domain.Job{
+			want: schema.Job{
 				ID: "j2", Remote: boolPtr(true), CountryCode: "US",
 			},
 		},
 		{
 			name: "salary tags position",
-			in: domain.Job{
+			in: schema.Job{
 				ID: "j3", SalaryRaw: "€80k", Tags: []string{"go", "backend"}, Position: strPtr("backend"),
 			},
-			want: domain.Job{
+			want: schema.Job{
 				ID: "j3", SalaryRaw: "€80k", Tags: []string{"go", "backend"}, Position: strPtr("backend"),
 			},
 		},

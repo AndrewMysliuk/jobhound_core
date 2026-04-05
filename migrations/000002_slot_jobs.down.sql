@@ -1,1 +1,0 @@
-DROP TABLE IF EXISTS slot_jobs;

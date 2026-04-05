@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/andrewmysliuk/jobhound_core/internal/domain"
+	"github.com/andrewmysliuk/jobhound_core/internal/domain/schema"
 	"github.com/andrewmysliuk/jobhound_core/internal/pipeline"
 )
 
@@ -22,7 +22,7 @@ func ValidateBroadFilterRules(rules pipeline.BroadFilterRules) error {
 
 // ApplyBroadFilter returns jobs that pass stage 1 rules, preserving input order.
 // clock supplies "now" for the default 7-day window when From/To are unset; if nil, time.Now is used.
-func ApplyBroadFilter(clock func() time.Time, rules pipeline.BroadFilterRules, jobs []domain.Job) ([]domain.Job, error) {
+func ApplyBroadFilter(clock func() time.Time, rules pipeline.BroadFilterRules, jobs []schema.Job) ([]schema.Job, error) {
 	if err := ValidateBroadFilterRules(rules); err != nil {
 		return nil, err
 	}
@@ -43,7 +43,7 @@ func ApplyBroadFilter(clock func() time.Time, rules pipeline.BroadFilterRules, j
 	syns := effectiveSynonyms(rules.RoleSynonyms)
 	allow := effectiveCountryAllowlist(rules.CountryAllowlist)
 
-	out := make([]domain.Job, 0, len(jobs))
+	out := make([]schema.Job, 0, len(jobs))
 	for _, j := range jobs {
 		if !postedInWindow(j, winFrom, winTo) {
 			continue
@@ -62,7 +62,7 @@ func ApplyBroadFilter(clock func() time.Time, rules pipeline.BroadFilterRules, j
 	return out, nil
 }
 
-func postedInWindow(j domain.Job, windowFrom, windowTo time.Time) bool {
+func postedInWindow(j schema.Job, windowFrom, windowTo time.Time) bool {
 	if j.PostedAt.IsZero() {
 		return false
 	}
@@ -81,7 +81,7 @@ func effectiveSynonyms(synonyms []string) []string {
 	return out
 }
 
-func matchesRoleSynonyms(j domain.Job, synonyms []string) bool {
+func matchesRoleSynonyms(j schema.Job, synonyms []string) bool {
 	if len(synonyms) == 0 {
 		return true
 	}
@@ -94,7 +94,7 @@ func matchesRoleSynonyms(j domain.Job, synonyms []string) bool {
 	return false
 }
 
-func passesRemoteRule(j domain.Job, remoteOnly bool) bool {
+func passesRemoteRule(j schema.Job, remoteOnly bool) bool {
 	if !remoteOnly {
 		return true
 	}
@@ -112,7 +112,7 @@ func effectiveCountryAllowlist(list []string) []string {
 	return out
 }
 
-func passesCountryRule(j domain.Job, allowUpper []string) bool {
+func passesCountryRule(j schema.Job, allowUpper []string) bool {
 	if len(allowUpper) == 0 {
 		return true
 	}

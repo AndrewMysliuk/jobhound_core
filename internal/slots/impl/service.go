@@ -13,6 +13,7 @@ import (
 	"github.com/andrewmysliuk/jobhound_core/internal/publicapi/schema"
 	"github.com/andrewmysliuk/jobhound_core/internal/slots"
 	slotstorage "github.com/andrewmysliuk/jobhound_core/internal/slots/storage"
+	slotworkflows "github.com/andrewmysliuk/jobhound_core/internal/slots/workflows"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	"go.temporal.io/sdk/client"
@@ -160,9 +161,9 @@ func (s *Service) card(ctx context.Context, row slotstorage.Slot) (*schema.SlotC
 	if err != nil {
 		return nil, err
 	}
-	st1 := stage1FromDescribe(s.Temporal.DescribeWorkflow(ctx, ingestWorkflowID(uid), ""))
-	st2 := stage2FromDescribe(s.Temporal.DescribeWorkflow(ctx, stage2WorkflowID(uid), ""))
-	st3 := stage3FromDescribe(s.Temporal.DescribeWorkflow(ctx, stage3WorkflowID(uid), ""))
+	st1 := slotworkflows.Stage1FromDescribe(s.Temporal.DescribeWorkflow(ctx, ingestWorkflowID(uid), ""))
+	st2 := slotworkflows.Stage2FromDescribe(s.Temporal.DescribeWorkflow(ctx, stage2WorkflowID(uid), ""))
+	st3 := slotworkflows.Stage3FromDescribe(s.Temporal.DescribeWorkflow(ctx, stage3WorkflowID(uid), ""))
 	return &schema.SlotCard{
 		ID:        row.ID,
 		Name:      row.Name,

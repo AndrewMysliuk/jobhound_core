@@ -66,7 +66,7 @@
 
 ## F. Public API handlers (`cmd/api`)
 
-1. [x] Extend [`handler.go`](../../internal/publicapi/handlers/handler.go) **`Deps`** with `zerolog.Logger`; pass into handlers via `routeLog` / `ReadJSON`. **Every** route:
+1. [x] Extend [`handler.go`](../../internal/publicapi/handlers/handler.go) **`Deps`** with `zerolog.Logger`; pass into handlers via `routeLog` / `publicapi/utils.ReadJSON` (or `ReadValidatedJSON`). **Every** route:
 
 | File | Route / handler |
 |------|-----------------|

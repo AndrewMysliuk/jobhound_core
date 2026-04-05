@@ -5,11 +5,11 @@ package llm
 import (
 	"context"
 
-	"github.com/andrewmysliuk/jobhound_core/internal/domain"
+	"github.com/andrewmysliuk/jobhound_core/internal/domain/schema"
 )
 
 // Scorer scores one item (e.g. a job) against user profile text. Implementations may call
 // Anthropic, OpenAI, local models, etc.; wire-up supplies keys and models, not os.Getenv here.
 type Scorer interface {
-	Score(ctx context.Context, profile string, job domain.Job) (domain.ScoredJob, error)
+	Score(ctx context.Context, profile string, job schema.Job) (schema.ScoredJob, error)
 }

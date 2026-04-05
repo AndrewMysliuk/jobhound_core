@@ -5,8 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/andrewmysliuk/jobhound_core/internal/domain"
+	jobdata "github.com/andrewmysliuk/jobhound_core/internal/domain/schema"
 	"github.com/andrewmysliuk/jobhound_core/internal/jobs"
+	jobsschema "github.com/andrewmysliuk/jobhound_core/internal/jobs/schema"
 	jobutils "github.com/andrewmysliuk/jobhound_core/internal/jobs/utils"
 	"github.com/andrewmysliuk/jobhound_core/internal/platform/logging"
 	"github.com/google/uuid"
@@ -17,12 +18,12 @@ type retentionJobsStub struct {
 	n      int64
 }
 
-func (r *retentionJobsStub) Save(context.Context, domain.Job) error { return nil }
+func (r *retentionJobsStub) Save(context.Context, jobdata.Job) error { return nil }
 
-func (r *retentionJobsStub) SaveIngest(context.Context, domain.Job) (bool, error) { return false, nil }
+func (r *retentionJobsStub) SaveIngest(context.Context, jobdata.Job) (bool, error) { return false, nil }
 
-func (r *retentionJobsStub) GetByID(context.Context, string) (domain.Job, error) {
-	return domain.Job{}, nil
+func (r *retentionJobsStub) GetByID(context.Context, string) (jobdata.Job, error) {
+	return jobdata.Job{}, nil
 }
 
 func (r *retentionJobsStub) DeleteJobsCreatedBeforeUTC(_ context.Context, cutoff time.Time) (int64, error) {
@@ -32,23 +33,23 @@ func (r *retentionJobsStub) DeleteJobsCreatedBeforeUTC(_ context.Context, cutoff
 
 func (r *retentionJobsStub) UpsertSlotJob(context.Context, uuid.UUID, string) error { return nil }
 
-func (r *retentionJobsStub) ListSlotJobsPassedStage1(context.Context, uuid.UUID) ([]domain.Job, error) {
+func (r *retentionJobsStub) ListSlotJobsPassedStage1(context.Context, uuid.UUID) ([]jobdata.Job, error) {
 	return nil, nil
 }
 
-func (r *retentionJobsStub) ListPassedStage2JobsForRun(context.Context, int64) ([]domain.Job, error) {
+func (r *retentionJobsStub) ListPassedStage2JobsForRun(context.Context, int64) ([]jobdata.Job, error) {
 	return nil, nil
 }
 
-func (r *retentionJobsStub) ListSlotStage1Jobs(context.Context, uuid.UUID, int, int) ([]jobs.JobListEntry, int64, error) {
+func (r *retentionJobsStub) ListSlotStage1Jobs(context.Context, uuid.UUID, int, int) ([]jobsschema.JobListEntry, int64, error) {
 	return nil, 0, nil
 }
 
-func (r *retentionJobsStub) ListPipelineRunStage2Jobs(context.Context, uuid.UUID, int64, jobs.ListBucket, int, int) ([]jobs.JobListEntry, int64, error) {
+func (r *retentionJobsStub) ListPipelineRunStage2Jobs(context.Context, uuid.UUID, int64, jobsschema.ListBucket, int, int) ([]jobsschema.JobListEntry, int64, error) {
 	return nil, 0, nil
 }
 
-func (r *retentionJobsStub) ListPipelineRunStage3Jobs(context.Context, uuid.UUID, int64, jobs.ListBucket, int, int) ([]jobs.JobListEntry, int64, error) {
+func (r *retentionJobsStub) ListPipelineRunStage3Jobs(context.Context, uuid.UUID, int64, jobsschema.ListBucket, int, int) ([]jobsschema.JobListEntry, int64, error) {
 	return nil, 0, nil
 }
 

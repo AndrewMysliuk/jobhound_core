@@ -10,7 +10,7 @@
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `JOBHOUND_ANTHROPIC_API_KEY` | Yes for **real** Claude calls | API key for Anthropic; **omit or empty** for unit tests and mock-only runs. |
-| `JOBHOUND_ANTHROPIC_MODEL` | No | Claude model id for the Messages API; defaults to `claude-3-5-haiku-20241022` when unset (see `config.DefaultAnthropicModel`). |
+| `JOBHOUND_ANTHROPIC_MODEL` | No | Claude model id for the Messages API; defaults to `claude-haiku-4-5` when unset (structured outputs; see `config.DefaultAnthropicModel`). |
 
 **Do not** commit keys; document the **name** only in README and this file.
 

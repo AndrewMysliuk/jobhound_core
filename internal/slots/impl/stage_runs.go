@@ -10,6 +10,7 @@ import (
 	"github.com/andrewmysliuk/jobhound_core/internal/pipeline"
 	"github.com/andrewmysliuk/jobhound_core/internal/publicapi/schema"
 	"github.com/andrewmysliuk/jobhound_core/internal/slots"
+	slotworkflows "github.com/andrewmysliuk/jobhound_core/internal/slots/workflows"
 	"github.com/google/uuid"
 	enumspb "go.temporal.io/api/enums/v1"
 	"go.temporal.io/sdk/client"
@@ -41,7 +42,7 @@ func (s *Service) RunStage2(ctx context.Context, slotID string, include, exclude
 		return nil, err
 	}
 	wid := stage2WorkflowID(u)
-	running, err := workflowExecutionRunning(s.Temporal.DescribeWorkflow(ctx, wid, ""))
+	running, err := slotworkflows.WorkflowExecutionRunning(s.Temporal.DescribeWorkflow(ctx, wid, ""))
 	if err != nil {
 		return nil, err
 	}
@@ -89,7 +90,7 @@ func (s *Service) RunStage3(ctx context.Context, slotID string, maxJobs int) (*s
 		return nil, err
 	}
 	wid := stage3WorkflowID(u)
-	running, err := workflowExecutionRunning(s.Temporal.DescribeWorkflow(ctx, wid, ""))
+	running, err := slotworkflows.WorkflowExecutionRunning(s.Temporal.DescribeWorkflow(ctx, wid, ""))
 	if err != nil {
 		return nil, err
 	}

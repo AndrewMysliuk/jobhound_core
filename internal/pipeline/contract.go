@@ -8,7 +8,7 @@ package pipeline
 import (
 	"context"
 
-	"github.com/andrewmysliuk/jobhound_core/internal/domain"
+	"github.com/andrewmysliuk/jobhound_core/internal/domain/schema"
 	"github.com/google/uuid"
 )
 
@@ -20,7 +20,7 @@ type Dedup interface {
 
 // Notifier delivers scored jobs to a downstream channel (orchestration-owned; not used for MVP push).
 type Notifier interface {
-	Send(ctx context.Context, jobs []domain.ScoredJob) error
+	Send(ctx context.Context, jobs []schema.ScoredJob) error
 }
 
 // PipelineRunRepository persists pipeline_runs and pipeline_run_jobs (007).

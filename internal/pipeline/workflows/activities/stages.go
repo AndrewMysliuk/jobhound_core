@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/andrewmysliuk/jobhound_core/internal/domain"
+	"github.com/andrewmysliuk/jobhound_core/internal/domain/schema"
 	"github.com/andrewmysliuk/jobhound_core/internal/jobs"
 	"github.com/andrewmysliuk/jobhound_core/internal/llm"
 	manualschema "github.com/andrewmysliuk/jobhound_core/internal/manual/schema"
@@ -153,7 +153,7 @@ func (a *Activities) RunPersistPipelineStage3(ctx context.Context, in pipelinesc
 
 	// SetRunJobStatus is idempotent for terminal rows; GetRunJobStatus skips duplicate LLM work on retry.
 	sentIDs := append([]string(nil), in.Stage3SentJobIDs...)
-	var scored []domain.ScoredJob
+	var scored []schema.ScoredJob
 	for _, id := range selected {
 		if cur, ok, err := a.Runs.GetRunJobStatus(ctx, in.PipelineRunID, id); err != nil {
 			log.Error().Err(err).Str("job_id", id).Msg("get run job status")

@@ -1,9 +1,10 @@
-package domain
+// Package schema holds cross-module vacancy types shared by collectors, pipeline, jobs storage, and LLM scoring.
+package schema
 
 import "time"
 
 // Job is the normalized vacancy flowing through the pipeline.
-// ID is set via StableJobID / AssignStableID (see specs/001-agent-skeleton-and-domain/spec.md).
+// ID is set via StableJobID / AssignStableID in domain/utils (see specs/001-agent-skeleton-and-domain/spec.md).
 type Job struct {
 	ID          string
 	Source      string // e.g. "himalayas", "djinni"

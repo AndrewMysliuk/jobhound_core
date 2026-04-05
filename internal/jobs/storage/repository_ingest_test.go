@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/andrewmysliuk/jobhound_core/internal/domain"
-	"github.com/andrewmysliuk/jobhound_core/internal/jobs"
+	jobdata "github.com/andrewmysliuk/jobhound_core/internal/domain/schema"
+	jobsschema "github.com/andrewmysliuk/jobhound_core/internal/jobs/schema"
 	"github.com/andrewmysliuk/jobhound_core/internal/pipeline"
 	"github.com/andrewmysliuk/jobhound_core/internal/platform/pgsql"
 	"gorm.io/driver/sqlite"
@@ -59,7 +59,7 @@ func TestRepository_SaveIngest_insertSetsStage1(t *testing.T) {
 	repo := NewRepository(pgsql.NewGetter(db))
 	now := time.Date(2026, 4, 1, 12, 0, 0, 0, time.UTC)
 
-	j := domain.Job{
+	j := jobdata.Job{
 		ID: "j1", Source: "src", Title: "t", Company: "c", URL: "https://u",
 		Description: "d1", PostedAt: now, Tags: []string{"go", "rust"},
 	}
@@ -73,7 +73,7 @@ func TestRepository_SaveIngest_insertSetsStage1(t *testing.T) {
 	if err := db.Raw(`SELECT stage1_status FROM jobs WHERE id = ?`, "j1").Scan(&st).Error; err != nil {
 		t.Fatal(err)
 	}
-	if st == nil || *st != jobs.Stage1StatusPassed {
+	if st == nil || *st != jobsschema.Stage1StatusPassed {
 		t.Fatalf("stage1_status = %v, want PASSED_STAGE_1", st)
 	}
 }
@@ -83,7 +83,7 @@ func TestRepository_SaveIngest_skipUnchanged(t *testing.T) {
 	db := testJobsDB(t)
 	repo := NewRepository(pgsql.NewGetter(db))
 	now := time.Date(2026, 4, 1, 12, 0, 0, 0, time.UTC)
-	passed := jobs.Stage1StatusPassed
+	passed := jobsschema.Stage1StatusPassed
 	if err := db.Exec(`
 		INSERT INTO jobs (id, source, title, company, url, description, tags, posted_at, stage1_status, created_at, updated_at)
 		VALUES ('j1', 'src', 't', 'c', 'https://u', 'same', '["go"]', ?, ?, ?, ?)`,
@@ -91,7 +91,7 @@ func TestRepository_SaveIngest_skipUnchanged(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	j := domain.Job{
+	j := jobdata.Job{
 		ID: "j1", Source: "src", Title: "t", Company: "c", URL: "https://u",
 		Description: "same", PostedAt: now, Tags: []string{"go"},
 	}
@@ -106,7 +106,7 @@ func TestRepository_SaveIngest_descriptionOnlyUpdates(t *testing.T) {
 	db := testJobsDB(t)
 	repo := NewRepository(pgsql.NewGetter(db))
 	now := time.Date(2026, 4, 1, 12, 0, 0, 0, time.UTC)
-	passed := jobs.Stage1StatusPassed
+	passed := jobsschema.Stage1StatusPassed
 	if err := db.Exec(`
 		INSERT INTO jobs (id, source, title, company, url, description, tags, posted_at, stage1_status, created_at, updated_at)
 		VALUES ('j1', 'src', 't', 'c', 'https://u', 'old', '["go"]', ?, ?, ?, ?)`,
@@ -114,7 +114,7 @@ func TestRepository_SaveIngest_descriptionOnlyUpdates(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	j := domain.Job{
+	j := jobdata.Job{
 		ID: "j1", Source: "src", Title: "t", Company: "c", URL: "https://u",
 		Description: "new", PostedAt: now, Tags: []string{"go"},
 	}
@@ -144,7 +144,7 @@ func TestRepository_SaveIngest_legacyNullStage1FullUpdate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	j := domain.Job{
+	j := jobdata.Job{
 		ID: "j1", Source: "src", Title: "t", Company: "c", URL: "https://u",
 		Description: "same", PostedAt: now, Tags: []string{"go"},
 	}
@@ -157,7 +157,7 @@ func TestRepository_SaveIngest_legacyNullStage1FullUpdate(t *testing.T) {
 	if err := db.Raw(`SELECT stage1_status FROM jobs WHERE id = ?`, "j1").Scan(&st).Error; err != nil {
 		t.Fatal(err)
 	}
-	if st == nil || *st != jobs.Stage1StatusPassed {
+	if st == nil || *st != jobsschema.Stage1StatusPassed {
 		t.Fatalf("stage1_status = %v", st)
 	}
 }
@@ -167,7 +167,7 @@ func TestRepository_SaveIngest_descriptionOnlyDoesNotTouchPipelineRunJobs(t *tes
 	db := testJobsDB(t)
 	repo := NewRepository(pgsql.NewGetter(db))
 	now := time.Date(2026, 4, 1, 12, 0, 0, 0, time.UTC)
-	passed := jobs.Stage1StatusPassed
+	passed := jobsschema.Stage1StatusPassed
 
 	extra := []string{
 		`CREATE TABLE pipeline_runs (
@@ -206,7 +206,7 @@ func TestRepository_SaveIngest_descriptionOnlyDoesNotTouchPipelineRunJobs(t *tes
 		t.Fatal(err)
 	}
 
-	j := domain.Job{
+	j := jobdata.Job{
 		ID: "j1", Source: "src", Title: "t", Company: "c", URL: "https://u",
 		Description: "new", PostedAt: now, Tags: []string{"go"},
 	}

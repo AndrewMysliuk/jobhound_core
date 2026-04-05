@@ -3,7 +3,7 @@ package debughttp
 import (
 	"time"
 
-	"github.com/andrewmysliuk/jobhound_core/internal/domain"
+	"github.com/andrewmysliuk/jobhound_core/internal/domain/schema"
 )
 
 type runCollectorResponse struct {
@@ -32,7 +32,7 @@ type jobDebugJSON struct {
 	UserID      *string  `json:"user_id,omitempty"`
 }
 
-func jobToDebugJSON(j domain.Job) jobDebugJSON {
+func jobToDebugJSON(j schema.Job) jobDebugJSON {
 	out := jobDebugJSON{
 		ID:          j.ID,
 		Source:      j.Source,

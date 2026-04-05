@@ -1,6 +1,6 @@
 package schema
 
-// Stage2RunRequest is POST …/stages/2/run body (required keys include, exclude).
+// Stage2RunRequest is POST …/stages/2/run body.
 type Stage2RunRequest struct {
 	Include []string `json:"include"`
 	Exclude []string `json:"exclude"`

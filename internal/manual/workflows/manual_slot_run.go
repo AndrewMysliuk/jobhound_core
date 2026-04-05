@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/andrewmysliuk/jobhound_core/internal/domain"
+	"github.com/andrewmysliuk/jobhound_core/internal/domain/schema"
 	ingestschema "github.com/andrewmysliuk/jobhound_core/internal/ingest/schema"
 	ingest_workflows "github.com/andrewmysliuk/jobhound_core/internal/ingest/workflows"
 	manualschema "github.com/andrewmysliuk/jobhound_core/internal/manual/schema"
@@ -72,7 +72,7 @@ func ManualSlotRunWorkflow(ctx workflow.Context, in manualschema.ManualSlotRunWo
 
 	if in.NeedsStage2() {
 		ctxAct := workflow.WithActivityOptions(ctx, temporalopts.DefaultActivityOptions())
-		var jobs []domain.Job
+		var jobs []schema.Job
 		if err := workflow.ExecuteActivity(ctxAct, manualschema.ListSlotJobsPassedStage1ActivityName, in.SlotID).Get(ctxAct, &jobs); err != nil {
 			workflow.GetLogger(ctx).Error("ListSlotJobsPassedStage1 activity failed",
 				logging.FieldWorkflow, manualschema.ManualSlotRunWorkflowName,

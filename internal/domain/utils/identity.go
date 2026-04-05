@@ -1,10 +1,13 @@
-package domain
+// Package utils holds stable vacancy identity helpers for the shared domain schema types.
+package utils
 
 import (
 	"errors"
 	"fmt"
 	"net/url"
 	"strings"
+
+	"github.com/andrewmysliuk/jobhound_core/internal/domain/schema"
 )
 
 // idSep is the unit separator (U+001E); unlikely in source keys or URLs.
@@ -54,7 +57,7 @@ func StableJobID(source, listingURL string) (string, error) {
 }
 
 // AssignStableID sets j.ID from Source and listing URL, or ApplyURL if listing URL is empty (spec fallback).
-func AssignStableID(j *Job) error {
+func AssignStableID(j *schema.Job) error {
 	if j == nil {
 		return errors.New("nil job")
 	}

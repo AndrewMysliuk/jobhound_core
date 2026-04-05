@@ -6,6 +6,7 @@ import (
 
 	"github.com/andrewmysliuk/jobhound_core/internal/platform/logging"
 	"github.com/andrewmysliuk/jobhound_core/internal/profile"
+	apputils "github.com/andrewmysliuk/jobhound_core/internal/publicapi/utils"
 	"github.com/andrewmysliuk/jobhound_core/internal/slots"
 	"github.com/rs/zerolog"
 )
@@ -31,7 +32,7 @@ func NewHTTPHandler(corsAllowedOrigins []string, deps Deps) *HTTPHandler {
 		deps: deps,
 	}
 	h.registerRoutes()
-	h.chain = logging.RequestIDMiddleware(withCORS(corsAllowedOrigins, h.mux))
+	h.chain = logging.RequestIDMiddleware(apputils.WithCORS(corsAllowedOrigins, h.mux))
 	return h
 }
 

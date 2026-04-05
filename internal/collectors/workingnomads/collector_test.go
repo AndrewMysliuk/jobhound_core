@@ -17,7 +17,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/utils"
-	"github.com/andrewmysliuk/jobhound_core/internal/domain"
+	"github.com/andrewmysliuk/jobhound_core/internal/domain/schema"
+	domainutils "github.com/andrewmysliuk/jobhound_core/internal/domain/utils"
 )
 
 const searchFixtureJSON = `{
@@ -88,7 +89,7 @@ func TestDecodeSearchJSON_toJob(t *testing.T) {
 	require.NotNil(t, j.Position)
 	require.Equal(t, "full-stack", *j.Position)
 	require.NotEmpty(t, j.ID)
-	wantID, err := domain.StableJobID(SourceName, j.URL)
+	wantID, err := domainutils.StableJobID(SourceName, j.URL)
 	require.NoError(t, err)
 	require.Equal(t, wantID, j.ID)
 }
@@ -125,7 +126,7 @@ func TestDecodeSearchJSON_skipsExpired(t *testing.T) {
 }`
 	var resp searchResponse
 	require.NoError(t, json.Unmarshal([]byte(both), &resp))
-	var jobs []domain.Job
+	var jobs []schema.Job
 	for _, h := range resp.Hits.Hits {
 		j, err := jobFromSource(nil, h.Source)
 		if errors.Is(err, errSkipHit) {

@@ -6,27 +6,27 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/andrewmysliuk/jobhound_core/internal/jobs"
+	jobschema "github.com/andrewmysliuk/jobhound_core/internal/jobs/schema"
 	"github.com/andrewmysliuk/jobhound_core/internal/pipeline"
 	"github.com/andrewmysliuk/jobhound_core/internal/publicapi/schema"
 	"github.com/andrewmysliuk/jobhound_core/internal/slots"
 	"github.com/google/uuid"
 )
 
-func listBucketFromQuery(bucket string) (jobs.ListBucket, error) {
+func listBucketFromQuery(bucket string) (jobschema.ListBucket, error) {
 	switch strings.TrimSpace(bucket) {
 	case "":
-		return jobs.ListBucketAll, nil
+		return jobschema.ListBucketAll, nil
 	case "passed":
-		return jobs.ListBucketPassed, nil
+		return jobschema.ListBucketPassed, nil
 	case "failed":
-		return jobs.ListBucketFailed, nil
+		return jobschema.ListBucketFailed, nil
 	default:
 		return 0, fmt.Errorf("invalid bucket")
 	}
 }
 
-func jobListItemFromEntry(e jobs.JobListEntry) schema.JobListItem {
+func jobListItemFromEntry(e jobschema.JobListEntry) schema.JobListItem {
 	item := schema.JobListItem{
 		JobID:           e.Job.ID,
 		Title:           e.Job.Title,
@@ -62,7 +62,7 @@ func (s *Service) ListJobs(ctx context.Context, slotID string, stage, page, limi
 		return schema.JobListResponse{}, slots.ErrInvalidJobListQuery
 	}
 	offset := (page - 1) * limit
-	var entries []jobs.JobListEntry
+	var entries []jobschema.JobListEntry
 	var total int64
 	switch stage {
 	case 1:

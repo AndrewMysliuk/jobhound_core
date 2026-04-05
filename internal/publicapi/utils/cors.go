@@ -1,8 +1,9 @@
-package handlers
+package utils
 
 import "net/http"
 
-func withCORS(allowedOrigins []string, next http.Handler) http.Handler {
+// WithCORS wraps next with Access-Control-Allow-* for listed origins and handles OPTIONS preflight.
+func WithCORS(allowedOrigins []string, next http.Handler) http.Handler {
 	allow := make(map[string]struct{}, len(allowedOrigins))
 	for _, o := range allowedOrigins {
 		if o == "" {

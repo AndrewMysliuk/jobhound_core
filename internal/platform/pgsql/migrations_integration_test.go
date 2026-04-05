@@ -145,9 +145,10 @@ func TestMigrations007PipelineTables_integration(t *testing.T) {
 		dataType string
 		nullable string
 	}{
-		"pipeline_run_id": {"bigint", "NO"},
-		"job_id":          {"text", "NO"},
-		"status":          {"text", "NO"},
+		"pipeline_run_id":  {"bigint", "NO"},
+		"job_id":           {"text", "NO"},
+		"status":           {"text", "NO"},
+		"stage3_rationale": {"text", "YES"},
 	})
 
 	var nIdx int

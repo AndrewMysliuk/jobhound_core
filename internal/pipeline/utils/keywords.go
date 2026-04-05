@@ -3,18 +3,18 @@ package utils
 import (
 	"strings"
 
-	"github.com/andrewmysliuk/jobhound_core/internal/domain"
+	"github.com/andrewmysliuk/jobhound_core/internal/domain/schema"
 	"github.com/andrewmysliuk/jobhound_core/internal/pipeline"
 )
 
 // ApplyKeywordFilter returns jobs that pass stage 2 rules, preserving input order.
 // Include constraints are evaluated first, then exclude (same outcome as a single pass:
 // a job must satisfy all includes and must not match any exclude pattern).
-func ApplyKeywordFilter(jobs []domain.Job, rules pipeline.KeywordRules) []domain.Job {
+func ApplyKeywordFilter(jobs []schema.Job, rules pipeline.KeywordRules) []schema.Job {
 	inc := nonEmptyPatterns(rules.Include)
 	exc := nonEmptyPatterns(rules.Exclude)
 
-	out := make([]domain.Job, 0, len(jobs))
+	out := make([]schema.Job, 0, len(jobs))
 	for _, j := range jobs {
 		hay := keywordHaystack(j)
 		if !matchesAllIncludes(hay, inc) {
@@ -28,7 +28,7 @@ func ApplyKeywordFilter(jobs []domain.Job, rules pipeline.KeywordRules) []domain
 	return out
 }
 
-func keywordHaystack(j domain.Job) string {
+func keywordHaystack(j schema.Job) string {
 	return strings.ToLower(j.Title + " " + j.Description)
 }
 

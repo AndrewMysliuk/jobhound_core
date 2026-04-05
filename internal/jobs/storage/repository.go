@@ -6,8 +6,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/andrewmysliuk/jobhound_core/internal/domain"
+	jobdata "github.com/andrewmysliuk/jobhound_core/internal/domain/schema"
 	"github.com/andrewmysliuk/jobhound_core/internal/jobs"
+	jobsschema "github.com/andrewmysliuk/jobhound_core/internal/jobs/schema"
 	"github.com/andrewmysliuk/jobhound_core/internal/platform/pgsql"
 	"gorm.io/gorm"
 )
@@ -28,7 +29,7 @@ func NewRepository(get pgsql.GormGetter) *Repository {
 }
 
 // Save inserts or updates a row by primary key id (GORM Save).
-func (r *Repository) Save(ctx context.Context, job domain.Job) error {
+func (r *Repository) Save(ctx context.Context, job jobdata.Job) error {
 	if job.ID == "" {
 		return fmt.Errorf("job id is required")
 	}
@@ -37,13 +38,13 @@ func (r *Repository) Save(ctx context.Context, job domain.Job) error {
 }
 
 // SaveIngest implements [jobs.JobRepository.SaveIngest].
-func (r *Repository) SaveIngest(ctx context.Context, job domain.Job) (skipped bool, err error) {
+func (r *Repository) SaveIngest(ctx context.Context, job jobdata.Job) (skipped bool, err error) {
 	if job.ID == "" {
 		return false, fmt.Errorf("job id is required")
 	}
 	now := time.Now().UTC()
 	want := job
-	passed := jobs.Stage1StatusPassed
+	passed := jobsschema.Stage1StatusPassed
 	want.Stage1Status = &passed
 
 	existing, err := r.GetByID(ctx, want.ID)
@@ -89,17 +90,17 @@ func existingRowCreatedAt(ctx context.Context, r *Repository, id string) time.Ti
 }
 
 // GetByID loads one job by stable id.
-func (r *Repository) GetByID(ctx context.Context, id string) (domain.Job, error) {
+func (r *Repository) GetByID(ctx context.Context, id string) (jobdata.Job, error) {
 	if id == "" {
-		return domain.Job{}, fmt.Errorf("job id is required")
+		return jobdata.Job{}, fmt.Errorf("job id is required")
 	}
 	var m Job
 	err := r.get().WithContext(ctx).Where("id = ?", id).First(&m).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return domain.Job{}, ErrNotFound
+			return jobdata.Job{}, ErrNotFound
 		}
-		return domain.Job{}, err
+		return jobdata.Job{}, err
 	}
 	return m.ToDomain(), nil
 }

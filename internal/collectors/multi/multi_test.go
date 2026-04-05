@@ -10,19 +10,19 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors"
-	"github.com/andrewmysliuk/jobhound_core/internal/domain"
+	"github.com/andrewmysliuk/jobhound_core/internal/domain/schema"
 	"github.com/andrewmysliuk/jobhound_core/internal/platform/logging"
 )
 
 type stubCollector struct {
 	name string
-	jobs []domain.Job
+	jobs []schema.Job
 	err  error
 }
 
 func (s stubCollector) Name() string { return s.name }
 
-func (s stubCollector) Fetch(context.Context) ([]domain.Job, error) {
+func (s stubCollector) Fetch(context.Context) ([]schema.Job, error) {
 	return s.jobs, s.err
 }
 
@@ -31,7 +31,7 @@ func TestAll_Fetch_mergesAndContinuesOnError(t *testing.T) {
 	a := &All{
 		Collectors: []collectors.Collector{
 			stubCollector{name: "bad", err: errors.New("boom")},
-			stubCollector{name: "good", jobs: []domain.Job{{Title: "A"}, {Title: "B"}}},
+			stubCollector{name: "good", jobs: []schema.Job{{Title: "A"}, {Title: "B"}}},
 		},
 		OnSourceError: func(name string, err error) {
 			logged = append(logged, name+":"+err.Error())
@@ -64,7 +64,7 @@ func TestAll_Fetch_logsWithLoggerWhenNoOnSourceError(t *testing.T) {
 	a := &All{
 		Collectors: []collectors.Collector{
 			stubCollector{name: "Europe Remotely", err: errors.New("boom")},
-			stubCollector{name: "good", jobs: []domain.Job{{Title: "x"}}},
+			stubCollector{name: "good", jobs: []schema.Job{{Title: "x"}}},
 		},
 		Log: &lg,
 	}

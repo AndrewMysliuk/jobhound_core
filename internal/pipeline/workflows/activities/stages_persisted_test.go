@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/andrewmysliuk/jobhound_core/internal/domain"
+	"github.com/andrewmysliuk/jobhound_core/internal/domain/schema"
 	"github.com/andrewmysliuk/jobhound_core/internal/ingest"
 	"github.com/andrewmysliuk/jobhound_core/internal/jobs/storage"
 	"github.com/andrewmysliuk/jobhound_core/internal/pipeline"
@@ -103,8 +103,8 @@ func TestRunPersistPipelineStage2_and_3_persistsAndScoresCappedBatch(t *testing.
 	}, []string{"djinni"}, slotID, nil)
 	require.NoError(t, err)
 
-	scorer := stubScorer(func(_ context.Context, _ string, j domain.Job) (domain.ScoredJob, error) {
-		return domain.ScoredJob{Job: j, Score: 80, Reason: "ok"}, nil
+	scorer := stubScorer(func(_ context.Context, _ string, j schema.Job) (schema.ScoredJob, error) {
+		return schema.ScoredJob{Job: j, Score: 80, Reason: "ok"}, nil
 	})
 
 	a := &Activities{
@@ -115,9 +115,9 @@ func TestRunPersistPipelineStage2_and_3_persistsAndScoresCappedBatch(t *testing.
 		Log:    logging.Nop(),
 	}
 
-	jobs := make([]domain.Job, len(ids))
+	jobs := make([]schema.Job, len(ids))
 	for i, id := range ids {
-		jobs[i] = domain.Job{
+		jobs[i] = schema.Job{
 			ID: id, Title: "Go Dev", Description: "backend golang",
 			PostedAt: now.Add(-24 * time.Hour), Remote: ptr(true), CountryCode: "DE",
 		}
@@ -176,8 +176,8 @@ func TestRunPersistPipelineStage3_stage3RejectScore(t *testing.T) {
 	runID, err := runRepo.CreateRun(ctx, nil)
 	require.NoError(t, err)
 
-	scorer := stubScorer(func(_ context.Context, _ string, j domain.Job) (domain.ScoredJob, error) {
-		return domain.ScoredJob{Job: j, Score: 40, Reason: "low"}, nil
+	scorer := stubScorer(func(_ context.Context, _ string, j schema.Job) (schema.ScoredJob, error) {
+		return schema.ScoredJob{Job: j, Score: 40, Reason: "low"}, nil
 	})
 
 	a := &Activities{
@@ -190,7 +190,7 @@ func TestRunPersistPipelineStage3_stage3RejectScore(t *testing.T) {
 
 	_, err = a.RunPersistPipelineStage2(ctx, pipelineschema.PersistPipelineStage2Input{
 		PipelineRunID: runID,
-		Jobs: []domain.Job{{
+		Jobs: []schema.Job{{
 			ID: "a", Title: "Go", Description: "backend",
 			PostedAt: now.Add(-24 * time.Hour), Remote: ptr(true), CountryCode: "DE",
 		}},
@@ -216,8 +216,8 @@ func TestRunPersistPipelineStage3_stage3RejectScore(t *testing.T) {
 	require.Equal(t, string(pipeline.RunJobRejectedStage3), st)
 }
 
-type stubScorer func(context.Context, string, domain.Job) (domain.ScoredJob, error)
+type stubScorer func(context.Context, string, schema.Job) (schema.ScoredJob, error)
 
-func (f stubScorer) Score(ctx context.Context, profile string, job domain.Job) (domain.ScoredJob, error) {
+func (f stubScorer) Score(ctx context.Context, profile string, job schema.Job) (schema.ScoredJob, error) {
 	return f(ctx, profile, job)
 }

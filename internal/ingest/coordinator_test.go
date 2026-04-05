@@ -11,12 +11,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestNormalizeSourceID(t *testing.T) {
-	if got := NormalizeSourceID("  LinkedIn  "); got != "linkedin" {
-		t.Fatalf("got %q", got)
-	}
-}
-
 func TestBegin_lockAndRelease(t *testing.T) {
 	mr := miniredis.RunT(t)
 	t.Cleanup(func() { mr.Close() })

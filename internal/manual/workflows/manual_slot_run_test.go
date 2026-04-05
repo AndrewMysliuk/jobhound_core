@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/andrewmysliuk/jobhound_core/internal/domain"
+	"github.com/andrewmysliuk/jobhound_core/internal/domain/schema"
 	ingestschema "github.com/andrewmysliuk/jobhound_core/internal/ingest/schema"
 	ingest_workflows "github.com/andrewmysliuk/jobhound_core/internal/ingest/workflows"
 	ingest_activities "github.com/andrewmysliuk/jobhound_core/internal/ingest/workflows/activities"
@@ -29,14 +29,14 @@ func TestManualSlotRunWorkflow_pipelineStage2_inMemory(t *testing.T) {
 		return 7, nil
 	}, activity.RegisterOptions{Name: manualschema.CreatePipelineRunActivityName})
 
-	env.RegisterActivityWithOptions(func(context.Context, uuid.UUID) ([]domain.Job, error) {
-		return []domain.Job{{ID: "j1"}}, nil
+	env.RegisterActivityWithOptions(func(context.Context, uuid.UUID) ([]schema.Job, error) {
+		return []schema.Job{{ID: "j1"}}, nil
 	}, activity.RegisterOptions{Name: manualschema.ListSlotJobsPassedStage1ActivityName})
 
 	env.RegisterActivityWithOptions(func(context.Context, pipelineschema.PersistPipelineStage2Input) (*pipelineschema.PersistPipelineStage2Output, error) {
 		return &pipelineschema.PersistPipelineStage2Output{
-			AfterBroad:    []domain.Job{{ID: "j1"}, {ID: "j2"}},
-			AfterKeywords: []domain.Job{{ID: "j1"}},
+			AfterBroad:    []schema.Job{{ID: "j1"}, {ID: "j2"}},
+			AfterKeywords: []schema.Job{{ID: "j1"}},
 		}, nil
 	}, activity.RegisterOptions{Name: manualschema.PersistPipelineStage2ActivityName})
 

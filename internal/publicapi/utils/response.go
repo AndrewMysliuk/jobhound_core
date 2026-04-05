@@ -1,6 +1,7 @@
-package handlers
+package utils
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"io"
@@ -46,6 +47,42 @@ func WriteSlotLimitReached(w http.ResponseWriter, message string) {
 func ReadJSON(w http.ResponseWriter, r *http.Request, log zerolog.Logger, dst any) bool {
 	r.Body = http.MaxBytesReader(w, r.Body, maxJSONBodyBytes)
 	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(dst); err != nil {
+		log.Error().Err(err).Msg("decode json body")
+		WriteAPIError(w, http.StatusBadRequest, "invalid_json", "request body is not valid JSON")
+		return false
+	}
+	if err := discardExtraJSON(dec); err != nil {
+		log.Error().Err(err).Msg("discard extra json")
+		WriteAPIError(w, http.StatusBadRequest, "invalid_json", "request body is not valid JSON")
+		return false
+	}
+	return true
+}
+
+// ReadValidatedJSON reads the body (max 1 MiB), validates instance against JSON Schema,
+// then decodes into dst with DisallowUnknownFields. On failure writes 400 and returns false.
+func ReadValidatedJSON(w http.ResponseWriter, r *http.Request, log zerolog.Logger, schemaBytes []byte, dst any) bool {
+	r.Body = http.MaxBytesReader(w, r.Body, maxJSONBodyBytes)
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		log.Error().Err(err).Msg("read json body")
+		WriteAPIError(w, http.StatusBadRequest, "invalid_json", "request body is not valid JSON")
+		return false
+	}
+	var instance any
+	if err := json.Unmarshal(body, &instance); err != nil {
+		log.Error().Err(err).Msg("decode json for validation")
+		WriteAPIError(w, http.StatusBadRequest, "invalid_json", "request body is not valid JSON")
+		return false
+	}
+	if err := ValidateJSONInstance(schemaBytes, instance); err != nil {
+		log.Warn().Err(err).Msg("json schema validation")
+		WriteAPIError(w, http.StatusBadRequest, "validation_error", err.Error())
+		return false
+	}
+	dec := json.NewDecoder(bytes.NewReader(body))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(dst); err != nil {
 		log.Error().Err(err).Msg("decode json body")
