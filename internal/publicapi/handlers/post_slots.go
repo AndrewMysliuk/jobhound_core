@@ -10,12 +10,13 @@ import (
 )
 
 func (h *HTTPHandler) postSlots(w http.ResponseWriter, r *http.Request) {
+	logH := h.routeLog(r, "postSlots")
 	if r.Method != http.MethodPost {
 		WriteAPIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
 		return
 	}
 	var body schema.CreateSlotRequest
-	if !ReadJSON(w, r, &body) {
+	if !ReadJSON(w, r, logH, &body) {
 		return
 	}
 	if strings.TrimSpace(body.Name) == "" {
@@ -32,6 +33,7 @@ func (h *HTTPHandler) postSlots(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
+		logH.Error().Err(err).Msg("create slot")
 		WriteAPIError(w, http.StatusInternalServerError, "internal_error", err.Error())
 		return
 	}

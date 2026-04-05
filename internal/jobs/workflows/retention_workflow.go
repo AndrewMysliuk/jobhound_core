@@ -5,6 +5,7 @@ import (
 
 	jobsschema "github.com/andrewmysliuk/jobhound_core/internal/jobs/schema"
 	jobs_activities "github.com/andrewmysliuk/jobhound_core/internal/jobs/workflows/activities"
+	"github.com/andrewmysliuk/jobhound_core/internal/platform/logging"
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 )
@@ -14,6 +15,7 @@ const JobRetentionWorkflowName = "JobRetentionWorkflow"
 
 // JobRetentionWorkflow runs the retention activity (same semantics as cmd/retention run).
 func JobRetentionWorkflow(ctx workflow.Context) (*jobsschema.JobRetentionOutput, error) {
+	workflow.GetLogger(ctx).Info("job retention workflow start", logging.FieldWorkflow, JobRetentionWorkflowName)
 	ctx = workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
 		StartToCloseTimeout:    15 * time.Minute,
 		ScheduleToCloseTimeout: 20 * time.Minute,
@@ -25,6 +27,7 @@ func JobRetentionWorkflow(ctx workflow.Context) (*jobsschema.JobRetentionOutput,
 	})
 	var out jobsschema.JobRetentionOutput
 	if err := workflow.ExecuteActivity(ctx, jobs_activities.RunJobRetentionActivityName).Get(ctx, &out); err != nil {
+		workflow.GetLogger(ctx).Error("RunJobRetention activity failed", logging.FieldWorkflow, JobRetentionWorkflowName, "error", err)
 		return nil, err
 	}
 	return &out, nil

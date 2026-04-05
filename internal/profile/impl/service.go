@@ -5,11 +5,13 @@ import (
 	"context"
 
 	"github.com/andrewmysliuk/jobhound_core/internal/pipeline"
+	"github.com/andrewmysliuk/jobhound_core/internal/platform/logging"
 	"github.com/andrewmysliuk/jobhound_core/internal/profile"
 	profilestorage "github.com/andrewmysliuk/jobhound_core/internal/profile/storage"
 	"github.com/andrewmysliuk/jobhound_core/internal/publicapi/schema"
 	slotstorage "github.com/andrewmysliuk/jobhound_core/internal/slots/storage"
 	"github.com/google/uuid"
+	"github.com/rs/zerolog"
 )
 
 var _ profile.API = (*Service)(nil)
@@ -19,15 +21,27 @@ type Service struct {
 	Text  *profilestorage.Repository
 	Runs  pipeline.PipelineRunRepository
 	Slots *slotstorage.Repository
+	Log   zerolog.Logger
 }
 
 // NewService constructs a profile service.
-func NewService(text *profilestorage.Repository, runs pipeline.PipelineRunRepository, slots *slotstorage.Repository) *Service {
-	return &Service{Text: text, Runs: runs, Slots: slots}
+func NewService(text *profilestorage.Repository, runs pipeline.PipelineRunRepository, slots *slotstorage.Repository, log zerolog.Logger) *Service {
+	return &Service{
+		Text:  text,
+		Runs:  runs,
+		Slots: slots,
+		Log:   log.With().Str(logging.FieldService, "profile").Logger(),
+	}
+}
+
+func (s *Service) methodLog(ctx context.Context, method string) zerolog.Logger {
+	return logging.EnrichWithContext(ctx, s.Log.With().Str(logging.FieldMethod, method).Logger())
 }
 
 // Get implements [profile.API.Get].
 func (s *Service) Get(ctx context.Context) (schema.ProfileResponse, error) {
+	log := s.methodLog(ctx, "Get")
+	log.Debug().Msg("get")
 	row, err := s.Text.Get(ctx)
 	if err != nil {
 		return schema.ProfileResponse{}, err
@@ -37,6 +51,8 @@ func (s *Service) Get(ctx context.Context) (schema.ProfileResponse, error) {
 
 // Put implements [profile.API.Put].
 func (s *Service) Put(ctx context.Context, text string) (schema.ProfileResponse, error) {
+	log := s.methodLog(ctx, "Put")
+	log.Debug().Msg("put")
 	updatedAt, err := s.Text.Set(ctx, text)
 	if err != nil {
 		return schema.ProfileResponse{}, err
@@ -59,6 +75,8 @@ func (s *Service) Put(ctx context.Context, text string) (schema.ProfileResponse,
 
 // GetText returns stored profile text for stage-3 workflow input ([slots.impl.Service]).
 func (s *Service) GetText(ctx context.Context) (string, error) {
+	log := s.methodLog(ctx, "GetText")
+	log.Debug().Msg("get text")
 	row, err := s.Text.Get(ctx)
 	if err != nil {
 		return "", err

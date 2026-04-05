@@ -82,12 +82,4 @@
 ## J. Quality gates
 
 1. [x] **`make test` / `go test ./...`** — Definition of done: passes without mandatory network for default tests.  
-2. [x] **`make vet` / `make fmt`** — Definition of done: clean for touched packages.  
-3. [ ] **Optional: integration** — Definition of done: tagged test that starts **`bin/api`** against Compose DB + Temporal + worker and hits one full flow (create slot → poll — if team adopts).
-
----
-
-## Optional / deferred (do not block `009` MVP)
-
-1. [ ] **OpenAPI** — Spec **`spec.md`** marks as nice-to-have.  
-2. [ ] **Auth** — Out of scope; **`user_id`** reserved in DB only.
+2. [x] **`make vet` / `make fmt`** — Definition of done: clean for touched packages.

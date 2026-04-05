@@ -6,10 +6,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
+	"strings"
 
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors"
 	"github.com/andrewmysliuk/jobhound_core/internal/domain"
+	"github.com/andrewmysliuk/jobhound_core/internal/platform/logging"
+	"github.com/rs/zerolog"
 )
 
 // All runs each collector in order, merges successful job lists, and does not abort
@@ -18,6 +20,8 @@ type All struct {
 	Collectors []collectors.Collector
 	// OnSourceError is called for each failed Fetch after others have still run. Optional.
 	OnSourceError func(sourceName string, err error)
+	// Log is used when OnSourceError is nil: one Warn per failed source (FieldSourceID). Optional.
+	Log *zerolog.Logger
 }
 
 // Name implements collectors.Collector.
@@ -40,8 +44,12 @@ func (a *All) Fetch(ctx context.Context) ([]domain.Job, error) {
 			errs = append(errs, wrapped)
 			if a.OnSourceError != nil {
 				a.OnSourceError(c.Name(), err)
-			} else {
-				log.Printf("collector: %v", wrapped)
+			} else if a.Log != nil {
+				src := strings.ToLower(strings.TrimSpace(c.Name()))
+				a.Log.Warn().
+					Str(logging.FieldSourceID, src).
+					Err(err).
+					Msg("collector fetch failed")
 			}
 			continue
 		}

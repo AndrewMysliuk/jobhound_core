@@ -1,7 +1,7 @@
 # Contract: manual search workflow (on-demand orchestration)
 
 **Feature**: `008-manual-search-workflow`  
-**Status**: **Draft** — aligns with root [`spec.md`](../spec.md) (snapshots, **`slot_jobs`**, **separate** stage-2 / stage-3 Temporal units, filter invalidation). Code may still use legacy **`RunPersistedPipelineStages`** until split.
+**Status**: **Draft** — aligns with root [`spec.md`](../spec.md) (snapshots, **`slot_jobs`**, **separate** stage-2 / stage-3 Temporal units, filter invalidation). **Product paths** use **`PersistPipelineStage2Activity`** / **`PersistPipelineStage3Activity`** only; the old bundled persisted activity is **not** registered (see §7).
 
 ## 1. Purpose
 
@@ -35,19 +35,21 @@ Logical **run kind** selects which steps execute. Go names are implementation de
 
 **Manual** never bypasses **`006`** for ingest.
 
-## 4. Temporal mapping (target architecture)
+## 4. Temporal mapping (implemented architecture)
 
-### 4.1 Existing primitives (reuse semantics; split implementation)
+### 4.1 Registered primitives
 
-| Piece | Registered name / symbol (today) | Package | **`008` expectation** |
-|-------|-----------------------------------|---------|------------------------|
-| Ingest workflow | `IngestSourceWorkflow` | `internal/ingest/workflows` | Keep; parent runs **N children in parallel** for N sources. |
-| Ingest activity | `RunIngestSourceActivity` | `internal/ingest/workflows/activities` | Unchanged contract for per-source ingest. |
-| Persisted pipeline (legacy) | `RunPersistedPipelineStagesActivity` | `internal/pipeline/workflows/activities` | **Split** into **two** activities (or workflows): one for **stage-2 snapshot only**, one for **stage-3 snapshot only**. Do not add new features to the bundled form. |
+| Piece | Registered name / symbol | Package | Role |
+|-------|--------------------------|---------|------|
+| Ingest workflow | `IngestSourceWorkflow` | `internal/ingest/workflows` | Parent runs **N children in parallel** for N sources. |
+| Ingest activity | `RunIngestSourceActivity` | `internal/ingest/workflows/activities` | Per-source ingest. |
+| In-memory pipeline (no snapshot DB) | `RunPipelineStagesActivity` | `internal/pipeline/workflows/activities` | Stages **1→2→3** in memory for tests/demo; **not** the persisted **`008`** path. |
+| Persisted stage 2 | `PersistPipelineStage2Activity` | `internal/pipeline/workflows/activities` | Snapshot **stage 2** only (`RunPersistPipelineStage2`). |
+| Persisted stage 3 | `PersistPipelineStage3Activity` | `internal/pipeline/workflows/activities` | Snapshot **stage 3** only (`RunPersistPipelineStage3`). |
 
 **Timeouts / retries**: use **`internal/platform/temporalopts`** (or equivalent); ingest workflow keeps conservative ingest timeouts.
 
-### 4.2 Parent “manual slot run” workflow (to implement)
+### 4.2 Parent “manual slot run” workflow (implemented)
 
 1. Input: **`slot_id`**, optional **`user_id`**, **run kind**, parameters (sources, `ExplicitRefresh`, **`004`** rules **`include`/`exclude`** for stage 2, profile text, **`max_jobs`** for stage 3 from HTTP, optional **`pipeline_run_id`** for stage-3-only).
 2. **Ingest kinds**: start **child** `IngestSourceWorkflow` per `source_id` **in parallel**; aggregate per-source outputs.
@@ -59,16 +61,17 @@ Logical **run kind** selects which steps execute. Go names are implementation de
 
 ### 4.3 Frozen Go identifiers (`internal/manual/schema`)
 
-Temporal **registration strings** and **run kinds** below match `github.com/andrewmysliuk/jobhound_core/internal/manual/schema` (same PR as this table). Parent workflow and split activities are registered under these names when §F lands; ingest names are already live in the worker.
+Temporal **registration strings** and **run kinds** below match `github.com/andrewmysliuk/jobhound_core/internal/manual/schema` and worker registration in **`cmd/worker`**.
 
 | Role | Registered Temporal name | Go constant |
 |------|---------------------------|-------------|
-| Parent manual slot run (planned) | `ManualSlotRunWorkflow` | `ManualSlotRunWorkflowName` |
-| Persisted stage 2 only (planned) | `PersistPipelineStage2Activity` | `PersistPipelineStage2ActivityName` |
-| Persisted stage 3 only (planned) | `PersistPipelineStage3Activity` | `PersistPipelineStage3ActivityName` |
+| Parent manual slot run | `ManualSlotRunWorkflow` | `ManualSlotRunWorkflowName` |
+| Persisted stage 2 only | `PersistPipelineStage2Activity` | `PersistPipelineStage2ActivityName` |
+| Persisted stage 3 only | `PersistPipelineStage3Activity` | `PersistPipelineStage3ActivityName` |
 | Per-source ingest workflow | `IngestSourceWorkflow` | `ingest_workflows.IngestSourceWorkflowName` (`internal/ingest/workflows`) |
 | Per-source ingest activity | `RunIngestSourceActivity` | `ingest_activities.RunIngestSourceActivityName` (`internal/ingest/workflows/activities`) |
-| Legacy bundled 2+3 persistence | `RunPersistedPipelineStagesActivity` | `pipeline_workflows.RunPersistedPipelineStagesActivityName` (`internal/pipeline/workflows`) |
+| In-memory pipeline (non-persisted) | `RunPipelineStagesActivity` | `pipeline_workflows.RunPipelineStagesActivityName` |
+| ~~Legacy bundled 2+3 persistence~~ | *(removed)* | Previously **`RunPersistedPipelineStages`** — **not** registered on the worker for product paths after **`008`**. |
 
 **Run kinds** (JSON / workflow input): `RunKind` string constants — `INGEST_SOURCES`, `PIPELINE_STAGE2`, `PIPELINE_STAGE3`, `PIPELINE_STAGE2_THEN_STAGE3`, `INGEST_THEN_PIPELINE`, `DELTA_INGEST_THEN_PIPELINE`.
 
@@ -93,7 +96,7 @@ JSON tags are defined on `internal/manual/schema.ManualSlotRunAggregate` and nes
 - **After stage 1**: jobs linked via **`slot_jobs`** with **`jobs.stage1_status = PASSED_STAGE_1`** (see root **`spec.md`**).
 - **Stage 3 eligible set**: **`PASSED_STAGE_2`** rows for the relevant **`pipeline_run_id`** (**`007`**), ordered by **`posted_at`** DESC, **`job_id`** ASC; take up to the effective **`max_jobs`** for that execution (**`009`** + **`007`**).
 
-**`JobRepository`** gains (or a sibling repo gains) **slot-scoped** queries joining **`slot_jobs`** and **`jobs`**.
+**Slot-scoped** reads use **`slot_jobs`** joined with **`jobs`** (see **`internal/jobs`** storage / queries used by pipeline and API).
 
 ## 7. Implementation snapshot vs this contract
 
@@ -105,7 +108,7 @@ JSON tags are defined on `internal/manual/schema.ManualSlotRunAggregate` and nes
 | **Parent manual slot workflow** | **Implemented** — **`ManualSlotRunWorkflow`** (`internal/manual/workflows`). |
 | **HTTP / stable start payload** | **`009`** |
 | **Filter invalidation (slot snapshots)** | **Implemented** — see [`filter-invalidation.md`](./filter-invalidation.md) |
-| **`cmd/agent` Temporal hook** | **Not implemented** |
+| **`cmd/agent` Temporal hook** | **Implemented** — `bin/agent -temporal-manual-slot-run` (+ `-manual-*` flags); **`009`** remains the primary product trigger. |
 
 ## 8. Related specs & contracts
 

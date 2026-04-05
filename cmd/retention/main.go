@@ -10,7 +10,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
 	"strings"
 	"time"
@@ -18,19 +17,23 @@ import (
 	"github.com/andrewmysliuk/jobhound_core/internal/config"
 	jobsstorage "github.com/andrewmysliuk/jobhound_core/internal/jobs/storage"
 	jobutils "github.com/andrewmysliuk/jobhound_core/internal/jobs/utils"
+	"github.com/andrewmysliuk/jobhound_core/internal/platform/logging"
 	"github.com/andrewmysliuk/jobhound_core/internal/platform/pgsql"
+	"github.com/rs/zerolog"
 )
 
 func main() {
-	log.SetFlags(0)
 	if len(os.Args) < 2 {
 		usage()
 		os.Exit(2)
 	}
 	switch strings.ToLower(strings.TrimSpace(os.Args[1])) {
 	case "run":
-		if err := run(); err != nil {
-			log.Fatal(err)
+		appCfg := config.Load()
+		log := logging.NewRoot(appCfg.Logging.Level, appCfg.Logging.Format, "retention")
+		if err := run(log, appCfg); err != nil {
+			log.Error().Err(err).Msg("retention run failed")
+			os.Exit(1)
 		}
 	default:
 		usage()
@@ -45,8 +48,7 @@ func usage() {
 	fmt.Fprintf(os.Stderr, "Requires %s.\n", config.EnvDatabaseURL)
 }
 
-func run() error {
-	appCfg := config.Load()
+func run(log zerolog.Logger, appCfg config.Config) error {
 	if strings.TrimSpace(appCfg.Database.URL) == "" {
 		return fmt.Errorf("%s is required", config.EnvDatabaseURL)
 	}
@@ -70,6 +72,9 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	log.Printf("retention: deleted %d job(s) with created_at before %s UTC", n, cutoff.Format(time.RFC3339))
+	log.Info().
+		Int64("deleted_jobs", n).
+		Str("cutoff_utc", cutoff.Format(time.RFC3339)).
+		Msg("retention completed")
 	return nil
 }

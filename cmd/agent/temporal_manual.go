@@ -11,7 +11,9 @@ import (
 	"github.com/andrewmysliuk/jobhound_core/internal/config"
 	manualschema "github.com/andrewmysliuk/jobhound_core/internal/manual/schema"
 	manual_workflows "github.com/andrewmysliuk/jobhound_core/internal/manual/workflows"
+	"github.com/andrewmysliuk/jobhound_core/internal/platform/logging"
 	"github.com/google/uuid"
+	"github.com/rs/zerolog"
 	"go.temporal.io/sdk/client"
 )
 
@@ -26,7 +28,7 @@ type temporalManualOpts struct {
 	explicitRefresh bool
 }
 
-func runTemporalManualSlotRun(ctx context.Context, o temporalManualOpts) error {
+func runTemporalManualSlotRun(ctx context.Context, log zerolog.Logger, o temporalManualOpts) error {
 	slotID, err := uuid.Parse(strings.TrimSpace(o.slotID))
 	if err != nil {
 		return fmt.Errorf("manual-slot-id: %w", err)
@@ -69,10 +71,36 @@ func runTemporalManualSlotRun(ctx context.Context, o temporalManualOpts) error {
 		wfID = fmt.Sprintf("agent-manual-slot-%d", time.Now().UnixNano())
 	}
 
-	agg, err := manual_workflows.StartManualSlotRunWorkflow(ctx, c, cfg.TaskQueue, wfID, in)
+	runCtx := logging.WithSlotID(ctx, slotID.String())
+	if o.pipelineRunID > 0 {
+		runCtx = logging.WithPipelineRunIDInt64(runCtx, o.pipelineRunID)
+	}
+	logH := logging.EnrichWithContext(runCtx, log.With().Str(logging.FieldHandler, "temporal_manual_slot_run").Logger())
+
+	logH.Info().
+		Str("temporal_workflow_id", wfID).
+		Str("task_queue", cfg.TaskQueue).
+		Str("run_kind", string(kind)).
+		Msg("manual slot run workflow starting")
+
+	run, err := c.ExecuteWorkflow(ctx, client.StartWorkflowOptions{
+		ID:                 wfID,
+		TaskQueue:          cfg.TaskQueue,
+		WorkflowRunTimeout: manual_workflows.DefaultManualSlotRunWorkflowTimeout,
+	}, manualschema.ManualSlotRunWorkflowName, in)
 	if err != nil {
+		logH.Error().Err(err).Msg("temporal execute workflow")
 		return err
 	}
+	logH.Info().Str("temporal_run_id", run.GetRunID()).Msg("manual slot run workflow started")
+
+	var agg manualschema.ManualSlotRunAggregate
+	if err := run.Get(ctx, &agg); err != nil {
+		logH.Error().Err(err).Msg("temporal workflow result")
+		return err
+	}
+	logH.Info().Msg("manual slot run workflow completed")
+
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
 	if err := enc.Encode(agg); err != nil {

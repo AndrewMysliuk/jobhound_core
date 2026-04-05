@@ -9,10 +9,12 @@ import (
 	manualschema "github.com/andrewmysliuk/jobhound_core/internal/manual/schema"
 	manualworkflows "github.com/andrewmysliuk/jobhound_core/internal/manual/workflows"
 	"github.com/andrewmysliuk/jobhound_core/internal/pipeline"
+	"github.com/andrewmysliuk/jobhound_core/internal/platform/logging"
 	"github.com/andrewmysliuk/jobhound_core/internal/publicapi/schema"
 	"github.com/andrewmysliuk/jobhound_core/internal/slots"
 	slotstorage "github.com/andrewmysliuk/jobhound_core/internal/slots/storage"
 	"github.com/google/uuid"
+	"github.com/rs/zerolog"
 	"go.temporal.io/sdk/client"
 )
 
@@ -27,6 +29,7 @@ type Service struct {
 	Temporal  slots.WorkflowTemporal
 	TaskQueue string
 	SourceIDs []string
+	Log       zerolog.Logger
 }
 
 // profileTextLoader loads trimmed global profile text for stage 3 (009).
@@ -35,7 +38,7 @@ type profileTextLoader interface {
 }
 
 // NewService constructs a slot service. SourceIDs must be non-empty (same set as the worker’s collectors).
-func NewService(repo *slotstorage.Repository, jobRepo jobs.JobRepository, runs pipeline.PipelineRunRepository, profiles profileTextLoader, tc slots.WorkflowTemporal, taskQueue string, sourceIDs []string) *Service {
+func NewService(repo *slotstorage.Repository, jobRepo jobs.JobRepository, runs pipeline.PipelineRunRepository, profiles profileTextLoader, tc slots.WorkflowTemporal, taskQueue string, sourceIDs []string, log zerolog.Logger) *Service {
 	return &Service{
 		Repo:      repo,
 		Jobs:      jobRepo,
@@ -44,7 +47,12 @@ func NewService(repo *slotstorage.Repository, jobRepo jobs.JobRepository, runs p
 		Temporal:  tc,
 		TaskQueue: taskQueue,
 		SourceIDs: append([]string(nil), sourceIDs...),
+		Log:       log.With().Str(logging.FieldService, "slots").Logger(),
 	}
+}
+
+func (s *Service) methodLog(ctx context.Context, method string) zerolog.Logger {
+	return logging.EnrichWithContext(ctx, s.Log.With().Str(logging.FieldMethod, method).Logger())
 }
 
 func ingestWorkflowID(slotID uuid.UUID) string {
@@ -53,6 +61,8 @@ func ingestWorkflowID(slotID uuid.UUID) string {
 
 // List implements [slots.API.List].
 func (s *Service) List(ctx context.Context) (schema.SlotsListResponse, error) {
+	log := s.methodLog(ctx, "List")
+	log.Debug().Msg("list")
 	rows, err := s.Repo.List(ctx)
 	if err != nil {
 		return schema.SlotsListResponse{}, err
@@ -77,6 +87,8 @@ func (s *Service) List(ctx context.Context) (schema.SlotsListResponse, error) {
 
 // Create implements [slots.API.Create].
 func (s *Service) Create(ctx context.Context, name string) (*schema.SlotCard, error) {
+	log := s.methodLog(ctx, "Create")
+	log.Debug().Msg("create")
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return nil, slots.ErrInvalidSlotName
@@ -120,6 +132,8 @@ func (s *Service) Create(ctx context.Context, name string) (*schema.SlotCard, er
 
 // Get implements [slots.API.Get].
 func (s *Service) Get(ctx context.Context, slotID string) (*schema.SlotCard, error) {
+	log := s.methodLog(ctx, "Get")
+	log.Debug().Msg("get")
 	row, err := s.Repo.GetByID(ctx, slotID)
 	if err != nil {
 		return nil, err
@@ -129,6 +143,8 @@ func (s *Service) Get(ctx context.Context, slotID string) (*schema.SlotCard, err
 
 // Delete implements [slots.API.Delete].
 func (s *Service) Delete(ctx context.Context, slotID string) error {
+	log := s.methodLog(ctx, "Delete")
+	log.Debug().Msg("delete")
 	u, err := uuid.Parse(strings.TrimSpace(slotID))
 	if err != nil {
 		return slots.ErrNotFound

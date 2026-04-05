@@ -2,7 +2,7 @@
 
 **Feature Branch**: `000-epic-overview`
 **Created**: 2026-03-29
-**Last Updated**: 2026-04-03  
+**Last Updated**: 2026-04-05  
 **Status**: Active (index complete; numbered epics aligned incrementally with the product draft)
 
 **Purpose**: Index of all planned features under `specs/`. Each numbered folder has its own brief `spec.md` for orientation; detailed requirements come later via Spec Kit per feature. If an epic contradicts [`product-concept-draft.md`](./product-concept-draft.md) on user-visible or data-lifecycle behavior, **fix the epic** (or the draft first if the product decision changed).
@@ -44,7 +44,7 @@ Personal job agent built around **search slots** (**3** slots in HTTP MVP **`009
 | 007 | `007-llm-policy-and-caps` | Caps, **ordering, eligible pool, idempotency** (draft §4); pipeline runs mapped to **slot** (+ user); manual “next batch” style actions |
 | 008 | `008-manual-search-workflow` | Same engine, **API-triggered** workflow, response contract; **slot id**, reset rules §5 |
 | 009 | `009-http-public-api` | REST (or RPC) for UI: slots, profile, runs, manual actions; **§5 reset** semantics |
-| 010 | `010-observability` | Structured logging; correlation (Temporal + HTTP + **`slot_id`/`user_id`**); GCP-friendly export; optional Grafana-style **ops** dashboards (draft §7) — post-core per draft §9 |
+| 010 | `010-observability` | Structured logging; correlation (Temporal + HTTP + **`slot_id`/`user_id`**); GCP-friendly JSON stdout — post-core per draft §9 (can overlap early with `003`) |
 
 ## Suggested implementation order
 

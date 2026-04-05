@@ -14,6 +14,7 @@ import (
 	pipelineschema "github.com/andrewmysliuk/jobhound_core/internal/pipeline/schema"
 	pipelinestorage "github.com/andrewmysliuk/jobhound_core/internal/pipeline/storage"
 	pipeutils "github.com/andrewmysliuk/jobhound_core/internal/pipeline/utils"
+	"github.com/andrewmysliuk/jobhound_core/internal/platform/logging"
 	"github.com/andrewmysliuk/jobhound_core/internal/platform/pgsql"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
@@ -111,6 +112,7 @@ func TestRunPersistPipelineStage2_and_3_persistsAndScoresCappedBatch(t *testing.
 		Scorer: scorer,
 		Runs:   runRepo,
 		Jobs:   jobRepo,
+		Log:    logging.Nop(),
 	}
 
 	jobs := make([]domain.Job, len(ids))
@@ -183,6 +185,7 @@ func TestRunPersistPipelineStage3_stage3RejectScore(t *testing.T) {
 		Scorer: scorer,
 		Runs:   runRepo,
 		Jobs:   jobRepo,
+		Log:    logging.Nop(),
 	}
 
 	_, err = a.RunPersistPipelineStage2(ctx, pipelineschema.PersistPipelineStage2Input{

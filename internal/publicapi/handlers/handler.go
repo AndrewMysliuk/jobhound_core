@@ -4,14 +4,17 @@ package handlers
 import (
 	"net/http"
 
+	"github.com/andrewmysliuk/jobhound_core/internal/platform/logging"
 	"github.com/andrewmysliuk/jobhound_core/internal/profile"
 	"github.com/andrewmysliuk/jobhound_core/internal/slots"
+	"github.com/rs/zerolog"
 )
 
 // Deps are shared dependencies for route handlers (wired from cmd/api).
 type Deps struct {
 	Slots   slots.API
 	Profile profile.API
+	Logger  zerolog.Logger
 }
 
 // HTTPHandler serves /api/v1 routes behind CORS middleware.
@@ -21,15 +24,19 @@ type HTTPHandler struct {
 	deps  Deps
 }
 
-// NewHTTPHandler registers routes and wraps the mux with CORS for configured origins.
+// NewHTTPHandler registers routes and wraps the mux: request id (outer) then CORS, then routes.
 func NewHTTPHandler(corsAllowedOrigins []string, deps Deps) *HTTPHandler {
 	h := &HTTPHandler{
 		mux:  http.NewServeMux(),
 		deps: deps,
 	}
 	h.registerRoutes()
-	h.chain = withCORS(corsAllowedOrigins, h.mux)
+	h.chain = logging.RequestIDMiddleware(withCORS(corsAllowedOrigins, h.mux))
 	return h
+}
+
+func (h *HTTPHandler) routeLog(r *http.Request, handlerName string) zerolog.Logger {
+	return logging.EnrichWithContext(r.Context(), h.deps.Logger.With().Str(logging.FieldHandler, handlerName).Logger())
 }
 
 func (h *HTTPHandler) registerRoutes() {
@@ -46,7 +53,7 @@ func (h *HTTPHandler) registerRoutes() {
 	h.mux.HandleFunc("PATCH /api/v1/slots/{slot_id}/stages/{stage}/jobs/{job_id}", h.patchStageJobBucket)
 }
 
-// ServeHTTP applies CORS then dispatches to registered routes.
+// ServeHTTP applies request-id and CORS then dispatches to registered routes.
 func (h *HTTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.chain.ServeHTTP(w, r)
 }

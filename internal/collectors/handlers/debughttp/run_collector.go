@@ -11,13 +11,17 @@ import (
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/europeremotely"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/workingnomads"
 	"github.com/andrewmysliuk/jobhound_core/internal/domain"
+	"github.com/andrewmysliuk/jobhound_core/internal/platform/logging"
+	"github.com/rs/zerolog"
 )
 
-func runCollectorDebug(w http.ResponseWriter, r *http.Request, coll collectors.Collector, wnConcrete *workingnomads.WorkingNomads, erConcrete *europeremotely.EuropeRemotely) {
+func runCollectorDebug(w http.ResponseWriter, r *http.Request, logH zerolog.Logger, coll collectors.Collector, wnConcrete *workingnomads.WorkingNomads, erConcrete *europeremotely.EuropeRemotely) {
 	if coll == nil {
+		logH.Error().Msg("collector not configured")
 		http.Error(w, "collector not configured", http.StatusInternalServerError)
 		return
 	}
+	logH.Debug().Str(logging.FieldSourceID, coll.Name()).Msg("debug collector fetch")
 	ctx := r.Context()
 	if _, ok := ctx.Deadline(); !ok {
 		var cancel context.CancelFunc
@@ -27,16 +31,19 @@ func runCollectorDebug(w http.ResponseWriter, r *http.Request, coll collectors.C
 
 	raw, err := readDebugRequestBody(w, r)
 	if err != nil {
+		logH.Error().Err(err).Msg("read request body")
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	req, err := parseCollectorsPOSTBody(raw)
 	if err != nil {
+		logH.Error().Err(err).Msg("parse json body")
 		http.Error(w, fmt.Sprintf("JSON body: %v", err), http.StatusBadRequest)
 		return
 	}
 	limit, err := resolveLimit(req.Limit)
 	if err != nil {
+		logH.Error().Err(err).Msg("resolve limit")
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -74,6 +81,7 @@ func runCollectorDebug(w http.ResponseWriter, r *http.Request, coll collectors.C
 
 	w.Header().Set("Content-Type", "application/json")
 	if fetchErr != nil {
+		logH.Error().Err(fetchErr).Str(logging.FieldSourceID, coll.Name()).Msg("collector fetch failed")
 		_ = json.NewEncoder(w).Encode(runCollectorResponse{
 			OK:        false,
 			Collector: coll.Name(),

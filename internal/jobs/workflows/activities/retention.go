@@ -9,6 +9,8 @@ import (
 	"github.com/andrewmysliuk/jobhound_core/internal/jobs"
 	jobsschema "github.com/andrewmysliuk/jobhound_core/internal/jobs/schema"
 	jobutils "github.com/andrewmysliuk/jobhound_core/internal/jobs/utils"
+	"github.com/andrewmysliuk/jobhound_core/internal/platform/logging"
+	"github.com/rs/zerolog"
 )
 
 // RunJobRetentionActivityName is the registered activity name for scheduled/manual job retention (006).
@@ -18,6 +20,7 @@ const RunJobRetentionActivityName = "RunJobRetentionActivity"
 type RetentionActivities struct {
 	Clock func() time.Time
 	Jobs  jobs.JobRepository
+	Log   zerolog.Logger
 }
 
 // RunJobRetention deletes jobs with created_at older than 7 days (UTC), per retention-jobs.md.
@@ -27,6 +30,8 @@ func (a *RetentionActivities) RunJobRetention(ctx context.Context) (*jobsschema.
 	if a == nil || a.Jobs == nil {
 		return nil, fmt.Errorf("jobs activities: RunJobRetention requires Jobs repository")
 	}
+	log := logging.EnrichWithContext(ctx, logging.LoggerWithActivity(ctx, a.Log, RunJobRetentionActivityName))
+	log.Debug().Msg("job retention start")
 	now := time.Now().UTC()
 	if a.Clock != nil {
 		now = a.Clock().UTC()
@@ -34,7 +39,9 @@ func (a *RetentionActivities) RunJobRetention(ctx context.Context) (*jobsschema.
 	cutoff := jobutils.CutoffUTC(now)
 	n, err := a.Jobs.DeleteJobsCreatedBeforeUTC(ctx, cutoff)
 	if err != nil {
+		log.Error().Err(err).Msg("delete jobs before cutoff")
 		return nil, err
 	}
+	log.Debug().Int64("deleted", n).Msg("job retention done")
 	return &jobsschema.JobRetentionOutput{Deleted: n}, nil
 }

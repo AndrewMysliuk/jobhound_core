@@ -3,7 +3,6 @@ package main
 
 import (
 	"context"
-	"log"
 	"os"
 	"strings"
 	"time"
@@ -23,6 +22,7 @@ import (
 	manual_workflows "github.com/andrewmysliuk/jobhound_core/internal/manual/workflows"
 	pipelinestorage "github.com/andrewmysliuk/jobhound_core/internal/pipeline/storage"
 	pipeline_workflows "github.com/andrewmysliuk/jobhound_core/internal/pipeline/workflows"
+	"github.com/andrewmysliuk/jobhound_core/internal/platform/logging"
 	"github.com/andrewmysliuk/jobhound_core/internal/platform/pgsql"
 	"github.com/andrewmysliuk/jobhound_core/internal/platform/temporalopts"
 	"github.com/redis/go-redis/v9"
@@ -31,10 +31,10 @@ import (
 )
 
 func main() {
-	// Job fetch runs from cmd/agent via internal/collectors/bootstrap; this worker runs stage activities on workflow-supplied jobs.
+	earlyLog := logging.NewRoot(config.DefaultLogLevel, config.DefaultLogFormat, "worker")
 	cfg, err := config.LoadTemporalFromEnv()
 	if err != nil {
-		log.Printf("temporal worker: %v", err)
+		earlyLog.Error().Err(err).Msg("temporal config")
 		os.Exit(1)
 	}
 
@@ -43,7 +43,7 @@ func main() {
 		Namespace: cfg.Namespace,
 	})
 	if err != nil {
-		log.Printf("temporal worker: dial: %v", err)
+		earlyLog.Error().Err(err).Msg("temporal dial")
 		os.Exit(1)
 	}
 	defer c.Close()
@@ -51,6 +51,7 @@ func main() {
 	w := worker.New(c, cfg.TaskQueue, temporalopts.DefaultWorkerOptions())
 
 	appCfg := config.Load()
+	log := logging.NewRoot(appCfg.Logging.Level, appCfg.Logging.Format, "worker")
 	var scorer llm.Scorer
 	if strings.TrimSpace(appCfg.AnthropicAPIKey) != "" {
 		scorer = anthropic.NewScorer(appCfg.AnthropicAPIKey, appCfg.AnthropicModel)
@@ -61,6 +62,7 @@ func main() {
 	actDeps := pipeline_workflows.ActivitiesDeps{
 		Scorer:              scorer,
 		Stage3MaxJobsPerRun: appCfg.Pipeline.Stage3MaxJobsPerRun,
+		Log:                 log,
 	}
 	var (
 		ingestRedis           *ingest.RedisCoordinator
@@ -73,7 +75,7 @@ func main() {
 		gdb, err := pgsql.Open(dbCtx, appCfg.Database)
 		cancel()
 		if err != nil {
-			log.Printf("temporal worker: database: %v", err)
+			log.Error().Err(err).Msg("database open")
 			os.Exit(1)
 		}
 		getter := pgsql.NewGetter(gdb)
@@ -83,7 +85,7 @@ func main() {
 		if ru := strings.TrimSpace(appCfg.Ingest.RedisURL); ru != "" {
 			opt, err := redis.ParseURL(ru)
 			if err != nil {
-				log.Printf("temporal worker: redis url: %v", err)
+				log.Error().Err(err).Msg("redis url")
 				os.Exit(1)
 			}
 			rdb := redis.NewClient(opt)
@@ -94,7 +96,7 @@ func main() {
 			er, wn, err := bootstrap.MVPCollectors(bootCtx, nil, appCfg.DataDir)
 			bcancel()
 			if err != nil {
-				log.Printf("temporal worker: collectors: %v", err)
+				log.Error().Err(err).Msg("collectors bootstrap")
 				os.Exit(1)
 			}
 			ingestCollectors = map[string]collectors.Collector{
@@ -108,14 +110,16 @@ func main() {
 	manual_workflows.Register(w, manual_workflows.WorkerDeps{
 		Runs: actDeps.RunRepo,
 		Jobs: actDeps.JobsRepo,
+		Log:  log,
 	})
-	jobs_workflows.RegisterRetention(w, jobs_workflows.RetentionWorkerDeps{Jobs: actDeps.JobsRepo})
+	jobs_workflows.RegisterRetention(w, jobs_workflows.RetentionWorkerDeps{Jobs: actDeps.JobsRepo, Log: log})
 	ingest_workflows.Register(w, ingest_workflows.WorkerDeps{
 		Redis:                  ingestRedis,
 		Jobs:                   actDeps.JobsRepo,
 		Watermarks:             ingestWatermarks,
 		Collectors:             ingestCollectors,
 		DefaultExplicitRefresh: ingestExplicitRefresh,
+		Log:                    log,
 	})
 
 	if actDeps.JobsRepo != nil && config.LoadJobRetentionScheduleUpsertFromEnv() {
@@ -123,13 +127,17 @@ func main() {
 		err := jobs_workflows.EnsureJobRetentionSchedule(schedCtx, c, cfg.TaskQueue)
 		scancel()
 		if err != nil {
-			log.Printf("temporal worker: job retention schedule: %v (worker continues; use Temporal UI/CLI or bin/retention run)", err)
+			log.Warn().Err(err).Msg("job retention schedule (worker continues; use Temporal UI/CLI or bin/retention run)")
 		}
 	}
 
-	log.Printf("temporal worker: polling queue %q namespace %q address %s", cfg.TaskQueue, cfg.Namespace, cfg.Address)
+	log.Info().
+		Str("task_queue", cfg.TaskQueue).
+		Str("namespace", cfg.Namespace).
+		Str("address", cfg.Address).
+		Msg("polling")
 	if err := w.Run(worker.InterruptCh()); err != nil {
-		log.Printf("temporal worker: %v", err)
+		log.Error().Err(err).Msg("worker")
 		os.Exit(1)
 	}
 }

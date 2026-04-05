@@ -5,7 +5,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -24,6 +23,8 @@ import (
 	manual_workflows "github.com/andrewmysliuk/jobhound_core/internal/manual/workflows"
 	"github.com/andrewmysliuk/jobhound_core/internal/pipeline/impl"
 	"github.com/andrewmysliuk/jobhound_core/internal/pipeline/mock"
+	"github.com/andrewmysliuk/jobhound_core/internal/platform/logging"
+	"github.com/rs/zerolog"
 )
 
 const debugHTTPShutdownTimeout = 30 * time.Second
@@ -42,6 +43,7 @@ func main() {
 
 	ctx := context.Background()
 	appCfg := config.Load()
+	log := logging.NewRoot(appCfg.Logging.Level, appCfg.Logging.Format, "agent")
 	addr := strings.TrimSpace(*debugHTTPAddr)
 	if addr == "" {
 		addr = strings.TrimSpace(appCfg.DebugHTTPAddr)
@@ -54,7 +56,7 @@ func main() {
 		}
 		runCtx, cancel := context.WithTimeout(ctx, manual_workflows.DefaultManualSlotRunWorkflowTimeout+time.Minute)
 		defer cancel()
-		err := runTemporalManualSlotRun(runCtx, temporalManualOpts{
+		err := runTemporalManualSlotRun(runCtx, log, temporalManualOpts{
 			slotID:          *manualSlotID,
 			runKind:         *manualRunKind,
 			workflowID:      *manualWorkflowID,
@@ -85,19 +87,20 @@ func main() {
 		if x, ok := er.(*europeremotely.EuropeRemotely); ok {
 			erConcrete = x
 		}
-		if err := runDebugHTTPServer(addr, er, wn, wnConcrete, erConcrete); err != nil {
-			fmt.Fprintln(os.Stderr, err)
+		if err := runDebugHTTPServer(log, addr, er, wn, wnConcrete, erConcrete); err != nil {
+			log.Error().Err(err).Msg("debug http")
 			os.Exit(1)
 		}
 		return
 	}
 
-	coll := bootstrap.MVPMulti(er, wn)
+	coll := bootstrap.MVPMulti(er, wn, &log)
 	p := &impl.Pipeline{
 		Collector: coll,
 		Scorer:    llmmock.Scorer{},
 		Dedup:     mock.Dedup{},
 		Notify:    mock.Notifier{},
+		Log:       log,
 	}
 	if err := p.Run(ctx); err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -106,10 +109,10 @@ func main() {
 	fmt.Fprintln(os.Stderr, "jobhound_core: noop pipeline run ok")
 }
 
-func runDebugHTTPServer(addr string, europeRemotely, workingNomads collectors.Collector, workingNomadsConcrete *workingnomads.WorkingNomads, europeRemotelyConcrete *europeremotely.EuropeRemotely) error {
+func runDebugHTTPServer(log zerolog.Logger, addr string, europeRemotely, workingNomads collectors.Collector, workingNomadsConcrete *workingnomads.WorkingNomads, europeRemotelyConcrete *europeremotely.EuropeRemotely) error {
 	srv := &http.Server{
 		Addr:    addr,
-		Handler: debughttp.NewHTTPHandler(europeRemotely, workingNomads, workingNomadsConcrete, europeRemotelyConcrete),
+		Handler: debughttp.NewHTTPHandler(europeRemotely, workingNomads, workingNomadsConcrete, europeRemotelyConcrete, log),
 	}
 
 	errCh := make(chan error, 1)
@@ -119,7 +122,12 @@ func runDebugHTTPServer(addr string, europeRemotely, workingNomads collectors.Co
 		}
 	}()
 
-	log.Printf("jobhound_core: debug HTTP on %s (GET /health, %s, %s); Ctrl+C to stop", addr, debughttp.PathEuropeRemotely, debughttp.PathWorkingNomads)
+	log.Info().
+		Str("listen", addr).
+		Str("route_health", "GET /health").
+		Str("route_europe", debughttp.PathEuropeRemotely).
+		Str("route_working_nomads", debughttp.PathWorkingNomads).
+		Msg("debug http listening")
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
@@ -134,7 +142,7 @@ func runDebugHTTPServer(addr string, europeRemotely, workingNomads collectors.Co
 		if err := srv.Shutdown(shutdownCtx); err != nil {
 			return fmt.Errorf("debug HTTP shutdown: %w", err)
 		}
-		log.Println("jobhound_core: debug HTTP stopped")
+		log.Info().Msg("debug http stopped")
 		return nil
 	}
 }

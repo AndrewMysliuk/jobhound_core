@@ -1,6 +1,7 @@
 package config
 
 // Epic 008 (manual-search-workflow) adds no new JOBHOUND_* keys — see specs/008-manual-search-workflow/contracts/environment.md.
+// Epic 010 (observability): JOBHOUND_LOG_LEVEL, JOBHOUND_LOG_FORMAT — see specs/010-observability/contracts/environment.md.
 
 // Config is the single place for env-backed application and infrastructure settings.
 // Use Load() in cmd/* and pass nested structs (e.g. Database) into internal packages;
@@ -10,6 +11,7 @@ type Config struct {
 	API      API
 	Ingest   Ingest
 	Pipeline Pipeline
+	Logging  Logging
 	// DataDir is the directory containing countries.json (see EnvDataDir). Empty means use "data" relative to the process working directory.
 	DataDir string
 	// DebugHTTPAddr enables cmd/agent local debug HTTP when non-empty (see EnvDebugHTTPAddr); flag -debug-http-addr overrides.
@@ -37,6 +39,7 @@ func Load() Config {
 		API:             LoadAPIFromEnv(),
 		Ingest:          LoadIngestFromEnv(),
 		Pipeline:        LoadPipelineFromEnv(),
+		Logging:         LoadLoggingFromEnv(),
 		DataDir:         loadDataDirFromEnv(),
 		DebugHTTPAddr:   loadDebugHTTPAddrFromEnv(),
 		AnthropicAPIKey: LoadAnthropicAPIKeyFromEnv(),

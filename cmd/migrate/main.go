@@ -1,4 +1,5 @@
 // Command migrate applies SQL migrations (golang-migrate) using JOBHOUND_DATABASE_URL.
+// Human-oriented CLI output uses fmt (spec 010-observability/tasks C.5: no structured log here).
 package main
 
 import (

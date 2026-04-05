@@ -2,7 +2,7 @@
 
 **Feature Branch**: `008-manual-search-workflow`  
 **Created**: 2026-03-29  
-**Last Updated**: 2026-04-04  
+**Last Updated**: 2026-04-05  
 **Status**: Draft  
 
 **Product narrative**: [`../000-epic-overview/product-concept-draft.md`](../000-epic-overview/product-concept-draft.md) — **§2**–**§5** as updated with **`009`**; **§3** (repeat ingest on the same slot is **not** in public HTTP MVP—see **`009`**).
@@ -72,7 +72,7 @@ Then **recompute** the affected stages on the next manual run (no implicit full 
 
 ## Temporal architecture (normative for this epic)
 
-- **Stage 2** and **stage 3** MUST be **separate** registered workflows or activities (two distinct Temporal units with clear boundaries). **Bundling persisted stages 2 and 3 in a single activity** (as in today’s **`RunPersistedPipelineStages`**) is **legacy** and **must be split** to satisfy this spec.
+- **Stage 2** and **stage 3** MUST be **separate** registered workflows or activities (two distinct Temporal units with clear boundaries). The historical bundled persisted activity (**`RunPersistedPipelineStages`**) is **not** used for product paths; the worker registers **`PersistPipelineStage2Activity`** and **`PersistPipelineStage3Activity`** instead (see [`contracts/manual-workflow.md`](./contracts/manual-workflow.md) §4).
 - **Stage 1** remains **per-source** **`IngestSourceWorkflow`** (or equivalent), parallelized under a parent when multiple sources run.
 - **Parent workflow** (composite run kinds) may compose: optional parallel ingest children → **stage-2 workflow** → **stage-3 workflow**, aggregating counts/errors ([`contracts/manual-workflow.md`](./contracts/manual-workflow.md)). **`009`** does not use a single **1→2→3** parent for the browser MVP.
 
@@ -111,16 +111,17 @@ Workflow code stays **deterministic**; I/O only inside activities (**`003`** pat
 
 | Area | Location | What exists today |
 |------|-----------|-------------------|
-| Temporal worker | `cmd/worker/main.go` | Pipeline activities (**including bundled** `RunPersistedPipelineStages`), ingest workflow, jobs retention, reference demo. |
-| Ingest | `internal/ingest/workflows/`, `.../activities/`, `internal/ingest/schema/` | **`IngestSourceWorkflow`** → **`RunIngestSource`**; **`SlotID`** required; **`PASSED_STAGE_1`** via **`SaveIngest`**. |
-| Pipeline (legacy bundle) | `internal/pipeline/workflows/activities/stages.go` | **`RunPersistedPipelineStages`** does **both** stage 2 and stage 3 persistence in **one** activity—**contradicts** this spec; **split** during **`008`** implementation. |
+| Temporal worker | `cmd/worker/main.go` | **`RunPipelineStagesActivity`** (in-memory 1→3, no snapshot tables), **`PersistPipelineStage2Activity`** / **`PersistPipelineStage3Activity`**, **`ManualSlotRunWorkflow`**, ingest workflow, jobs retention, reference demo. |
+| Ingest | `internal/ingest/workflows/`, `.../activities/`, `internal/ingest/schema/` | **`IngestSourceWorkflow`** → **`RunIngestSource`**; **`SlotID`** required; **`PASSED_STAGE_1`** via **`SaveIngest`**; **`slot_jobs`** membership on ingest. |
+| Pipeline (persisted snapshots) | `internal/pipeline/workflows/activities/stages.go` | **`RunPersistPipelineStage2`** and **`RunPersistPipelineStage3`** — separate activities; orchestrated from **`ManualSlotRunWorkflow`**. |
 | Pipeline run header | `internal/pipeline/storage/`, `internal/pipeline/contract.go` | **`CreateRun(ctx, slotID)`** → **`pipeline_runs.slot_id`**. |
-| Jobs repo | `internal/jobs/` | No **`slot_jobs`**; no slot-scoped list API yet. |
-| Agent / debug HTTP | `cmd/agent/`, `internal/collectors/handlers/debughttp/` | Collectors only; **no** Temporal client for manual runs. |
+| Jobs / slot membership | `internal/jobs/storage/`, migrations | **`slot_jobs`** (`slot_id`, `job_id`); slot-scoped queries for pipeline stages. |
+| Public HTTP | `cmd/api/`, `internal/publicapi/` | **`009`** — slots, profile, stage runs, job lists; invalidation on stage-2 run and profile update. |
+| Agent | `cmd/agent/` | Debug HTTP for collectors; optional **`-temporal-manual-slot-run`** for CLI workflow starts (JSON aggregate on stdout). |
 | Reference client | `internal/reference/workflows/client.go` | **`ExecuteWorkflow`** pattern for tests/CLI. |
 
-**Gaps for this epic**: **`slot_jobs`** migration + writes on ingest + queries; **split** persisted pipeline into **stage-2** and **stage-3** Temporal units; **parent** manual workflow for composite kinds; wire **invalidation** with **`009`** (`POST …/stages/2/run` carries **include/exclude**; profile via **`PUT /profile`** + **`POST …/stages/3/run`**).
+**`008` core delivery**: complete — see [`tasks.md`](./tasks.md) and [`contracts/manual-workflow.md`](./contracts/manual-workflow.md) §7.
 
 ## Local / Docker
 
-Compose: **Temporal** + **Postgres**; ingest paths need **Redis** and configured collectors. Start workflows from worker tests, a small Temporal client (see `internal/reference/workflows`), or future **`cmd/agent`** / CLI. HTTP entrypoints—**`009`**.
+Compose: **Temporal** + **Postgres**; ingest paths need **Redis** and configured collectors. Start workflows from **`009`**, worker integration tests, **`internal/reference/workflows`**, or **`cmd/agent -temporal-manual-slot-run`**. Primary HTTP entrypoints—**`009`**.

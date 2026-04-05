@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/andrewmysliuk/jobhound_core/internal/publicapi/schema"
+	"github.com/rs/zerolog"
 )
 
 const maxJSONBodyBytes = 1 << 20
@@ -42,15 +43,17 @@ func WriteSlotLimitReached(w http.ResponseWriter, message string) {
 }
 
 // ReadJSON decodes a JSON body (max 1 MiB). On failure it writes 400 invalid_json and returns false.
-func ReadJSON(w http.ResponseWriter, r *http.Request, dst any) bool {
+func ReadJSON(w http.ResponseWriter, r *http.Request, log zerolog.Logger, dst any) bool {
 	r.Body = http.MaxBytesReader(w, r.Body, maxJSONBodyBytes)
 	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(dst); err != nil {
+		log.Error().Err(err).Msg("decode json body")
 		WriteAPIError(w, http.StatusBadRequest, "invalid_json", "request body is not valid JSON")
 		return false
 	}
 	if err := discardExtraJSON(dec); err != nil {
+		log.Error().Err(err).Msg("discard extra json")
 		WriteAPIError(w, http.StatusBadRequest, "invalid_json", "request body is not valid JSON")
 		return false
 	}

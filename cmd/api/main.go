@@ -3,7 +3,6 @@ package main
 
 import (
 	"context"
-	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -13,6 +12,7 @@ import (
 	"github.com/andrewmysliuk/jobhound_core/internal/config"
 	jobsstorage "github.com/andrewmysliuk/jobhound_core/internal/jobs/storage"
 	pipelinestorage "github.com/andrewmysliuk/jobhound_core/internal/pipeline/storage"
+	"github.com/andrewmysliuk/jobhound_core/internal/platform/logging"
 	"github.com/andrewmysliuk/jobhound_core/internal/platform/pgsql"
 	profileimpl "github.com/andrewmysliuk/jobhound_core/internal/profile/impl"
 	profilestorage "github.com/andrewmysliuk/jobhound_core/internal/profile/storage"
@@ -27,14 +27,15 @@ const shutdownTimeout = 30 * time.Second
 
 func main() {
 	appCfg := config.Load()
+	log := logging.NewRoot(appCfg.Logging.Level, appCfg.Logging.Format, "api")
 
 	if appCfg.Database.URL == "" {
-		log.Printf("api: %s is required", config.EnvDatabaseURL)
+		log.Error().Str("env", config.EnvDatabaseURL).Msg("required database URL missing")
 		os.Exit(1)
 	}
 	temporalCfg, err := config.LoadTemporalFromEnv()
 	if err != nil {
-		log.Printf("api: %v", err)
+		log.Error().Err(err).Msg("temporal config")
 		os.Exit(1)
 	}
 
@@ -42,7 +43,7 @@ func main() {
 	gdb, err := pgsql.Open(dbCtx, appCfg.Database)
 	cancel()
 	if err != nil {
-		log.Printf("api: database: %v", err)
+		log.Error().Err(err).Msg("database open")
 		os.Exit(1)
 	}
 
@@ -51,7 +52,7 @@ func main() {
 		Namespace: temporalCfg.Namespace,
 	})
 	if err != nil {
-		log.Printf("api: temporal dial: %v", err)
+		log.Error().Err(err).Msg("temporal dial")
 		os.Exit(1)
 	}
 	defer tc.Close()
@@ -61,12 +62,13 @@ func main() {
 	jobRepo := jobsstorage.NewRepository(getter)
 	pipeRuns := pipelinestorage.NewRepository(getter)
 	profileRepo := profilestorage.NewRepository(getter)
-	profileSvc := profileimpl.NewService(profileRepo, pipeRuns, slotRepo)
-	slotSvc := slotsimpl.NewService(slotRepo, jobRepo, pipeRuns, profileSvc, tc, temporalCfg.TaskQueue, slots.DefaultIngestSourceIDs())
+	profileSvc := profileimpl.NewService(profileRepo, pipeRuns, slotRepo, log)
+	slotSvc := slotsimpl.NewService(slotRepo, jobRepo, pipeRuns, profileSvc, tc, temporalCfg.TaskQueue, slots.DefaultIngestSourceIDs(), log)
 
 	handler := publicapihandlers.NewHTTPHandler(appCfg.API.CORSAllowedOrigins, publicapihandlers.Deps{
 		Slots:   slotSvc,
 		Profile: profileSvc,
+		Logger:  log,
 	})
 
 	srv := &http.Server{
@@ -76,7 +78,11 @@ func main() {
 
 	errCh := make(chan error, 1)
 	go func() {
-		log.Printf("api: listening on %s (Temporal %s queue %q)", appCfg.API.Listen, temporalCfg.Address, temporalCfg.TaskQueue)
+		log.Info().
+			Str("listen", appCfg.API.Listen).
+			Str("temporal_address", temporalCfg.Address).
+			Str("task_queue", temporalCfg.TaskQueue).
+			Msg("listening")
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			errCh <- err
 		}
@@ -88,15 +94,15 @@ func main() {
 
 	select {
 	case err := <-errCh:
-		log.Printf("api: %v", err)
+		log.Error().Err(err).Msg("http server")
 		os.Exit(1)
 	case <-quit:
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
-		defer cancel()
+		shutdownCtx, scancel := context.WithTimeout(context.Background(), shutdownTimeout)
+		defer scancel()
 		if err := srv.Shutdown(shutdownCtx); err != nil {
-			log.Printf("api: shutdown: %v", err)
+			log.Error().Err(err).Msg("shutdown")
 			os.Exit(1)
 		}
-		log.Println("api: stopped")
+		log.Info().Msg("stopped")
 	}
 }

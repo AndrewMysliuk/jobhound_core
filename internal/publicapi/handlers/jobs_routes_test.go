@@ -11,6 +11,7 @@ import (
 
 	"github.com/andrewmysliuk/jobhound_core/internal/publicapi/schema"
 	"github.com/andrewmysliuk/jobhound_core/internal/slots"
+	"github.com/rs/zerolog"
 )
 
 type mockSlotsJobs struct {
@@ -60,7 +61,7 @@ func TestGetStageJobs_queryAnd404(t *testing.T) {
 			Total: 25,
 		},
 	}
-	h := NewHTTPHandler(nil, Deps{Slots: ms, Profile: stubProfile{}})
+	h := NewHTTPHandler(nil, Deps{Logger: zerolog.Nop(), Slots: ms, Profile: stubProfile{}})
 
 	t.Run("limit_max_ok", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/slots/"+sid+"/stages/1/jobs?page=1&limit=100", nil)
@@ -91,7 +92,7 @@ func TestGetStageJobs_queryAnd404(t *testing.T) {
 
 	t.Run("empty_list", func(t *testing.T) {
 		msEmpty := &mockSlotsJobs{listResp: schema.JobListResponse{Items: []schema.JobListItem{}, Page: 1, Limit: 50, Total: 0}}
-		hE := NewHTTPHandler(nil, Deps{Slots: msEmpty, Profile: stubProfile{}})
+		hE := NewHTTPHandler(nil, Deps{Logger: zerolog.Nop(), Slots: msEmpty, Profile: stubProfile{}})
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/slots/"+sid+"/stages/2/jobs", nil)
 		rec := httptest.NewRecorder()
 		hE.ServeHTTP(rec, req)
@@ -109,7 +110,7 @@ func TestGetStageJobs_queryAnd404(t *testing.T) {
 
 	t.Run("404_slot", func(t *testing.T) {
 		ms404 := &mockSlotsJobs{listErr: slots.ErrNotFound}
-		h404 := NewHTTPHandler(nil, Deps{Slots: ms404, Profile: stubProfile{}})
+		h404 := NewHTTPHandler(nil, Deps{Logger: zerolog.Nop(), Slots: ms404, Profile: stubProfile{}})
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/slots/"+sid+"/stages/1/jobs", nil)
 		rec := httptest.NewRecorder()
 		h404.ServeHTTP(rec, req)
@@ -120,7 +121,7 @@ func TestGetStageJobs_queryAnd404(t *testing.T) {
 
 	t.Run("invalid_bucket", func(t *testing.T) {
 		msB := &mockSlotsJobs{listErr: slots.ErrInvalidJobListQuery}
-		hB := NewHTTPHandler(nil, Deps{Slots: msB, Profile: stubProfile{}})
+		hB := NewHTTPHandler(nil, Deps{Logger: zerolog.Nop(), Slots: msB, Profile: stubProfile{}})
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/slots/"+sid+"/stages/2/jobs?bucket=nope", nil)
 		rec := httptest.NewRecorder()
 		hB.ServeHTTP(rec, req)
@@ -135,7 +136,7 @@ func TestPatchStageJobBucket(t *testing.T) {
 	ms := &mockSlotsJobs{
 		patchRet: &schema.PatchJobBucketResponse{JobID: "jx", Bucket: schema.JobBucketPassed},
 	}
-	h := NewHTTPHandler(nil, Deps{Slots: ms, Profile: stubProfile{}})
+	h := NewHTTPHandler(nil, Deps{Logger: zerolog.Nop(), Slots: ms, Profile: stubProfile{}})
 
 	t.Run("ok", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPatch, "/api/v1/slots/"+sid+"/stages/2/jobs/jx", bytes.NewBufferString(`{"bucket":"passed"}`))
@@ -159,7 +160,7 @@ func TestPatchStageJobBucket(t *testing.T) {
 
 	t.Run("404", func(t *testing.T) {
 		ms404 := &mockSlotsJobs{patchErr: slots.ErrNotFound}
-		h404 := NewHTTPHandler(nil, Deps{Slots: ms404, Profile: stubProfile{}})
+		h404 := NewHTTPHandler(nil, Deps{Logger: zerolog.Nop(), Slots: ms404, Profile: stubProfile{}})
 		req := httptest.NewRequest(http.MethodPatch, "/api/v1/slots/"+sid+"/stages/3/jobs/missing", bytes.NewBufferString(`{"bucket":"failed"}`))
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()

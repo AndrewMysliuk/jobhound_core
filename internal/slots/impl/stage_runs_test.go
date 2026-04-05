@@ -8,6 +8,7 @@ import (
 
 	manualschema "github.com/andrewmysliuk/jobhound_core/internal/manual/schema"
 	pipelinestorage "github.com/andrewmysliuk/jobhound_core/internal/pipeline/storage"
+	"github.com/andrewmysliuk/jobhound_core/internal/platform/logging"
 	"github.com/andrewmysliuk/jobhound_core/internal/platform/pgsql"
 	"github.com/andrewmysliuk/jobhound_core/internal/slots"
 	slotstorage "github.com/andrewmysliuk/jobhound_core/internal/slots/storage"
@@ -104,6 +105,7 @@ func TestRunStage2_startsWorkflowWithKeywordRules(t *testing.T) {
 		ft,
 		"q",
 		[]string{"src"},
+		logging.Nop(),
 	)
 	out, err := svc.RunStage2(ctx, slotID.String(), []string{"a", "b"}, []string{"x"})
 	require.NoError(t, err)
@@ -138,6 +140,7 @@ func TestRunStage2_stageAlreadyRunning(t *testing.T) {
 		ft,
 		"q",
 		[]string{"src"},
+		logging.Nop(),
 	)
 	_, err := svc.RunStage2(ctx, slotID.String(), []string{"a"}, []string{"b"})
 	require.ErrorIs(t, err, slots.ErrStageAlreadyRunning)
@@ -165,6 +168,7 @@ func TestRunStage3_startsWorkflowWithRunKindAndMaxJobs(t *testing.T) {
 		ft,
 		"q",
 		[]string{"src"},
+		logging.Nop(),
 	)
 	out, err := svc.RunStage3(ctx, slotID.String(), 7)
 	require.NoError(t, err)
@@ -199,6 +203,7 @@ func TestRunStage3_profileRequired(t *testing.T) {
 		ft,
 		"q",
 		[]string{"src"},
+		logging.Nop(),
 	)
 	_, err := svc.RunStage3(ctx, slotID.String(), 5)
 	require.ErrorIs(t, err, slots.ErrProfileRequired)
@@ -224,6 +229,7 @@ func TestRunStage3_noPipelineRun(t *testing.T) {
 		ft,
 		"q",
 		[]string{"src"},
+		logging.Nop(),
 	)
 	_, err := svc.RunStage3(ctx, slotID.String(), 5)
 	require.ErrorIs(t, err, slots.ErrNoPipelineRun)

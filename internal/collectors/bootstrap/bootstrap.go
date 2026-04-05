@@ -15,6 +15,7 @@ import (
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/multi"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/utils"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/workingnomads"
+	"github.com/rs/zerolog"
 )
 
 // MVPCollectors returns Europe Remotely and Working Nomads as separate collectors.
@@ -56,17 +57,18 @@ func MVPCollectors(ctx context.Context, httpClient *http.Client, dataDir string)
 }
 
 // MVPMulti wraps Europe Remotely and Working Nomads collectors in one collectors.Collector (MVP order).
-func MVPMulti(europeRemotely, workingNomads collectors.Collector) collectors.Collector {
-	return &multi.All{Collectors: []collectors.Collector{europeRemotely, workingNomads}}
+// Optional log: per-source Fetch failures log at Warn on multi.All when OnSourceError is unset.
+func MVPMulti(europeRemotely, workingNomads collectors.Collector, log *zerolog.Logger) collectors.Collector {
+	return &multi.All{Collectors: []collectors.Collector{europeRemotely, workingNomads}, Log: log}
 }
 
 // MVPCollector returns a single collectors.Collector that runs Europe Remotely and Working Nomads.
-func MVPCollector(ctx context.Context, httpClient *http.Client, dataDir string) (collectors.Collector, error) {
+func MVPCollector(ctx context.Context, httpClient *http.Client, dataDir string, log *zerolog.Logger) (collectors.Collector, error) {
 	er, wn, err := MVPCollectors(ctx, httpClient, dataDir)
 	if err != nil {
 		return nil, err
 	}
-	return MVPMulti(er, wn), nil
+	return MVPMulti(er, wn, log), nil
 }
 
 func loadCountryResolver(dataDir string) (*utils.CountryResolver, error) {

@@ -28,6 +28,8 @@ func stage3WorkflowID(slotID uuid.UUID) string {
 // Concurrency: fixed Temporal workflow id per slot and stage; DescribeWorkflow before ExecuteWorkflow;
 // ALLOW_DUPLICATE allows a new run after the previous closed. If ExecuteWorkflow races, AlreadyStarted maps to 409.
 func (s *Service) RunStage2(ctx context.Context, slotID string, include, exclude []string) (*schema.StageRunAcceptedResponse, error) {
+	log := s.methodLog(ctx, "RunStage2")
+	log.Debug().Msg("run stage 2")
 	if s.Runs == nil {
 		return nil, errors.New("slots service: pipeline runs repository is required for stage 2")
 	}
@@ -74,6 +76,8 @@ func (s *Service) RunStage2(ctx context.Context, slotID string, include, exclude
 
 // RunStage3 implements [slots.API.RunStage3]. maxJobs must already be validated (1–100) by the handler.
 func (s *Service) RunStage3(ctx context.Context, slotID string, maxJobs int) (*schema.StageRunAcceptedResponse, error) {
+	log := s.methodLog(ctx, "RunStage3")
+	log.Debug().Msg("run stage 3")
 	if s.Runs == nil || s.Profiles == nil {
 		return nil, errors.New("slots service: pipeline runs and profile are required for stage 3")
 	}

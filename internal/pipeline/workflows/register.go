@@ -8,6 +8,7 @@ import (
 	manualschema "github.com/andrewmysliuk/jobhound_core/internal/manual/schema"
 	"github.com/andrewmysliuk/jobhound_core/internal/pipeline"
 	pipeline_activities "github.com/andrewmysliuk/jobhound_core/internal/pipeline/workflows/activities"
+	"github.com/rs/zerolog"
 	"go.temporal.io/sdk/activity"
 	"go.temporal.io/sdk/worker"
 )
@@ -24,6 +25,7 @@ type ActivitiesDeps struct {
 	JobsRepo jobs.JobRepository
 	// Stage3MaxJobsPerRun is the cap N (from config); zero uses default constant in selection helper.
 	Stage3MaxJobsPerRun int
+	Log                 zerolog.Logger
 }
 
 // RegisterActivities registers pipeline stage activities on the worker.
@@ -37,6 +39,7 @@ func RegisterActivities(w worker.Worker, deps ActivitiesDeps) {
 		Runs:                deps.RunRepo,
 		Jobs:                deps.JobsRepo,
 		Stage3MaxJobsPerRun: deps.Stage3MaxJobsPerRun,
+		Log:                 deps.Log,
 	}
 	w.RegisterActivityWithOptions(acts.RunPipelineStages, activity.RegisterOptions{
 		Name: RunPipelineStagesActivityName,

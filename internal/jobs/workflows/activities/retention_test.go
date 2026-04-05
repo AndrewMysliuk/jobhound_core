@@ -8,6 +8,7 @@ import (
 	"github.com/andrewmysliuk/jobhound_core/internal/domain"
 	"github.com/andrewmysliuk/jobhound_core/internal/jobs"
 	jobutils "github.com/andrewmysliuk/jobhound_core/internal/jobs/utils"
+	"github.com/andrewmysliuk/jobhound_core/internal/platform/logging"
 	"github.com/google/uuid"
 )
 
@@ -67,6 +68,7 @@ func TestRunJobRetention_usesClockAndCutoff(t *testing.T) {
 	a := &RetentionActivities{
 		Clock: func() time.Time { return fixed },
 		Jobs:  stub,
+		Log:   logging.Nop(),
 	}
 	out, err := a.RunJobRetention(context.Background())
 	if err != nil {

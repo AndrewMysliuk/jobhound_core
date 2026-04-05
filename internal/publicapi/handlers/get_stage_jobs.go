@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/andrewmysliuk/jobhound_core/internal/platform/logging"
 	"github.com/andrewmysliuk/jobhound_core/internal/publicapi/schema"
 	"github.com/andrewmysliuk/jobhound_core/internal/slots"
 )
@@ -16,6 +17,8 @@ func (h *HTTPHandler) getStageJobs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	slotID := stringsTrimPathValue(r, "slot_id")
+	ctx := logging.WithSlotID(r.Context(), slotID)
+	logH := logging.EnrichWithContext(ctx, h.deps.Logger.With().Str(logging.FieldHandler, "getStageJobs").Logger())
 	stageStr := stringsTrimPathValue(r, "stage")
 	stage, ok := parseStageDigit(stageStr)
 	if !ok || stage < 1 || stage > 3 {
@@ -31,7 +34,7 @@ func (h *HTTPHandler) getStageJobs(w http.ResponseWriter, r *http.Request) {
 		WriteAPIError(w, http.StatusBadRequest, "invalid_query", "bucket is only allowed for stages 2 and 3")
 		return
 	}
-	resp, err := h.deps.Slots.ListJobs(r.Context(), slotID, stage, page, limit, bucket)
+	resp, err := h.deps.Slots.ListJobs(ctx, slotID, stage, page, limit, bucket)
 	if errors.Is(err, slots.ErrNotFound) {
 		WriteAPIError(w, http.StatusNotFound, "not_found", "slot not found")
 		return
@@ -41,6 +44,7 @@ func (h *HTTPHandler) getStageJobs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
+		logH.Error().Err(err).Msg("list stage jobs")
 		WriteAPIError(w, http.StatusInternalServerError, "internal_error", err.Error())
 		return
 	}

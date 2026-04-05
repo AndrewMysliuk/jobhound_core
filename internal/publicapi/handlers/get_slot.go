@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/andrewmysliuk/jobhound_core/internal/platform/logging"
 	"github.com/andrewmysliuk/jobhound_core/internal/slots"
 )
 
@@ -13,12 +14,15 @@ func (h *HTTPHandler) getSlot(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id := stringsTrimPathValue(r, "slot_id")
-	card, err := h.deps.Slots.Get(r.Context(), id)
+	ctx := logging.WithSlotID(r.Context(), id)
+	logH := logging.EnrichWithContext(ctx, h.deps.Logger.With().Str(logging.FieldHandler, "getSlot").Logger())
+	card, err := h.deps.Slots.Get(ctx, id)
 	if errors.Is(err, slots.ErrNotFound) {
 		WriteAPIError(w, http.StatusNotFound, "not_found", "slot not found")
 		return
 	}
 	if err != nil {
+		logH.Error().Err(err).Msg("get slot")
 		WriteAPIError(w, http.StatusInternalServerError, "internal_error", err.Error())
 		return
 	}

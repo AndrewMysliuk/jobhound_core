@@ -45,6 +45,8 @@ func jobListItemFromEntry(e jobs.JobListEntry) schema.JobListItem {
 
 // ListJobs implements [slots.API.ListJobs].
 func (s *Service) ListJobs(ctx context.Context, slotID string, stage, page, limit int, bucket string) (schema.JobListResponse, error) {
+	log := s.methodLog(ctx, "ListJobs")
+	log.Debug().Msg("list jobs")
 	if s.Jobs == nil {
 		return schema.JobListResponse{}, errors.New("slots service: jobs repository is required for job lists")
 	}
@@ -102,6 +104,8 @@ func (s *Service) ListJobs(ctx context.Context, slotID string, stage, page, limi
 
 // PatchJobBucket implements [slots.API.PatchJobBucket].
 func (s *Service) PatchJobBucket(ctx context.Context, slotID string, stage int, jobID string, bucket schema.JobBucket) (*schema.PatchJobBucketResponse, error) {
+	log := s.methodLog(ctx, "PatchJobBucket")
+	log.Debug().Msg("patch job bucket")
 	if s.Runs == nil {
 		return nil, errors.New("slots service: pipeline runs repository is required for bucket patch")
 	}

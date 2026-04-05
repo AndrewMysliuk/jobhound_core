@@ -14,6 +14,7 @@ import (
 	"github.com/andrewmysliuk/jobhound_core/internal/jobs"
 	jobsstorage "github.com/andrewmysliuk/jobhound_core/internal/jobs/storage"
 	"github.com/andrewmysliuk/jobhound_core/internal/pipeline"
+	"github.com/andrewmysliuk/jobhound_core/internal/platform/logging"
 	"github.com/andrewmysliuk/jobhound_core/internal/platform/pgsql"
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
@@ -121,6 +122,7 @@ func TestRunIngestSource_incrementalWatermark(t *testing.T) {
 		},
 		BroadRules: pipeline.BroadFilterRules{},
 		Clock:      func() time.Time { return fixedNow },
+		Log:        logging.Nop(),
 	}
 
 	out, err := acts.RunIngestSource(ctx, ingestschema.IngestSourceInput{SlotID: testSlot, SourceID: src, ExplicitRefresh: false})
@@ -196,6 +198,7 @@ func TestRunIngestSource_broadFilterSkipsNonPassing(t *testing.T) {
 		},
 		BroadRules: pipeline.BroadFilterRules{},
 		Clock:      func() time.Time { return fixedNow },
+		Log:        logging.Nop(),
 	}
 
 	out, err := acts.RunIngestSource(ctx, ingestschema.IngestSourceInput{SlotID: slot2, SourceID: src, ExplicitRefresh: true})
@@ -267,6 +270,7 @@ func TestRunIngestSource_writesSlotJobMembership(t *testing.T) {
 		},
 		BroadRules: pipeline.BroadFilterRules{},
 		Clock:      func() time.Time { return fixedNow },
+		Log:        logging.Nop(),
 	}
 
 	out, err := acts.RunIngestSource(ctx, ingestschema.IngestSourceInput{SlotID: testSlot, SourceID: src, ExplicitRefresh: true})

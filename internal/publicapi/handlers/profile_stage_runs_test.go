@@ -11,6 +11,7 @@ import (
 
 	"github.com/andrewmysliuk/jobhound_core/internal/publicapi/schema"
 	"github.com/andrewmysliuk/jobhound_core/internal/slots"
+	"github.com/rs/zerolog"
 )
 
 type mockProfile struct {
@@ -50,7 +51,7 @@ func TestProfileRoutes_roundTrip(t *testing.T) {
 		getRet: schema.ProfileResponse{Text: "hello", UpdatedAt: t0},
 		putRet: schema.ProfileResponse{Text: "hello", UpdatedAt: t0},
 	}
-	h := NewHTTPHandler(nil, Deps{Slots: &mockSlots{}, Profile: prof})
+	h := NewHTTPHandler(nil, Deps{Logger: zerolog.Nop(), Slots: &mockSlots{}, Profile: prof})
 
 	t.Run("get", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/profile", nil)
@@ -94,7 +95,7 @@ func TestPostStage2Run_validationAnd409(t *testing.T) {
 	ms := &mockSlotsStageRuns{
 		run2Ret: &schema.StageRunAcceptedResponse{SlotID: sid, Stage: 2},
 	}
-	h := NewHTTPHandler(nil, Deps{Slots: ms, Profile: stubProfile{}})
+	h := NewHTTPHandler(nil, Deps{Logger: zerolog.Nop(), Slots: ms, Profile: stubProfile{}})
 
 	t.Run("missing_include", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/slots/"+sid+"/stages/2/run", bytes.NewBufferString(`{"exclude":[]}`))
@@ -117,7 +118,7 @@ func TestPostStage2Run_validationAnd409(t *testing.T) {
 	})
 
 	ms409 := &mockSlotsStageRuns{run2Err: slots.ErrStageAlreadyRunning}
-	h409 := NewHTTPHandler(nil, Deps{Slots: ms409, Profile: stubProfile{}})
+	h409 := NewHTTPHandler(nil, Deps{Logger: zerolog.Nop(), Slots: ms409, Profile: stubProfile{}})
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/slots/"+sid+"/stages/2/run", bytes.NewBufferString(`{"include":[],"exclude":[]}`))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
@@ -137,7 +138,7 @@ func TestPostStage2Run_validationAnd409(t *testing.T) {
 func TestPostStage3Run_404_and_422(t *testing.T) {
 	sid := "22222222-2222-4222-8222-222222222222"
 	ms := &mockSlotsStageRuns{run3Err: slots.ErrNotFound}
-	h := NewHTTPHandler(nil, Deps{Slots: ms, Profile: stubProfile{}})
+	h := NewHTTPHandler(nil, Deps{Logger: zerolog.Nop(), Slots: ms, Profile: stubProfile{}})
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/slots/"+sid+"/stages/3/run", bytes.NewBufferString(`{"max_jobs":5}`))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
@@ -147,7 +148,7 @@ func TestPostStage3Run_404_and_422(t *testing.T) {
 	}
 
 	ms2 := &mockSlotsStageRuns{run3Err: slots.ErrNoPipelineRun}
-	h2 := NewHTTPHandler(nil, Deps{Slots: ms2, Profile: stubProfile{}})
+	h2 := NewHTTPHandler(nil, Deps{Logger: zerolog.Nop(), Slots: ms2, Profile: stubProfile{}})
 	req2 := httptest.NewRequest(http.MethodPost, "/api/v1/slots/"+sid+"/stages/3/run", bytes.NewBufferString(`{"max_jobs":5}`))
 	req2.Header.Set("Content-Type", "application/json")
 	rec2 := httptest.NewRecorder()
@@ -157,7 +158,7 @@ func TestPostStage3Run_404_and_422(t *testing.T) {
 	}
 
 	ms3 := &mockSlotsStageRuns{run3Err: slots.ErrProfileRequired}
-	h3 := NewHTTPHandler(nil, Deps{Slots: ms3, Profile: stubProfile{}})
+	h3 := NewHTTPHandler(nil, Deps{Logger: zerolog.Nop(), Slots: ms3, Profile: stubProfile{}})
 	req3 := httptest.NewRequest(http.MethodPost, "/api/v1/slots/"+sid+"/stages/3/run", bytes.NewBufferString(`{"max_jobs":5}`))
 	req3.Header.Set("Content-Type", "application/json")
 	rec3 := httptest.NewRecorder()
@@ -170,7 +171,7 @@ func TestPostStage3Run_404_and_422(t *testing.T) {
 func TestPostStage3Run_maxJobsValidation(t *testing.T) {
 	sid := "33333333-3333-4333-8333-333333333333"
 	ms := &mockSlotsStageRuns{}
-	h := NewHTTPHandler(nil, Deps{Slots: ms, Profile: stubProfile{}})
+	h := NewHTTPHandler(nil, Deps{Logger: zerolog.Nop(), Slots: ms, Profile: stubProfile{}})
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/slots/"+sid+"/stages/3/run", bytes.NewBufferString(`{"max_jobs":0}`))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()

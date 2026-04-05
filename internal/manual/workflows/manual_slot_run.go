@@ -2,6 +2,7 @@ package manual_workflows
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/andrewmysliuk/jobhound_core/internal/pipeline"
 	pipelineschema "github.com/andrewmysliuk/jobhound_core/internal/pipeline/schema"
 	pipeutils "github.com/andrewmysliuk/jobhound_core/internal/pipeline/utils"
+	"github.com/andrewmysliuk/jobhound_core/internal/platform/logging"
 	"github.com/andrewmysliuk/jobhound_core/internal/platform/temporalopts"
 	"go.temporal.io/sdk/workflow"
 )
@@ -21,6 +23,16 @@ func ManualSlotRunWorkflow(ctx workflow.Context, in manualschema.ManualSlotRunWo
 	if err := in.Validate(); err != nil {
 		return manualschema.ManualSlotRunAggregate{}, err
 	}
+
+	startKV := []interface{}{
+		logging.FieldWorkflow, manualschema.ManualSlotRunWorkflowName,
+		logging.FieldSlotID, in.SlotID.String(),
+		"run_kind", string(in.Kind),
+	}
+	if in.UserID != nil && strings.TrimSpace(*in.UserID) != "" {
+		startKV = append(startKV, logging.FieldUserID, strings.TrimSpace(*in.UserID))
+	}
+	workflow.GetLogger(ctx).Info("manual slot run workflow start", startKV...)
 
 	info := workflow.GetInfo(ctx)
 	agg := manualschema.ManualSlotRunAggregate{
@@ -46,6 +58,11 @@ func ManualSlotRunWorkflow(ctx workflow.Context, in manualschema.ManualSlotRunWo
 		} else {
 			ctxCreate := workflow.WithActivityOptions(ctx, temporalopts.DefaultActivityOptions())
 			if err := workflow.ExecuteActivity(ctxCreate, manualschema.CreatePipelineRunActivityName, in.SlotID).Get(ctxCreate, &runID); err != nil {
+				workflow.GetLogger(ctx).Error("CreatePipelineRun activity failed",
+					logging.FieldWorkflow, manualschema.ManualSlotRunWorkflowName,
+					logging.FieldSlotID, in.SlotID.String(),
+					"error", err,
+				)
 				return agg, err
 			}
 			rid := runID
@@ -57,6 +74,11 @@ func ManualSlotRunWorkflow(ctx workflow.Context, in manualschema.ManualSlotRunWo
 		ctxAct := workflow.WithActivityOptions(ctx, temporalopts.DefaultActivityOptions())
 		var jobs []domain.Job
 		if err := workflow.ExecuteActivity(ctxAct, manualschema.ListSlotJobsPassedStage1ActivityName, in.SlotID).Get(ctxAct, &jobs); err != nil {
+			workflow.GetLogger(ctx).Error("ListSlotJobsPassedStage1 activity failed",
+				logging.FieldWorkflow, manualschema.ManualSlotRunWorkflowName,
+				logging.FieldSlotID, in.SlotID.String(),
+				"error", err,
+			)
 			return agg, err
 		}
 		ctxPipe := workflow.WithActivityOptions(ctx, temporalopts.PipelinePersistActivityOptions())
@@ -69,6 +91,12 @@ func ManualSlotRunWorkflow(ctx workflow.Context, in manualschema.ManualSlotRunWo
 		}
 		var s2out pipelineschema.PersistPipelineStage2Output
 		if err := workflow.ExecuteActivity(ctxPipe, manualschema.PersistPipelineStage2ActivityName, in2).Get(ctxPipe, &s2out); err != nil {
+			workflow.GetLogger(ctx).Error("PersistPipelineStage2 activity failed",
+				logging.FieldWorkflow, manualschema.ManualSlotRunWorkflowName,
+				logging.FieldSlotID, in.SlotID.String(),
+				logging.FieldPipelineRunID, strconv.FormatInt(runID, 10),
+				"error", err,
+			)
 			return agg, err
 		}
 		passed := len(s2out.AfterKeywords)
@@ -88,6 +116,12 @@ func ManualSlotRunWorkflow(ctx workflow.Context, in manualschema.ManualSlotRunWo
 		}
 		var s3out pipelineschema.PersistPipelineStage3Output
 		if err := workflow.ExecuteActivity(ctxPipe, manualschema.PersistPipelineStage3ActivityName, in3).Get(ctxPipe, &s3out); err != nil {
+			workflow.GetLogger(ctx).Error("PersistPipelineStage3 activity failed",
+				logging.FieldWorkflow, manualschema.ManualSlotRunWorkflowName,
+				logging.FieldSlotID, in.SlotID.String(),
+				logging.FieldPipelineRunID, strconv.FormatInt(runID, 10),
+				"error", err,
+			)
 			return agg, err
 		}
 		capN := pipeutils.MaxStage3JobsPerPipelineRunExecution
@@ -133,6 +167,12 @@ func runParallelIngest(ctx workflow.Context, agg *manualschema.ManualSlotRunAggr
 	for i, src := range in.SourceIDs {
 		var out ingestschema.IngestSourceOutput
 		if err := futures[i].Get(ctx, &out); err != nil {
+			workflow.GetLogger(ctx).Error("ingest child workflow failed",
+				logging.FieldWorkflow, manualschema.ManualSlotRunWorkflowName,
+				logging.FieldSlotID, in.SlotID.String(),
+				logging.FieldSourceID, src,
+				"error", err,
+			)
 			errParts = append(errParts, fmt.Sprintf("ingest %s: %v", src, err))
 			continue
 		}

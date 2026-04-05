@@ -4,12 +4,29 @@ Backend for a **personal job agent**: collect vacancies, pipeline (filters → L
 
 For modules, env vars, and Docker, see `specs/` and `.specify/memory/constitution.md`.
 
+## Logging
+
+Structured logs use **zerolog**. Tune via:
+
+- **`JOBHOUND_LOG_LEVEL`** — e.g. `debug`, `info`, `warn`, `error` (see `internal/config` defaults).
+- **`JOBHOUND_LOG_FORMAT`** — `console` for local readability; **`json`** for Docker Compose / GCP Cloud Logging (stdout).
+
+Example for Compose or production-style runs:
+
+```bash
+export JOBHOUND_LOG_FORMAT=json
+export JOBHOUND_LOG_LEVEL=info
+./bin/worker
+```
+
+Details: `specs/010-observability/contracts/environment.md`.
+
 ## Run
 
 Requires Go 1.24.
 
 ```bash
-make build    # bin/agent, bin/worker
+make build    # bin/agent, bin/worker, bin/api (see Makefile)
 make run      # agent
 make test     # unit tests
 ```

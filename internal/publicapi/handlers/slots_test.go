@@ -12,6 +12,7 @@ import (
 
 	"github.com/andrewmysliuk/jobhound_core/internal/publicapi/schema"
 	"github.com/andrewmysliuk/jobhound_core/internal/slots"
+	"github.com/rs/zerolog"
 )
 
 type mockSlots struct {
@@ -210,7 +211,7 @@ func TestSlotsRoutes_tableDriven(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			h := NewHTTPHandler(nil, Deps{Slots: tt.mock, Profile: stubProfile{}})
+			h := NewHTTPHandler(nil, Deps{Logger: zerolog.Nop(), Slots: tt.mock, Profile: stubProfile{}})
 			var reqBody *bytes.Reader
 			if tt.body != "" {
 				reqBody = bytes.NewReader([]byte(tt.body))

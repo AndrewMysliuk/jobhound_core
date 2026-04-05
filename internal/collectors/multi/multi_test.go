@@ -1,14 +1,17 @@
 package multi
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"testing"
 
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors"
 	"github.com/andrewmysliuk/jobhound_core/internal/domain"
+	"github.com/andrewmysliuk/jobhound_core/internal/platform/logging"
 )
 
 type stubCollector struct {
@@ -53,4 +56,23 @@ func TestAll_Fetch_allFail(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "e1")
 	require.Contains(t, err.Error(), "e2")
+}
+
+func TestAll_Fetch_logsWithLoggerWhenNoOnSourceError(t *testing.T) {
+	var buf bytes.Buffer
+	lg := zerolog.New(&buf).Level(zerolog.WarnLevel)
+	a := &All{
+		Collectors: []collectors.Collector{
+			stubCollector{name: "Europe Remotely", err: errors.New("boom")},
+			stubCollector{name: "good", jobs: []domain.Job{{Title: "x"}}},
+		},
+		Log: &lg,
+	}
+	out, err := a.Fetch(context.Background())
+	require.NoError(t, err)
+	require.Len(t, out, 1)
+	s := buf.String()
+	require.Contains(t, s, logging.FieldSourceID)
+	require.Contains(t, s, "europe remotely")
+	require.Contains(t, s, "boom")
 }

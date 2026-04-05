@@ -13,7 +13,9 @@ import (
 	"github.com/andrewmysliuk/jobhound_core/internal/jobs"
 	"github.com/andrewmysliuk/jobhound_core/internal/pipeline"
 	pipeutils "github.com/andrewmysliuk/jobhound_core/internal/pipeline/utils"
+	"github.com/andrewmysliuk/jobhound_core/internal/platform/logging"
 	"github.com/google/uuid"
+	"github.com/rs/zerolog"
 )
 
 // RunIngestSourceActivityName is the registered Temporal activity for per-source ingest (006).
@@ -30,6 +32,7 @@ type IngestActivities struct {
 	BroadRules pipeline.BroadFilterRules
 	// Clock is optional; used by ApplyBroadFilter for the default 7-day window when From/To unset; nil uses time.Now.
 	Clock func() time.Time
+	Log   zerolog.Logger
 }
 
 // RunIngestSource acquires the ingest lock, fetches via the 005 collector, applies broad stage 1 (004),
@@ -51,14 +54,22 @@ func (a *IngestActivities) RunIngestSource(ctx context.Context, in ingestschema.
 	if id == "" {
 		return nil, ingest.ErrEmptySourceID
 	}
+	ctx = logging.WithSlotID(ctx, in.SlotID.String())
+	log := logging.EnrichWithContext(ctx, logging.LoggerWithActivity(ctx, a.Log, RunIngestSourceActivityName)).
+		With().Str(logging.FieldSourceID, id).Logger()
 	col, ok := a.Collectors[id]
 	if !ok || col == nil {
-		return nil, fmt.Errorf("ingest activity: unknown source_id %q", id)
+		err := fmt.Errorf("ingest activity: unknown source_id %q", id)
+		log.Error().Err(err).Msg("unknown source")
+		return nil, err
 	}
+
+	log.Debug().Msg("ingest start")
 
 	explicit := in.ExplicitRefresh || a.DefaultExplicitRefresh
 	release, err := a.Redis.Begin(ctx, id, explicit)
 	if err != nil {
+		log.Error().Err(err).Msg("redis begin")
 		return nil, err
 	}
 	defer func() { _ = release(ctx) }()
@@ -70,22 +81,27 @@ func (a *IngestActivities) RunIngestSource(ctx context.Context, in ingestschema.
 		usedIncr = true
 		cur, err := a.Watermarks.GetCursor(ctx, in.SlotID, id)
 		if err != nil {
+			log.Error().Err(err).Msg("watermark get cursor")
 			return nil, err
 		}
 		list, nextCursor, err = inc.FetchIncremental(ctx, cur)
 		if err != nil {
+			log.Error().Err(err).Msg("fetch incremental")
 			return nil, err
 		}
 	} else {
 		list, err = col.Fetch(ctx)
 		if err != nil {
+			log.Error().Err(err).Msg("fetch")
 			return nil, err
 		}
 	}
 
 	filtered, err := pipeutils.ApplyBroadFilter(a.Clock, a.BroadRules, list)
 	if err != nil {
-		return nil, fmt.Errorf("ingest activity: broad filter: %w", err)
+		err = fmt.Errorf("ingest activity: broad filter: %w", err)
+		log.Error().Err(err).Msg("broad filter")
+		return nil, err
 	}
 
 	out := &ingestschema.IngestSourceOutput{
@@ -95,10 +111,12 @@ func (a *IngestActivities) RunIngestSource(ctx context.Context, in ingestschema.
 	for _, j := range filtered {
 		skipped, err := a.Jobs.SaveIngest(ctx, j)
 		if err != nil {
+			log.Error().Err(err).Str("job_id", j.ID).Msg("save ingest")
 			return nil, err
 		}
 		// 008: slot membership after ingest; SaveIngest alone sets PASSED_STAGE_1 (007) when the row is written/updated.
 		if err := a.Jobs.UpsertSlotJob(ctx, in.SlotID, j.ID); err != nil {
+			log.Error().Err(err).Str("job_id", j.ID).Msg("upsert slot job")
 			return nil, err
 		}
 		if skipped {
@@ -110,13 +128,21 @@ func (a *IngestActivities) RunIngestSource(ctx context.Context, in ingestschema.
 
 	if usedIncr {
 		if err := a.Watermarks.SetCursor(ctx, in.SlotID, id, nextCursor); err != nil {
+			log.Error().Err(err).Msg("watermark set cursor")
 			return nil, err
 		}
 		out.WatermarkAdvanced = true
 	}
 
 	if err := a.Redis.RecordSuccessfulIngest(ctx, id); err != nil {
+		log.Error().Err(err).Msg("record successful ingest")
 		return nil, err
 	}
+	log.Debug().
+		Int("jobs_written", out.JobsWritten).
+		Int("jobs_skipped", out.JobsSkipped).
+		Int("jobs_filtered_out", out.JobsFilteredOut).
+		Bool("used_incremental", out.UsedIncremental).
+		Msg("ingest done")
 	return out, nil
 }

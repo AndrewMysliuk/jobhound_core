@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/andrewmysliuk/jobhound_core/internal/publicapi/schema"
+	"github.com/rs/zerolog"
 )
 
 func TestWriteAPIError_internalServerErrorSanitized(t *testing.T) {
@@ -42,7 +43,7 @@ func TestReadJSON_invalidSyntax(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/x", bytes.NewBufferString(`{`))
 	req.Header.Set("Content-Type", "application/json")
 	var dst struct{}
-	if ReadJSON(rec, req, &dst) {
+	if ReadJSON(rec, req, zerolog.Nop(), &dst) {
 		t.Fatal("expected false")
 	}
 	if rec.Code != http.StatusBadRequest {
@@ -55,7 +56,7 @@ func TestReadJSON_trailingGarbage(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/x", bytes.NewBufferString(`{} []`))
 	req.Header.Set("Content-Type", "application/json")
 	var dst struct{}
-	if ReadJSON(rec, req, &dst) {
+	if ReadJSON(rec, req, zerolog.Nop(), &dst) {
 		t.Fatal("expected false")
 	}
 }
