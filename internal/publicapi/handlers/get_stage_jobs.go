@@ -7,6 +7,7 @@ import (
 	"github.com/andrewmysliuk/jobhound_core/internal/platform/logging"
 	apputils "github.com/andrewmysliuk/jobhound_core/internal/publicapi/utils"
 	"github.com/andrewmysliuk/jobhound_core/internal/slots"
+	slotschema "github.com/andrewmysliuk/jobhound_core/internal/slots/schema"
 )
 
 func (h *HTTPHandler) getStageJobs(w http.ResponseWriter, r *http.Request) {
@@ -28,7 +29,7 @@ func (h *HTTPHandler) getStageJobs(w http.ResponseWriter, r *http.Request) {
 		apputils.WriteAPIError(w, http.StatusBadRequest, "invalid_query", "status filter is only allowed for stages 2 and 3")
 		return
 	}
-	resp, err := h.deps.Slots.ListJobs(ctx, slotID, stage, page, limit, statusQ)
+	resp, err := h.deps.Slots.ListJobs(ctx, slotschema.ListJobsParams{SlotID: slotID, Stage: stage, Page: page, Limit: limit, StatusQuery: statusQ})
 	if errors.Is(err, slots.ErrNotFound) {
 		apputils.WriteAPIError(w, http.StatusNotFound, "not_found", "slot not found")
 		return

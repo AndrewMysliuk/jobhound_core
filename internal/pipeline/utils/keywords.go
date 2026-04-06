@@ -9,7 +9,7 @@ import (
 
 // ApplyKeywordFilter returns jobs that pass stage 2 rules, preserving input order.
 // Include constraints are evaluated first, then exclude (same outcome as a single pass:
-// a job must satisfy all includes and must not match any exclude pattern).
+// a job must match at least one include when includes are non-empty, and must not match any exclude pattern).
 func ApplyKeywordFilter(jobs []schema.Job, rules pipeline.KeywordRules) []schema.Job {
 	inc := nonEmptyPatterns(rules.Include)
 	exc := nonEmptyPatterns(rules.Exclude)
@@ -17,7 +17,7 @@ func ApplyKeywordFilter(jobs []schema.Job, rules pipeline.KeywordRules) []schema
 	out := make([]schema.Job, 0, len(jobs))
 	for _, j := range jobs {
 		hay := keywordHaystack(j)
-		if !matchesAllIncludes(hay, inc) {
+		if !matchesAnyInclude(hay, inc) {
 			continue
 		}
 		if matchesAnyExclude(hay, exc) {
@@ -43,13 +43,13 @@ func nonEmptyPatterns(patterns []string) []string {
 	return out
 }
 
-func matchesAllIncludes(hayLower string, includes []string) bool {
+func matchesAnyInclude(hayLower string, includes []string) bool {
 	for _, p := range includes {
-		if !strings.Contains(hayLower, strings.ToLower(p)) {
-			return false
+		if strings.Contains(hayLower, strings.ToLower(p)) {
+			return true
 		}
 	}
-	return true
+	return len(includes) == 0
 }
 
 func matchesAnyExclude(hayLower string, excludes []string) bool {

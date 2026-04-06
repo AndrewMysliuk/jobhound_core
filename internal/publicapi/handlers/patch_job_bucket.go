@@ -8,6 +8,7 @@ import (
 	"github.com/andrewmysliuk/jobhound_core/internal/publicapi/schema"
 	apputils "github.com/andrewmysliuk/jobhound_core/internal/publicapi/utils"
 	"github.com/andrewmysliuk/jobhound_core/internal/slots"
+	slotschema "github.com/andrewmysliuk/jobhound_core/internal/slots/schema"
 )
 
 func (h *HTTPHandler) patchStageJobBucket(w http.ResponseWriter, r *http.Request) {
@@ -29,7 +30,7 @@ func (h *HTTPHandler) patchStageJobBucket(w http.ResponseWriter, r *http.Request
 	if !apputils.ReadValidatedJSON(w, r, logH, schemaPatchJobBucket, &body) {
 		return
 	}
-	out, err := h.deps.Slots.PatchJobBucket(ctx, slotID, stage, jobID, body.Bucket)
+	out, err := h.deps.Slots.PatchJobBucket(ctx, slotschema.PatchJobBucketParams{SlotID: slotID, Stage: stage, JobID: jobID, Bucket: body.Bucket})
 	if errors.Is(err, slots.ErrNotFound) {
 		apputils.WriteAPIError(w, http.StatusNotFound, "not_found", "slot or job not found for this stage")
 		return

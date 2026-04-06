@@ -10,6 +10,7 @@ import (
 	"github.com/andrewmysliuk/jobhound_core/internal/pipeline"
 	"github.com/andrewmysliuk/jobhound_core/internal/publicapi/schema"
 	"github.com/andrewmysliuk/jobhound_core/internal/slots"
+	slotschema "github.com/andrewmysliuk/jobhound_core/internal/slots/schema"
 	slotworkflows "github.com/andrewmysliuk/jobhound_core/internal/slots/workflows"
 	"github.com/google/uuid"
 	enumspb "go.temporal.io/api/enums/v1"
@@ -28,13 +29,13 @@ func stage3WorkflowID(slotID uuid.UUID) string {
 // RunStage2 implements [slots.API.RunStage2].
 // Concurrency: fixed Temporal workflow id per slot and stage; DescribeWorkflow before ExecuteWorkflow;
 // ALLOW_DUPLICATE allows a new run after the previous closed. If ExecuteWorkflow races, AlreadyStarted maps to 409.
-func (s *Service) RunStage2(ctx context.Context, slotID string, include, exclude []string) (*schema.StageRunAcceptedResponse, error) {
+func (s *Service) RunStage2(ctx context.Context, p slotschema.RunStage2Params) (*schema.StageRunAcceptedResponse, error) {
 	log := s.methodLog(ctx, "RunStage2")
 	log.Debug().Msg("run stage 2")
 	if s.Runs == nil {
 		return nil, errors.New("slots service: pipeline runs repository is required for stage 2")
 	}
-	u, err := uuid.Parse(strings.TrimSpace(slotID))
+	u, err := uuid.Parse(strings.TrimSpace(p.SlotID))
 	if err != nil {
 		return nil, slots.ErrNotFound
 	}
@@ -55,7 +56,7 @@ func (s *Service) RunStage2(ctx context.Context, slotID string, include, exclude
 	in := manualschema.ManualSlotRunWorkflowInput{
 		SlotID:       u,
 		Kind:         manualschema.RunKindPipelineStage2,
-		KeywordRules: pipeline.KeywordRules{Include: append([]string(nil), include...), Exclude: append([]string(nil), exclude...)},
+		KeywordRules: pipeline.KeywordRules{Include: append([]string(nil), p.Include...), Exclude: append([]string(nil), p.Exclude...)},
 	}
 	if err := in.Validate(); err != nil {
 		return nil, err
@@ -75,14 +76,14 @@ func (s *Service) RunStage2(ctx context.Context, slotID string, include, exclude
 	return &schema.StageRunAcceptedResponse{SlotID: u.String(), Stage: 2}, nil
 }
 
-// RunStage3 implements [slots.API.RunStage3]. maxJobs must already be validated (1–100) by the handler.
-func (s *Service) RunStage3(ctx context.Context, slotID string, maxJobs int) (*schema.StageRunAcceptedResponse, error) {
+// RunStage3 implements [slots.API.RunStage3]. p.MaxJobs must already be validated (1–100) by the handler.
+func (s *Service) RunStage3(ctx context.Context, p slotschema.RunStage3Params) (*schema.StageRunAcceptedResponse, error) {
 	log := s.methodLog(ctx, "RunStage3")
 	log.Debug().Msg("run stage 3")
 	if s.Runs == nil || s.Profiles == nil {
 		return nil, errors.New("slots service: pipeline runs and profile are required for stage 3")
 	}
-	u, err := uuid.Parse(strings.TrimSpace(slotID))
+	u, err := uuid.Parse(strings.TrimSpace(p.SlotID))
 	if err != nil {
 		return nil, slots.ErrNotFound
 	}
@@ -120,7 +121,7 @@ func (s *Service) RunStage3(ctx context.Context, slotID string, maxJobs int) (*s
 		Kind:          manualschema.RunKindPipelineStage3,
 		Profile:       profileText,
 		PipelineRunID: &rid,
-		Stage3MaxJobs: maxJobs,
+		Stage3MaxJobs: p.MaxJobs,
 	}
 	if err := in.Validate(); err != nil {
 		return nil, err

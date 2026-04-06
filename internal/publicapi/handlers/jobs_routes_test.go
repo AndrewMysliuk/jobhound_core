@@ -11,6 +11,7 @@ import (
 
 	"github.com/andrewmysliuk/jobhound_core/internal/publicapi/schema"
 	"github.com/andrewmysliuk/jobhound_core/internal/slots"
+	slotschema "github.com/andrewmysliuk/jobhound_core/internal/slots/schema"
 	"github.com/rs/zerolog"
 )
 
@@ -22,26 +23,26 @@ type mockSlotsJobs struct {
 	patchErr error
 }
 
-func (m *mockSlotsJobs) ListJobs(ctx context.Context, slotID string, stage, page, limit int, statusQuery string) (schema.JobListResponse, error) {
+func (m *mockSlotsJobs) ListJobs(ctx context.Context, p slotschema.ListJobsParams) (schema.JobListResponse, error) {
 	if m.listErr != nil {
 		return schema.JobListResponse{}, m.listErr
 	}
 	_ = ctx
-	_ = slotID
-	_ = stage
-	_ = statusQuery
+	_ = p.SlotID
+	_ = p.Stage
+	_ = p.StatusQuery
 	out := m.listResp
-	out.Page = page
-	out.Limit = limit
+	out.Page = p.Page
+	out.Limit = p.Limit
 	return out, nil
 }
 
-func (m *mockSlotsJobs) PatchJobBucket(ctx context.Context, slotID string, stage int, jobID string, bucket schema.JobBucket) (*schema.PatchJobBucketResponse, error) {
+func (m *mockSlotsJobs) PatchJobBucket(ctx context.Context, p slotschema.PatchJobBucketParams) (*schema.PatchJobBucketResponse, error) {
 	_ = ctx
-	_ = slotID
-	_ = stage
-	_ = jobID
-	_ = bucket
+	_ = p.SlotID
+	_ = p.Stage
+	_ = p.JobID
+	_ = p.Bucket
 	return m.patchRet, m.patchErr
 }
 

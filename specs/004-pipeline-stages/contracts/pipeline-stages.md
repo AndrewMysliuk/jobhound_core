@@ -51,7 +51,7 @@ The following logical fields are **required** for spec compliance (exact Go fiel
 
 | Rule | Semantics |
 |------|-----------|
-| `Include` | Optional string slice. If **non-empty**, **every** pattern must appear somewhere in **`Title` or `Description`** combined text (case-insensitive). If **empty**, no include constraint. |
+| `Include` | Optional string slice. If **non-empty**, **at least one** pattern must appear somewhere in **`Title` or `Description`** combined text (case-insensitive). If **empty**, no include constraint. |
 | `Exclude` | Optional string slice. If **non-empty**, **any** pattern appearing in that combined text → job **dropped**. |
 
 **Order of evaluation**: Apply **include** constraints first, then **exclude** (or document equivalent if both are checked in one pass — must match tests).

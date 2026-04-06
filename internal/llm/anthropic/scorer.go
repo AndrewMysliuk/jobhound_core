@@ -11,6 +11,8 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/rs/zerolog"
+
 	"github.com/andrewmysliuk/jobhound_core/internal/domain/schema"
 	llmschema "github.com/andrewmysliuk/jobhound_core/internal/llm/schema"
 	llmutils "github.com/andrewmysliuk/jobhound_core/internal/llm/utils"
@@ -19,7 +21,9 @@ import (
 const (
 	defaultBaseURL        = "https://api.anthropic.com"
 	defaultAnthropicVer   = "2023-06-01"
-	defaultScoreMaxTokens = 256
+	defaultScoreMaxTokens = 384
+	// maxAssistantTextLogBytes caps logged model text (debug); avoids huge log lines from long descriptions in prompts reflected in output.
+	maxAssistantTextLogBytes = 12288
 )
 
 var (
@@ -53,6 +57,8 @@ type Scorer struct {
 	Model      string
 	BaseURL    string
 	HTTPClient *http.Client
+	// Log, when set, records raw API / assistant output when scoring fails (temporary diagnostics).
+	Log *zerolog.Logger
 }
 
 // NewScorer returns a Scorer with the given API key and model. Empty apiKey causes Score to error.
@@ -128,20 +134,47 @@ func (s *Scorer) Score(ctx context.Context, profile string, job schema.Job) (sch
 	}
 	text, err := extractAssistantText(respBody)
 	if err != nil {
+		s.logScoreFailure(job, "extract_assistant_text", string(respBody), err)
 		return schema.ScoredJob{}, err
 	}
 	if err := llmutils.ValidateJSONDocument(llmschema.JobScoringJSON, []byte(text)); err != nil {
+		s.logScoreFailure(job, "validate_json_document", text, err)
 		return schema.ScoredJob{}, fmt.Errorf("anthropic: scoring output: %w", err)
 	}
 	score, rationale, err := llmutils.ParseScoringJSON([]byte(text))
 	if err != nil {
+		s.logScoreFailure(job, "parse_scoring_json", text, err)
 		return schema.ScoredJob{}, err
 	}
 	return schema.ScoredJob{Job: job, Score: score, Reason: rationale}, nil
 }
 
+func (s *Scorer) logScoreFailure(job schema.Job, phase, payload string, cause error) {
+	if s == nil || s.Log == nil {
+		return
+	}
+	s.Log.Warn().
+		Str("job_id", job.ID).
+		Str("phase", phase).
+		Int("payload_len", len(payload)).
+		Err(cause).
+		Str("payload", truncateForLog(payload, maxAssistantTextLogBytes)).
+		Msg("anthropic scorer: bad model output (debug)")
+}
+
+func truncateForLog(s string, maxBytes int) string {
+	if maxBytes <= 0 || len(s) <= maxBytes {
+		return s
+	}
+	return s[:maxBytes] + "…(truncated)"
+}
+
 func buildUserPrompt(profile string, job schema.Job) string {
 	return fmt.Sprintf(`You are a job relevance scorer. Return a JSON object matching the requested schema only.
+
+Rules:
+- score: integer from 0 (no fit) through 100 (strong fit), inclusive.
+- rationale: one or two short sentences only—state the main reason for the score. No lists, no long paragraphs, no essay-style analysis.
 
 User profile:
 %s

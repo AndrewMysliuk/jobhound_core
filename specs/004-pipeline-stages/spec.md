@@ -59,7 +59,7 @@ Per-site geo parsing is **out of scope**; `Job` may carry optional fields the co
 - **Include** and **exclude** lists are **both optional**; each is a **string array**.
 - **Ignore case** (same convention as stage 1 for English text).
 
-Semantics (all includes vs any include, any exclude rejects, etc.) must be defined unambiguously in code and tests; default: **all includes** must match if the list is non-empty, and **no exclude** may appear if the exclude list is non-empty.
+Semantics (any include, any exclude rejects, etc.) must be defined unambiguously in code and tests; default: **at least one include** must match if the list is non-empty, and **no exclude** may appear if the exclude list is non-empty.
 
 ## Stage 3 — LLM
 

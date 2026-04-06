@@ -11,6 +11,7 @@ import (
 	"github.com/andrewmysliuk/jobhound_core/internal/platform/logging"
 	"github.com/andrewmysliuk/jobhound_core/internal/platform/pgsql"
 	"github.com/andrewmysliuk/jobhound_core/internal/slots"
+	slotschema "github.com/andrewmysliuk/jobhound_core/internal/slots/schema"
 	slotstorage "github.com/andrewmysliuk/jobhound_core/internal/slots/storage"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
@@ -107,7 +108,7 @@ func TestRunStage2_startsWorkflowWithKeywordRules(t *testing.T) {
 		[]string{"src"},
 		logging.Nop(),
 	)
-	out, err := svc.RunStage2(ctx, slotID.String(), []string{"a", "b"}, []string{"x"})
+	out, err := svc.RunStage2(ctx, slotschema.RunStage2Params{SlotID: slotID.String(), Include: []string{"a", "b"}, Exclude: []string{"x"}})
 	require.NoError(t, err)
 	require.Equal(t, slotID.String(), out.SlotID)
 	require.Equal(t, 2, out.Stage)
@@ -142,7 +143,7 @@ func TestRunStage2_stageAlreadyRunning(t *testing.T) {
 		[]string{"src"},
 		logging.Nop(),
 	)
-	_, err := svc.RunStage2(ctx, slotID.String(), []string{"a"}, []string{"b"})
+	_, err := svc.RunStage2(ctx, slotschema.RunStage2Params{SlotID: slotID.String(), Include: []string{"a"}, Exclude: []string{"b"}})
 	require.ErrorIs(t, err, slots.ErrStageAlreadyRunning)
 	require.Nil(t, ft.gotWorkflow)
 }
@@ -170,7 +171,7 @@ func TestRunStage3_startsWorkflowWithRunKindAndMaxJobs(t *testing.T) {
 		[]string{"src"},
 		logging.Nop(),
 	)
-	out, err := svc.RunStage3(ctx, slotID.String(), 7)
+	out, err := svc.RunStage3(ctx, slotschema.RunStage3Params{SlotID: slotID.String(), MaxJobs: 7})
 	require.NoError(t, err)
 	require.Equal(t, 3, out.Stage)
 	require.Equal(t, manualschema.ManualSlotRunWorkflowName, ft.gotWorkflow)
@@ -205,7 +206,7 @@ func TestRunStage3_profileRequired(t *testing.T) {
 		[]string{"src"},
 		logging.Nop(),
 	)
-	_, err := svc.RunStage3(ctx, slotID.String(), 5)
+	_, err := svc.RunStage3(ctx, slotschema.RunStage3Params{SlotID: slotID.String(), MaxJobs: 5})
 	require.ErrorIs(t, err, slots.ErrProfileRequired)
 }
 
@@ -231,6 +232,6 @@ func TestRunStage3_noPipelineRun(t *testing.T) {
 		[]string{"src"},
 		logging.Nop(),
 	)
-	_, err := svc.RunStage3(ctx, slotID.String(), 5)
+	_, err := svc.RunStage3(ctx, slotschema.RunStage3Params{SlotID: slotID.String(), MaxJobs: 5})
 	require.ErrorIs(t, err, slots.ErrNoPipelineRun)
 }

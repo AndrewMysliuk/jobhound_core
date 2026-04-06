@@ -54,7 +54,10 @@ func main() {
 	log := logging.NewRoot(appCfg.Logging.Level, appCfg.Logging.Format, "worker")
 	var scorer llm.Scorer
 	if strings.TrimSpace(appCfg.AnthropicAPIKey) != "" {
-		scorer = anthropic.NewScorer(appCfg.AnthropicAPIKey, appCfg.AnthropicModel)
+		as := anthropic.NewScorer(appCfg.AnthropicAPIKey, appCfg.AnthropicModel)
+		sl := log.With().Str("component", "anthropic_scorer").Logger()
+		as.Log = &sl
+		scorer = as
 	} else {
 		scorer = llmmock.Scorer{}
 	}

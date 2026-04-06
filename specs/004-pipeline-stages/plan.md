@@ -38,7 +38,7 @@ Implement **three local processing steps** (implementation stages 1–3) as **pu
 | 1 Contracts | `contracts/environment.md`, `contracts/pipeline-stages.md` |
 | 2 Domain alignment | Extend `domain.Job` (and migrations in `002` if columns required) for **remote** and **country** fields as per frozen contract |
 | 3 Stage 1 | Broad filter: `PostedAt` window (explicit `from`/`to` or default last 7 days UTC), role synonyms on title+description, remote flag, country allowlist |
-| 4 Stage 2 | Keywords: include/exclude on title+description; semantics frozen in code + tests (all includes, any exclude rejects) |
+| 4 Stage 2 | Keywords: include/exclude on title+description; semantics frozen in code + tests (any include, any exclude rejects) |
 | 5 Stage 3 | `Scorer` / LLM provider interface; structured result (score + rationale minimum); JSON parsing; **mock** implementation for tests |
 | 6 Wire & trim | Align `internal/pipeline/impl` orchestration with new stage APIs; keep persistence / outbound notifications **out** of stage functions |
 | 7 Docs | README pointers; env contract aligned with `contracts/environment.md` |

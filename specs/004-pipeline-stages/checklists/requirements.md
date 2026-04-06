@@ -17,7 +17,7 @@
 ## Requirement Completeness
 
 - [x] No unresolved [NEEDS CLARIFICATION] markers in spec
-- [x] Stage 2 keyword semantics have a default (all includes / any exclude) — detailed in `contracts/pipeline-stages.md`
+- [x] Stage 2 keyword semantics have a default (any include / any exclude) — detailed in `contracts/pipeline-stages.md`
 - [x] Date window default (7 days UTC) and explicit bounds behaviour stated
 - [x] LLM behind abstraction; Anthropic env name referenced
 - [x] Tests: no real API in unit tests — testable

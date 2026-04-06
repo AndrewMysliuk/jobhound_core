@@ -8,6 +8,7 @@ import (
 	"github.com/andrewmysliuk/jobhound_core/internal/publicapi/schema"
 	apputils "github.com/andrewmysliuk/jobhound_core/internal/publicapi/utils"
 	"github.com/andrewmysliuk/jobhound_core/internal/slots"
+	slotschema "github.com/andrewmysliuk/jobhound_core/internal/slots/schema"
 )
 
 func (h *HTTPHandler) postStage2Run(w http.ResponseWriter, r *http.Request) {
@@ -18,7 +19,7 @@ func (h *HTTPHandler) postStage2Run(w http.ResponseWriter, r *http.Request) {
 	if !apputils.ReadValidatedJSON(w, r, logH, schemaStage2Run, &body) {
 		return
 	}
-	out, err := h.deps.Slots.RunStage2(ctx, slotID, body.Include, body.Exclude)
+	out, err := h.deps.Slots.RunStage2(ctx, slotschema.RunStage2Params{SlotID: slotID, Include: body.Include, Exclude: body.Exclude})
 	if errors.Is(err, slots.ErrNotFound) {
 		apputils.WriteAPIError(w, http.StatusNotFound, "not_found", "slot not found")
 		return

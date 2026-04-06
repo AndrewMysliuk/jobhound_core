@@ -12,6 +12,7 @@ import (
 
 	"github.com/andrewmysliuk/jobhound_core/internal/publicapi/schema"
 	"github.com/andrewmysliuk/jobhound_core/internal/slots"
+	slotschema "github.com/andrewmysliuk/jobhound_core/internal/slots/schema"
 	"github.com/rs/zerolog"
 )
 
@@ -29,31 +30,31 @@ func (m *mockSlots) List(ctx context.Context) (schema.SlotsListResponse, error) 
 	return m.listResp, m.listErr
 }
 
-func (m *mockSlots) Create(ctx context.Context, name string) (*schema.SlotCard, error) {
+func (m *mockSlots) Create(ctx context.Context, _ slotschema.CreateSlotParams) (*schema.SlotCard, error) {
 	return m.createRet, m.createErr
 }
 
-func (m *mockSlots) Get(ctx context.Context, slotID string) (*schema.SlotCard, error) {
+func (m *mockSlots) Get(ctx context.Context, _ slotschema.GetSlotParams) (*schema.SlotCard, error) {
 	return m.getRet, m.getErr
 }
 
-func (m *mockSlots) Delete(ctx context.Context, slotID string) error {
+func (m *mockSlots) Delete(ctx context.Context, _ slotschema.DeleteSlotParams) error {
 	return m.delErr
 }
 
-func (m *mockSlots) RunStage2(context.Context, string, []string, []string) (*schema.StageRunAcceptedResponse, error) {
+func (m *mockSlots) RunStage2(context.Context, slotschema.RunStage2Params) (*schema.StageRunAcceptedResponse, error) {
 	return nil, errors.New("unexpected RunStage2 in slots_test mock")
 }
 
-func (m *mockSlots) RunStage3(context.Context, string, int) (*schema.StageRunAcceptedResponse, error) {
+func (m *mockSlots) RunStage3(context.Context, slotschema.RunStage3Params) (*schema.StageRunAcceptedResponse, error) {
 	return nil, errors.New("unexpected RunStage3 in slots_test mock")
 }
 
-func (m *mockSlots) ListJobs(context.Context, string, int, int, int, string) (schema.JobListResponse, error) {
+func (m *mockSlots) ListJobs(context.Context, slotschema.ListJobsParams) (schema.JobListResponse, error) {
 	return schema.JobListResponse{}, errors.New("unexpected ListJobs in slots_test mock")
 }
 
-func (m *mockSlots) PatchJobBucket(context.Context, string, int, string, schema.JobBucket) (*schema.PatchJobBucketResponse, error) {
+func (m *mockSlots) PatchJobBucket(context.Context, slotschema.PatchJobBucketParams) (*schema.PatchJobBucketResponse, error) {
 	return nil, errors.New("unexpected PatchJobBucket in slots_test mock")
 }
 

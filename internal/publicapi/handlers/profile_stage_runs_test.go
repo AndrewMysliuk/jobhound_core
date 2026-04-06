@@ -11,6 +11,7 @@ import (
 
 	"github.com/andrewmysliuk/jobhound_core/internal/publicapi/schema"
 	"github.com/andrewmysliuk/jobhound_core/internal/slots"
+	slotschema "github.com/andrewmysliuk/jobhound_core/internal/slots/schema"
 	"github.com/rs/zerolog"
 )
 
@@ -37,11 +38,11 @@ type mockSlotsStageRuns struct {
 	run3Err error
 }
 
-func (m *mockSlotsStageRuns) RunStage2(ctx context.Context, slotID string, include, exclude []string) (*schema.StageRunAcceptedResponse, error) {
+func (m *mockSlotsStageRuns) RunStage2(ctx context.Context, _ slotschema.RunStage2Params) (*schema.StageRunAcceptedResponse, error) {
 	return m.run2Ret, m.run2Err
 }
 
-func (m *mockSlotsStageRuns) RunStage3(ctx context.Context, slotID string, maxJobs int) (*schema.StageRunAcceptedResponse, error) {
+func (m *mockSlotsStageRuns) RunStage3(ctx context.Context, _ slotschema.RunStage3Params) (*schema.StageRunAcceptedResponse, error) {
 	return m.run3Ret, m.run3Err
 }
 

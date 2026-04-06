@@ -7,7 +7,10 @@ const (
 	EnvAnthropicAPIKey    = "JOBHOUND_ANTHROPIC_API_KEY"
 	EnvAnthropicModel     = "JOBHOUND_ANTHROPIC_MODEL"
 	// Models that support Messages API structured outputs (output_config.format json_schema); see Anthropic structured outputs docs.
-	DefaultAnthropicModel = "claude-haiku-4-5"
+	//
+	// Toggle default for local A/B: comment one line, uncomment the other (or set JOBHOUND_ANTHROPIC_MODEL).
+	DefaultAnthropicModel = "claude-sonnet-4-5"
+	// DefaultAnthropicModel = "claude-haiku-4-5"
 )
 
 // LoadAnthropicAPIKeyFromEnv returns the API key from the environment (may be empty).

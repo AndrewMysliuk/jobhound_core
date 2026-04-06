@@ -3,19 +3,18 @@ package slots
 import (
 	"context"
 
-	"github.com/andrewmysliuk/jobhound_core/internal/publicapi/schema"
+	apischema "github.com/andrewmysliuk/jobhound_core/internal/publicapi/schema"
+	slotschema "github.com/andrewmysliuk/jobhound_core/internal/slots/schema"
 )
 
 // API is the application surface for slot HTTP handlers (mock in handler tests).
 type API interface {
-	List(ctx context.Context) (schema.SlotsListResponse, error)
-	Create(ctx context.Context, name string) (*schema.SlotCard, error)
-	Get(ctx context.Context, slotID string) (*schema.SlotCard, error)
-	Delete(ctx context.Context, slotID string) error
-	RunStage2(ctx context.Context, slotID string, include, exclude []string) (*schema.StageRunAcceptedResponse, error)
-	RunStage3(ctx context.Context, slotID string, maxJobs int) (*schema.StageRunAcceptedResponse, error)
-	// ListJobs returns paginated jobs for stages 1–3. statusQuery is empty (all rows) or an exact pipeline_run_jobs.status for stages 2–3; caller rejects status on stage 1.
-	ListJobs(ctx context.Context, slotID string, stage, page, limit int, statusQuery string) (schema.JobListResponse, error)
-	// PatchJobBucket updates coarse outcome for stage 2 or 3 (009 PATCH). stage must be 2 or 3.
-	PatchJobBucket(ctx context.Context, slotID string, stage int, jobID string, bucket schema.JobBucket) (*schema.PatchJobBucketResponse, error)
+	List(ctx context.Context) (apischema.SlotsListResponse, error)
+	Create(ctx context.Context, p slotschema.CreateSlotParams) (*apischema.SlotCard, error)
+	Get(ctx context.Context, p slotschema.GetSlotParams) (*apischema.SlotCard, error)
+	Delete(ctx context.Context, p slotschema.DeleteSlotParams) error
+	RunStage2(ctx context.Context, p slotschema.RunStage2Params) (*apischema.StageRunAcceptedResponse, error)
+	RunStage3(ctx context.Context, p slotschema.RunStage3Params) (*apischema.StageRunAcceptedResponse, error)
+	ListJobs(ctx context.Context, p slotschema.ListJobsParams) (apischema.JobListResponse, error)
+	PatchJobBucket(ctx context.Context, p slotschema.PatchJobBucketParams) (*apischema.PatchJobBucketResponse, error)
 }

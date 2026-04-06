@@ -4,8 +4,7 @@
   "properties": {
     "score": {
       "type": "integer",
-      "minimum": 0,
-      "maximum": 100
+      "description": "Relevance score from 0 (no fit) through 100 (strong fit), inclusive. Must be an integer."
     },
     "rationale": {
       "type": "string",

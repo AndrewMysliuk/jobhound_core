@@ -20,7 +20,7 @@
 
 ## D. Stage 2 — keywords
 
-1. [x] **Implement keyword filter** — Definition of done: include/exclude on title+description; semantics per contract (all includes, any exclude); case-insensitive per plan.
+1. [x] **Implement keyword filter** — Definition of done: include/exclude on title+description; semantics per contract (any include, any exclude); case-insensitive per plan.
 2. [x] **Unit tests — stage 2** — Definition of done: empty lists, only include, only exclude, combined.
 
 ## E. Stage 3 — LLM scoring

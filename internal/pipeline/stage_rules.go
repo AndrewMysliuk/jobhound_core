@@ -17,7 +17,7 @@ type BroadFilterRules struct {
 // KeywordRules configures stage 2 (keyword include/exclude on title + description).
 // Matching is case-insensitive; empty patterns after trim are ignored.
 type KeywordRules struct {
-	// Include: if non-empty after trimming, every non-empty pattern must appear as a substring
+	// Include: if non-empty after trimming, at least one non-empty pattern must appear as a substring
 	// in the combined title + description text.
 	Include []string
 	// Exclude: if non-empty, any non-empty pattern appearing in that combined text drops the job.

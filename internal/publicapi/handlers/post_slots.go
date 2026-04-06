@@ -7,6 +7,7 @@ import (
 	"github.com/andrewmysliuk/jobhound_core/internal/publicapi/schema"
 	apputils "github.com/andrewmysliuk/jobhound_core/internal/publicapi/utils"
 	"github.com/andrewmysliuk/jobhound_core/internal/slots"
+	slotschema "github.com/andrewmysliuk/jobhound_core/internal/slots/schema"
 )
 
 func (h *HTTPHandler) postSlots(w http.ResponseWriter, r *http.Request) {
@@ -19,7 +20,7 @@ func (h *HTTPHandler) postSlots(w http.ResponseWriter, r *http.Request) {
 	if !apputils.ReadValidatedJSON(w, r, logH, schemaCreateSlot, &body) {
 		return
 	}
-	card, err := h.deps.Slots.Create(r.Context(), body.Name)
+	card, err := h.deps.Slots.Create(r.Context(), slotschema.CreateSlotParams{Name: body.Name})
 	if errors.Is(err, slots.ErrInvalidSlotName) {
 		apputils.WriteAPIError(w, http.StatusBadRequest, "validation_error", "name is required")
 		return

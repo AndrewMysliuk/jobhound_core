@@ -7,6 +7,7 @@ import (
 	"github.com/andrewmysliuk/jobhound_core/internal/platform/logging"
 	apputils "github.com/andrewmysliuk/jobhound_core/internal/publicapi/utils"
 	"github.com/andrewmysliuk/jobhound_core/internal/slots"
+	slotschema "github.com/andrewmysliuk/jobhound_core/internal/slots/schema"
 )
 
 func (h *HTTPHandler) deleteSlot(w http.ResponseWriter, r *http.Request) {
@@ -17,7 +18,7 @@ func (h *HTTPHandler) deleteSlot(w http.ResponseWriter, r *http.Request) {
 	id := apputils.StringsTrimPathValue(r, "slot_id")
 	ctx := logging.WithSlotID(r.Context(), id)
 	logH := logging.EnrichWithContext(ctx, h.deps.Logger.With().Str(logging.FieldHandler, "deleteSlot").Logger())
-	err := h.deps.Slots.Delete(ctx, id)
+	err := h.deps.Slots.Delete(ctx, slotschema.DeleteSlotParams{SlotID: id})
 	if errors.Is(err, slots.ErrNotFound) {
 		apputils.WriteAPIError(w, http.StatusNotFound, "not_found", "slot not found")
 		return

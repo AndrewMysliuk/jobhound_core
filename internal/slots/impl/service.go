@@ -12,6 +12,7 @@ import (
 	"github.com/andrewmysliuk/jobhound_core/internal/platform/logging"
 	"github.com/andrewmysliuk/jobhound_core/internal/publicapi/schema"
 	"github.com/andrewmysliuk/jobhound_core/internal/slots"
+	slotschema "github.com/andrewmysliuk/jobhound_core/internal/slots/schema"
 	slotstorage "github.com/andrewmysliuk/jobhound_core/internal/slots/storage"
 	slotworkflows "github.com/andrewmysliuk/jobhound_core/internal/slots/workflows"
 	"github.com/google/uuid"
@@ -87,10 +88,10 @@ func (s *Service) List(ctx context.Context) (schema.SlotsListResponse, error) {
 }
 
 // Create implements [slots.API.Create].
-func (s *Service) Create(ctx context.Context, name string) (*schema.SlotCard, error) {
+func (s *Service) Create(ctx context.Context, p slotschema.CreateSlotParams) (*schema.SlotCard, error) {
 	log := s.methodLog(ctx, "Create")
 	log.Debug().Msg("create")
-	name = strings.TrimSpace(name)
+	name := strings.TrimSpace(p.Name)
 	if name == "" {
 		return nil, slots.ErrInvalidSlotName
 	}
@@ -132,10 +133,10 @@ func (s *Service) Create(ctx context.Context, name string) (*schema.SlotCard, er
 }
 
 // Get implements [slots.API.Get].
-func (s *Service) Get(ctx context.Context, slotID string) (*schema.SlotCard, error) {
+func (s *Service) Get(ctx context.Context, p slotschema.GetSlotParams) (*schema.SlotCard, error) {
 	log := s.methodLog(ctx, "Get")
 	log.Debug().Msg("get")
-	row, err := s.Repo.GetByID(ctx, slotID)
+	row, err := s.Repo.GetByID(ctx, p.SlotID)
 	if err != nil {
 		return nil, err
 	}
@@ -143,10 +144,10 @@ func (s *Service) Get(ctx context.Context, slotID string) (*schema.SlotCard, err
 }
 
 // Delete implements [slots.API.Delete].
-func (s *Service) Delete(ctx context.Context, slotID string) error {
+func (s *Service) Delete(ctx context.Context, p slotschema.DeleteSlotParams) error {
 	log := s.methodLog(ctx, "Delete")
 	log.Debug().Msg("delete")
-	u, err := uuid.Parse(strings.TrimSpace(slotID))
+	u, err := uuid.Parse(strings.TrimSpace(p.SlotID))
 	if err != nil {
 		return slots.ErrNotFound
 	}
