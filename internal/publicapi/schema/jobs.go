@@ -10,6 +10,7 @@ const MaxJobListLimit = 100
 
 // JobListItem is one row in paginated job lists (contracts/http-public-api.md §4.6).
 // stage_3_rationale is always JSON null when absent (plan.md D4: null, not omit).
+// Status is pipeline_run_jobs.status for GET …/stages/2|3/jobs only; omitted for stage 1.
 type JobListItem struct {
 	JobID           string     `json:"job_id"`
 	Title           string     `json:"title"`
@@ -18,6 +19,7 @@ type JobListItem struct {
 	ApplyURL        string     `json:"apply_url"`
 	FirstSeenAt     time.Time  `json:"first_seen_at"`
 	PostedAt        *time.Time `json:"posted_at"`
+	Status          *string    `json:"status,omitempty"`
 	Stage3Rationale *string    `json:"stage_3_rationale"`
 }
 

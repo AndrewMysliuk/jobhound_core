@@ -29,7 +29,7 @@ Stage math, persistence, and Temporal remain **`002` / `004` / `006` / `007` / `
 - **Prefix**: all routes under **`/api/v1`**.
 - **Format**: `Content-Type: application/json`; bodies and responses are JSON.
 - **IDs**: `slot_id`, `job_id` as string UUIDs if stored as UUIDs in the DB.
-- **CORS**: required for browser clients. Allowed origins are **configuration** (list of strings), extendable without code changes. Env: **`JOBHOUND_API_CORS_ORIGINS`** (e.g. comma-separated); document default **`http://localhost:8080`** for local dev.
+- **CORS**: required for browser clients. Allowed origins are **configuration** (list of strings), extendable without code changes. Env: **`JOBHOUND_API_CORS_ORIGINS`** (e.g. comma-separated); document default **`http://localhost:5173,http://localhost:3000`** for local dev.
 - **Auth**: none in MVP; no session headers. DB schema reserves **`user_id`** for later.
 
 ### Errors (single envelope)

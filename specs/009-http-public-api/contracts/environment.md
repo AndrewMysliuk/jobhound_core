@@ -8,8 +8,8 @@
 
 | Variable | Required | Default (local dev) | Semantics |
 |----------|----------|---------------------|-----------|
-| **`JOBHOUND_API_LISTEN`** | No | **`127.0.0.1:8081`** (or team-agreed port; document in `cmd/api` help) | TCP address for the public API HTTP server. **Alternative**: split into **`JOBHOUND_API_HOST`** + **`JOBHOUND_API_PORT`** if the codebase standard prefers two keys — **pick one pair** in `internal/config` and list only that here. |
-| **`JOBHOUND_API_CORS_ORIGINS`** | No | **`http://localhost:8080`** (when unset; see below) | Comma-separated list of allowed **Origin** values for CORS. **Unset** → default single origin `http://localhost:8080`. **Set to empty string** → no allowed origins (API does not emit `Access-Control-Allow-Origin`). |
+| **`JOBHOUND_API_LISTEN`** | No | **`127.0.0.1:3000`** (or team-agreed port; document in `cmd/api` help) | TCP address for the public API HTTP server. **Alternative**: split into **`JOBHOUND_API_HOST`** + **`JOBHOUND_API_PORT`** if the codebase standard prefers two keys — **pick one pair** in `internal/config` and list only that here. |
+| **`JOBHOUND_API_CORS_ORIGINS`** | No | **`http://localhost:5173,http://localhost:3000`** (when unset; see below) | Comma-separated list of allowed **Origin** values for CORS. **Unset** → defaults to Vite + common dev-server origin. **Set to empty string** → no allowed origins (API does not emit `Access-Control-Allow-Origin`). |
 
 ## Shared variables (already defined elsewhere)
 

@@ -23,7 +23,7 @@
 
 ## A. Config & environment contract
 
-1. [x] **API config keys** — Definition of done: **`JOBHOUND_API_CORS_ORIGINS`** (comma-separated list; default documented for local dev **`http://localhost:8080`** per spec) and listen **host/port** (or equivalent single **`JOBHOUND_API_LISTEN`**) parsed only in **`internal/config`**; **`cmd/api`** receives typed struct.  
+1. [x] **API config keys** — Definition of done: **`JOBHOUND_API_CORS_ORIGINS`** (comma-separated list; default documented for local dev **`http://localhost:5173,http://localhost:3000`** per spec) and listen **host/port** (or equivalent single **`JOBHOUND_API_LISTEN`**) parsed only in **`internal/config`**; **`cmd/api`** receives typed struct.  
 2. [x] **`contracts/environment.md` vs code** — Definition of done: table in [`contracts/environment.md`](./contracts/environment.md) matches **`internal/config`** (names, defaults, semantics); checklist [`checklists/requirements.md`](./checklists/requirements.md) env item can be ticked.
 
 ## B. `cmd/api` skeleton

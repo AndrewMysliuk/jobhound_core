@@ -67,7 +67,7 @@ func (a *IngestActivities) RunIngestSource(ctx context.Context, in ingestschema.
 	log.Debug().Msg("ingest start")
 
 	explicit := in.ExplicitRefresh || a.DefaultExplicitRefresh
-	release, err := a.Redis.Begin(ctx, id, explicit)
+	release, err := a.Redis.Begin(ctx, in.SlotID, id, explicit)
 	if err != nil {
 		log.Error().Err(err).Msg("redis begin")
 		return nil, err
@@ -134,7 +134,7 @@ func (a *IngestActivities) RunIngestSource(ctx context.Context, in ingestschema.
 		out.WatermarkAdvanced = true
 	}
 
-	if err := a.Redis.RecordSuccessfulIngest(ctx, id); err != nil {
+	if err := a.Redis.RecordSuccessfulIngest(ctx, in.SlotID, id); err != nil {
 		log.Error().Err(err).Msg("record successful ingest")
 		return nil, err
 	}

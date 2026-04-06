@@ -21,6 +21,9 @@ const SourceName = "working_nomads"
 // DefaultSearchURL is the Elasticsearch-style jobs API (resources/working-nomads.md).
 const DefaultSearchURL = "https://www.workingnomads.com/jobsapi/_search"
 
+// DefaultMaxPages is the default cap on jobsapi/_search requests when MaxPages is 0 (worker bootstrap).
+const DefaultMaxPages = 2
+
 var (
 	defaultWNQuery  = json.RawMessage(`{"match_all":{}}`)
 	defaultWNSort   = json.RawMessage(`[{"premium":{"order":"desc"}},{"_score":{"order":"desc"}},{"pub_date":{"order":"desc"}}]`)
@@ -58,6 +61,8 @@ type WorkingNomads struct {
 	// MaxFetchJobs stops pagination after this many jobs are collected (0 = unlimited).
 	// Debug HTTP and tests use this to avoid downloading the full index.
 	MaxFetchJobs int
+	// MaxPages caps how many search API pages to fetch. Zero uses DefaultMaxPages. Negative means unlimited.
+	MaxPages int
 }
 
 // Name implements collectors.Collector.
@@ -90,9 +95,21 @@ func (c *WorkingNomads) Fetch(ctx context.Context) ([]schema.Job, error) {
 		srcFields = defaultWNSource
 	}
 
+	maxPages := DefaultMaxPages
+	switch {
+	case c.MaxPages < 0:
+		maxPages = 0
+	case c.MaxPages > 0:
+		maxPages = c.MaxPages
+	}
+
 	var all []schema.Job
 	from := 0
+	pagesDone := 0
 	for {
+		if maxPages > 0 && pagesDone >= maxPages {
+			break
+		}
 		reqBody := esSearchRequest{
 			TrackTotalHits: true,
 			From:           from,
@@ -109,6 +126,7 @@ func (c *WorkingNomads) Fetch(ctx context.Context) ([]schema.Job, error) {
 		if err != nil {
 			return nil, fmt.Errorf("working nomads search from=%d: %w", from, err)
 		}
+		pagesDone++
 		var resp searchResponse
 		if err := json.Unmarshal(body, &resp); err != nil {
 			return nil, fmt.Errorf("working nomads search from=%d: decode: %w", from, err)

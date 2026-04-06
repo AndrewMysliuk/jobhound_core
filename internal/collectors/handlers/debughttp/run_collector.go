@@ -60,6 +60,9 @@ func runCollectorDebug(w http.ResponseWriter, r *http.Request, logH zerolog.Logg
 		applyWorkingNomadsOverrides(&req, &c)
 		if limit > 0 {
 			c.MaxFetchJobs = limit
+		} else if limit == 0 {
+			// resolveLimit(0) = unlimited jobs; lift DefaultMaxPages so debug can scrape beyond MVP cap.
+			c.MaxPages = -1
 		}
 		jobs, fetchErr = c.Fetch(ctx)
 		upstreamFetched = len(jobs)

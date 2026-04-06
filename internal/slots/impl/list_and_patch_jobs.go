@@ -13,20 +13,32 @@ import (
 	"github.com/google/uuid"
 )
 
-func listBucketFromQuery(bucket string) (jobschema.ListBucket, error) {
-	switch strings.TrimSpace(bucket) {
-	case "":
-		return jobschema.ListBucketAll, nil
-	case "passed":
-		return jobschema.ListBucketPassed, nil
-	case "failed":
-		return jobschema.ListBucketFailed, nil
-	default:
-		return 0, fmt.Errorf("invalid bucket")
+// normalizeListStatusFilter maps GET ?status= to a pipeline_run_jobs.status filter. Empty means no filter (all rows for that stage list).
+func normalizeListStatusFilter(stage int, raw string) (string, error) {
+	s := strings.TrimSpace(raw)
+	if s == "" {
+		return "", nil
 	}
+	st := pipeline.RunJobStatus(s)
+	if !st.Valid() {
+		return "", fmt.Errorf("invalid status")
+	}
+	switch stage {
+	case 2:
+		if st != pipeline.RunJobPassedStage2 && st != pipeline.RunJobRejectedStage2 {
+			return "", fmt.Errorf("status not valid for stage 2 list")
+		}
+	case 3:
+		if st != pipeline.RunJobPassedStage3 && st != pipeline.RunJobRejectedStage3 {
+			return "", fmt.Errorf("status not valid for stage 3 list")
+		}
+	default:
+		return "", fmt.Errorf("invalid stage")
+	}
+	return s, nil
 }
 
-func jobListItemFromEntry(e jobschema.JobListEntry) schema.JobListItem {
+func jobListItemFromEntry(e jobschema.JobListEntry, includePipelineStatus bool) schema.JobListItem {
 	item := schema.JobListItem{
 		JobID:           e.Job.ID,
 		Title:           e.Job.Title,
@@ -36,6 +48,10 @@ func jobListItemFromEntry(e jobschema.JobListEntry) schema.JobListItem {
 		FirstSeenAt:     e.FirstSeenAt.UTC(),
 		Stage3Rationale: e.Stage3Rationale,
 	}
+	if includePipelineStatus && e.PipelineRunStatus != "" {
+		st := e.PipelineRunStatus
+		item.Status = &st
+	}
 	if !e.Job.PostedAt.IsZero() {
 		t := e.Job.PostedAt.UTC()
 		item.PostedAt = &t
@@ -44,7 +60,7 @@ func jobListItemFromEntry(e jobschema.JobListEntry) schema.JobListItem {
 }
 
 // ListJobs implements [slots.API.ListJobs].
-func (s *Service) ListJobs(ctx context.Context, slotID string, stage, page, limit int, bucket string) (schema.JobListResponse, error) {
+func (s *Service) ListJobs(ctx context.Context, slotID string, stage, page, limit int, statusQuery string) (schema.JobListResponse, error) {
 	log := s.methodLog(ctx, "ListJobs")
 	log.Debug().Msg("list jobs")
 	if s.Jobs == nil {
@@ -57,9 +73,18 @@ func (s *Service) ListJobs(ctx context.Context, slotID string, stage, page, limi
 	if _, err := s.Repo.GetByID(ctx, u.String()); err != nil {
 		return schema.JobListResponse{}, err
 	}
-	listBuck, err := listBucketFromQuery(bucket)
-	if err != nil {
-		return schema.JobListResponse{}, slots.ErrInvalidJobListQuery
+	var statusFilter string
+	switch stage {
+	case 2, 3:
+		var ferr error
+		statusFilter, ferr = normalizeListStatusFilter(stage, statusQuery)
+		if ferr != nil {
+			return schema.JobListResponse{}, slots.ErrInvalidJobListQuery
+		}
+	case 1:
+		statusFilter = ""
+	default:
+		return schema.JobListResponse{}, fmt.Errorf("invalid stage")
 	}
 	offset := (page - 1) * limit
 	var entries []jobschema.JobListEntry
@@ -76,9 +101,9 @@ func (s *Service) ListJobs(ctx context.Context, slotID string, stage, page, limi
 			return schema.JobListResponse{Items: []schema.JobListItem{}, Page: page, Limit: limit, Total: 0}, nil
 		}
 		if stage == 2 {
-			entries, total, err = s.Jobs.ListPipelineRunStage2Jobs(ctx, u, runID, listBuck, offset, limit)
+			entries, total, err = s.Jobs.ListPipelineRunStage2Jobs(ctx, u, runID, statusFilter, offset, limit)
 		} else {
-			entries, total, err = s.Jobs.ListPipelineRunStage3Jobs(ctx, u, runID, listBuck, offset, limit)
+			entries, total, err = s.Jobs.ListPipelineRunStage3Jobs(ctx, u, runID, statusFilter, offset, limit)
 		}
 	default:
 		return schema.JobListResponse{}, fmt.Errorf("invalid stage")
@@ -86,9 +111,10 @@ func (s *Service) ListJobs(ctx context.Context, slotID string, stage, page, limi
 	if err != nil {
 		return schema.JobListResponse{}, err
 	}
+	includePRStatus := stage == 2 || stage == 3
 	items := make([]schema.JobListItem, 0, len(entries))
 	for _, e := range entries {
-		item := jobListItemFromEntry(e)
+		item := jobListItemFromEntry(e, includePRStatus)
 		if stage != 3 {
 			item.Stage3Rationale = nil
 		}

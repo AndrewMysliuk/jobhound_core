@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	jobdata "github.com/andrewmysliuk/jobhound_core/internal/domain/schema"
@@ -81,33 +82,12 @@ func (r *Repository) ListPassedStage2JobsForRun(ctx context.Context, pipelineRun
 type jobListScanRow struct {
 	Job
 	SlotFirstSeenAt    time.Time `gorm:"column:sj_first_seen"`
+	PRJStatus          string    `gorm:"column:prj_status"`
 	PRJStage3Rationale *string   `gorm:"column:prj_stage3_rationale"`
 }
 
 func jobListOrderSQL(jt string) string {
 	return "CASE WHEN " + jt + ".posted_at IS NULL THEN 1 ELSE 0 END ASC, " + jt + ".posted_at DESC, " + jt + ".id ASC"
-}
-
-func stage2ListStatuses(bucket jobsschema.ListBucket) []string {
-	switch bucket {
-	case jobsschema.ListBucketPassed:
-		return []string{string(pipeline.RunJobPassedStage2)}
-	case jobsschema.ListBucketFailed:
-		return []string{string(pipeline.RunJobRejectedStage2)}
-	default:
-		return []string{string(pipeline.RunJobPassedStage2), string(pipeline.RunJobRejectedStage2)}
-	}
-}
-
-func stage3ListStatuses(bucket jobsschema.ListBucket) []string {
-	switch bucket {
-	case jobsschema.ListBucketPassed:
-		return []string{string(pipeline.RunJobPassedStage3)}
-	case jobsschema.ListBucketFailed:
-		return []string{string(pipeline.RunJobRejectedStage3)}
-	default:
-		return []string{string(pipeline.RunJobPassedStage3), string(pipeline.RunJobRejectedStage3)}
-	}
 }
 
 func (r *Repository) stage1JobListBase(ctx context.Context, slotID uuid.UUID) *gorm.DB {
@@ -117,30 +97,42 @@ func (r *Repository) stage1JobListBase(ctx context.Context, slotID uuid.UUID) *g
 		Where(jt+".stage1_status = ?", jobsschema.Stage1StatusPassed)
 }
 
-func (r *Repository) stage2JobListBase(ctx context.Context, slotID uuid.UUID, runID int64, bucket jobsschema.ListBucket) *gorm.DB {
+func (r *Repository) stage2JobListBase(ctx context.Context, slotID uuid.UUID, runID int64, statusFilter string) *gorm.DB {
 	jt := Job{}.TableName()
-	return r.get().WithContext(ctx).Table(jt).
+	q := r.get().WithContext(ctx).Table(jt).
 		Joins("INNER JOIN slot_jobs ON slot_jobs.job_id = "+jt+".id AND slot_jobs.slot_id = ?", slotID).
-		Joins("INNER JOIN pipeline_run_jobs prj ON prj.job_id = "+jt+".id").
-		Where("prj.pipeline_run_id = ? AND prj.status IN ?", runID, stage2ListStatuses(bucket))
+		Joins("INNER JOIN pipeline_run_jobs prj ON prj.job_id = " + jt + ".id")
+	if strings.TrimSpace(statusFilter) == "" {
+		return q.Where("prj.pipeline_run_id = ? AND prj.status IN ?", runID, []string{
+			string(pipeline.RunJobPassedStage2),
+			string(pipeline.RunJobRejectedStage2),
+		})
+	}
+	return q.Where("prj.pipeline_run_id = ? AND prj.status = ?", runID, statusFilter)
 }
 
-func (r *Repository) stage3JobListBase(ctx context.Context, slotID uuid.UUID, runID int64, bucket jobsschema.ListBucket) *gorm.DB {
+func (r *Repository) stage3JobListBase(ctx context.Context, slotID uuid.UUID, runID int64, statusFilter string) *gorm.DB {
 	jt := Job{}.TableName()
-	return r.get().WithContext(ctx).Table(jt).
+	q := r.get().WithContext(ctx).Table(jt).
 		Joins("INNER JOIN slot_jobs ON slot_jobs.job_id = "+jt+".id AND slot_jobs.slot_id = ?", slotID).
-		Joins("INNER JOIN pipeline_run_jobs prj ON prj.job_id = "+jt+".id").
-		Where("prj.pipeline_run_id = ? AND prj.status IN ?", runID, stage3ListStatuses(bucket))
+		Joins("INNER JOIN pipeline_run_jobs prj ON prj.job_id = " + jt + ".id")
+	if strings.TrimSpace(statusFilter) == "" {
+		return q.Where("prj.pipeline_run_id = ? AND prj.status IN ?", runID, []string{
+			string(pipeline.RunJobPassedStage3),
+			string(pipeline.RunJobRejectedStage3),
+		})
+	}
+	return q.Where("prj.pipeline_run_id = ? AND prj.status = ?", runID, statusFilter)
 }
 
-func (r *Repository) countAndListJobEntries(base *gorm.DB, jt string, offset, limit int, stage3RationaleSelect string) ([]jobsschema.JobListEntry, int64, error) {
+func (r *Repository) countAndListJobEntries(base *gorm.DB, jt string, offset, limit int, prjExtraSelect string) ([]jobsschema.JobListEntry, int64, error) {
 	var total int64
 	if err := base.Session(&gorm.Session{}).Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 	sel := jt + ".*, slot_jobs.first_seen_at AS sj_first_seen"
-	if stage3RationaleSelect != "" {
-		sel += ", " + stage3RationaleSelect
+	if prjExtraSelect != "" {
+		sel += ", " + prjExtraSelect
 	}
 	var rows []jobListScanRow
 	err := base.Session(&gorm.Session{}).
@@ -155,8 +147,9 @@ func (r *Repository) countAndListJobEntries(base *gorm.DB, jt string, offset, li
 	out := make([]jobsschema.JobListEntry, 0, len(rows))
 	for i := range rows {
 		ent := jobsschema.JobListEntry{
-			Job:         rows[i].ToDomain(),
-			FirstSeenAt: rows[i].SlotFirstSeenAt.UTC(),
+			Job:               rows[i].ToDomain(),
+			FirstSeenAt:       rows[i].SlotFirstSeenAt.UTC(),
+			PipelineRunStatus: rows[i].PRJStatus,
 		}
 		if rows[i].PRJStage3Rationale != nil && *rows[i].PRJStage3Rationale != "" {
 			ent.Stage3Rationale = rows[i].PRJStage3Rationale
@@ -182,7 +175,7 @@ func (r *Repository) ListSlotStage1Jobs(ctx context.Context, slotID uuid.UUID, o
 }
 
 // ListPipelineRunStage2Jobs implements [jobs.JobRepository.ListPipelineRunStage2Jobs].
-func (r *Repository) ListPipelineRunStage2Jobs(ctx context.Context, slotID uuid.UUID, pipelineRunID int64, bucket jobsschema.ListBucket, offset, limit int) ([]jobsschema.JobListEntry, int64, error) {
+func (r *Repository) ListPipelineRunStage2Jobs(ctx context.Context, slotID uuid.UUID, pipelineRunID int64, statusFilter string, offset, limit int) ([]jobsschema.JobListEntry, int64, error) {
 	if slotID == uuid.Nil {
 		return nil, 0, fmt.Errorf("slot id is required")
 	}
@@ -196,11 +189,11 @@ func (r *Repository) ListPipelineRunStage2Jobs(ctx context.Context, slotID uuid.
 		return nil, 0, fmt.Errorf("offset must be non-negative")
 	}
 	jt := Job{}.TableName()
-	return r.countAndListJobEntries(r.stage2JobListBase(ctx, slotID, pipelineRunID, bucket), jt, offset, limit, "")
+	return r.countAndListJobEntries(r.stage2JobListBase(ctx, slotID, pipelineRunID, statusFilter), jt, offset, limit, "prj.status AS prj_status")
 }
 
 // ListPipelineRunStage3Jobs implements [jobs.JobRepository.ListPipelineRunStage3Jobs].
-func (r *Repository) ListPipelineRunStage3Jobs(ctx context.Context, slotID uuid.UUID, pipelineRunID int64, bucket jobsschema.ListBucket, offset, limit int) ([]jobsschema.JobListEntry, int64, error) {
+func (r *Repository) ListPipelineRunStage3Jobs(ctx context.Context, slotID uuid.UUID, pipelineRunID int64, statusFilter string, offset, limit int) ([]jobsschema.JobListEntry, int64, error) {
 	if slotID == uuid.Nil {
 		return nil, 0, fmt.Errorf("slot id is required")
 	}
@@ -214,5 +207,6 @@ func (r *Repository) ListPipelineRunStage3Jobs(ctx context.Context, slotID uuid.
 		return nil, 0, fmt.Errorf("offset must be non-negative")
 	}
 	jt := Job{}.TableName()
-	return r.countAndListJobEntries(r.stage3JobListBase(ctx, slotID, pipelineRunID, bucket), jt, offset, limit, "prj.stage3_rationale AS prj_stage3_rationale")
+	return r.countAndListJobEntries(r.stage3JobListBase(ctx, slotID, pipelineRunID, statusFilter), jt, offset, limit,
+		"prj.status AS prj_status, prj.stage3_rationale AS prj_stage3_rationale")
 }

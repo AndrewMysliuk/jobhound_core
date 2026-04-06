@@ -15,6 +15,6 @@ var (
 	ErrNoPipelineRun = errors.New("no pipeline run for slot")
 	// ErrProfileRequired is returned when stage 3 runs but global profile text is empty.
 	ErrProfileRequired = errors.New("profile text is required for stage 3")
-	// ErrInvalidJobListQuery is returned for bad page/limit/bucket (009 GET …/jobs).
+	// ErrInvalidJobListQuery is returned for bad page/limit/status filter (009 GET …/jobs).
 	ErrInvalidJobListQuery = errors.New("invalid job list query")
 )

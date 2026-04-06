@@ -45,11 +45,11 @@ func (r *retentionJobsStub) ListSlotStage1Jobs(context.Context, uuid.UUID, int, 
 	return nil, 0, nil
 }
 
-func (r *retentionJobsStub) ListPipelineRunStage2Jobs(context.Context, uuid.UUID, int64, jobsschema.ListBucket, int, int) ([]jobsschema.JobListEntry, int64, error) {
+func (r *retentionJobsStub) ListPipelineRunStage2Jobs(context.Context, uuid.UUID, int64, string, int, int) ([]jobsschema.JobListEntry, int64, error) {
 	return nil, 0, nil
 }
 
-func (r *retentionJobsStub) ListPipelineRunStage3Jobs(context.Context, uuid.UUID, int64, jobsschema.ListBucket, int, int) ([]jobsschema.JobListEntry, int64, error) {
+func (r *retentionJobsStub) ListPipelineRunStage3Jobs(context.Context, uuid.UUID, int64, string, int, int) ([]jobsschema.JobListEntry, int64, error) {
 	return nil, 0, nil
 }
 

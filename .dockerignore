@@ -1,0 +1,9 @@
+.git
+bin/
+specs/
+.cursor
+*.md
+.env
+.env.*
+mcps/
+agent-transcripts/

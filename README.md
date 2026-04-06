@@ -10,7 +10,7 @@ Env vars and infra details: `specs/`; names and loaders: `internal/config`.
 make build
 make run                 # agent
 make run-worker          # Temporal worker; set JOBHOUND_TEMPORAL_ADDRESS
-make run-debug           # agent + debug HTTP on 127.0.0.1:8080
+make run-debug           # agent + debug HTTP on 127.0.0.1:3001
 make test
 make test-integration    # -tags=integration; needs env from specs
 ```

@@ -14,8 +14,8 @@ type API interface {
 	Delete(ctx context.Context, slotID string) error
 	RunStage2(ctx context.Context, slotID string, include, exclude []string) (*schema.StageRunAcceptedResponse, error)
 	RunStage3(ctx context.Context, slotID string, maxJobs int) (*schema.StageRunAcceptedResponse, error)
-	// ListJobs returns paginated jobs for stages 1–3. bucket is "" (all), "passed", or "failed" (stages 2–3 only); caller validates stage and bucket rules.
-	ListJobs(ctx context.Context, slotID string, stage, page, limit int, bucket string) (schema.JobListResponse, error)
+	// ListJobs returns paginated jobs for stages 1–3. statusQuery is empty (all rows) or an exact pipeline_run_jobs.status for stages 2–3; caller rejects status on stage 1.
+	ListJobs(ctx context.Context, slotID string, stage, page, limit int, statusQuery string) (schema.JobListResponse, error)
 	// PatchJobBucket updates coarse outcome for stage 2 or 3 (009 PATCH). stage must be 2 or 3.
 	PatchJobBucket(ctx context.Context, slotID string, stage int, jobID string, bucket schema.JobBucket) (*schema.PatchJobBucketResponse, error)
 }

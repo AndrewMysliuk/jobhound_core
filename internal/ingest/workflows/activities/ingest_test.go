@@ -80,11 +80,11 @@ func (m *memJobs) ListSlotStage1Jobs(context.Context, uuid.UUID, int, int) ([]jo
 	return nil, 0, nil
 }
 
-func (m *memJobs) ListPipelineRunStage2Jobs(context.Context, uuid.UUID, int64, jobschema.ListBucket, int, int) ([]jobschema.JobListEntry, int64, error) {
+func (m *memJobs) ListPipelineRunStage2Jobs(context.Context, uuid.UUID, int64, string, int, int) ([]jobschema.JobListEntry, int64, error) {
 	return nil, 0, nil
 }
 
-func (m *memJobs) ListPipelineRunStage3Jobs(context.Context, uuid.UUID, int64, jobschema.ListBucket, int, int) ([]jobschema.JobListEntry, int64, error) {
+func (m *memJobs) ListPipelineRunStage3Jobs(context.Context, uuid.UUID, int64, string, int, int) ([]jobschema.JobListEntry, int64, error) {
 	return nil, 0, nil
 }
 

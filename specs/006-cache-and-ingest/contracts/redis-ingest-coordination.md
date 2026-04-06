@@ -5,7 +5,7 @@
 
 **Related**: `specs/006-cache-and-ingest/spec.md`; `specs/006-cache-and-ingest/contracts/environment.md`; `007` stage-1 column name in `specs/007-llm-policy-and-caps/contracts/pipeline-run-job-status.md`.
 
-**Product note** ([`product-concept-draft.md`](../../000-epic-overview/product-concept-draft.md) §3): lock + cooldown apply on **every** ingest for a source, including the **first** successful run for a new slot. Keys are **not** prefixed by `slot_id` — different slots that share a source **serialize** at that source by design.
+**Product note** ([`product-concept-draft.md`](../../000-epic-overview/product-concept-draft.md) §3): lock + cooldown apply on **every** ingest for a **(slot, source)** pair, including the **first** successful run for a new slot. Keys **include** `slot_id` so **different slots** can ingest the same source **in parallel** without Redis cross-talk; overlapping ingests for the **same** slot and source still **serialize** via the lock.
 
 ---
 
@@ -13,8 +13,8 @@
 
 | Purpose   | Pattern                    | Notes |
 |-----------|----------------------------|--------|
-| In-flight lock | `ingest:lock:{source_id}` | `source_id` is **normalized** (see §4). |
-| Cooldown  | `ingest:cooldown:{source_id}` | Set **after** a successful ingest for that source (see `spec.md`). |
+| In-flight lock | `ingest:lock:{slot_id}:{source_id}` | `slot_id` is the slot UUID string; `source_id` is **normalized** (see §4). |
+| Cooldown  | `ingest:cooldown:{slot_id}:{source_id}` | Set **after** a successful ingest for that slot+source (see `spec.md`). |
 
 No other Redis keys are required for ingest in v1. **No** Redis-backed search-result cache in v1.
 
@@ -26,8 +26,8 @@ No other Redis keys are required for ingest in v1. **No** Redis-backed search-re
 
 | Constant (illustrative name) | Seconds | Role |
 |------------------------------|---------|------|
-| `IngestLockTTLSeconds`       | **600** | Prevents overlapping ingest for the same `source_id`; lock auto-expires if a worker dies mid-run. |
-| `IngestCooldownTTLSeconds`   | **3600** | Minimum interval between **successful** ingests for the same `source_id`, unless **explicit refresh** bypasses cooldown (see `spec.md`). |
+| `IngestLockTTLSeconds`       | **600** | Prevents overlapping ingest for the same **(slot, source)**; lock auto-expires if a worker dies mid-run. |
+| `IngestCooldownTTLSeconds`   | **3600** | Minimum interval between **successful** ingests for the same **(slot, source)**, unless **explicit refresh** bypasses cooldown (see `spec.md`). |
 
 **Lock acquisition**: use **SET** with **NX** (or equivalent) and the lock TTL above. No heartbeat requirement in v1.
 
@@ -37,7 +37,7 @@ No other Redis keys are required for ingest in v1. **No** Redis-backed search-re
 
 ## 3. Explicit refresh vs cooldown
 
-When **explicit refresh** is enabled (see `environment.md`), a new ingest may start **even if** `ingest:cooldown:{source_id}` is still present — implementation **deletes** or **overrides** that key as part of the refresh path, or skips cooldown check. **Lock** (`ingest:lock:{source_id}`) is **still** taken before work; refresh does **not** bypass the lock.
+When **explicit refresh** is enabled (see `environment.md`), a new ingest may start **even if** `ingest:cooldown:{slot_id}:{source_id}` is still present — implementation **deletes** or **overrides** that key as part of the refresh path, or skips cooldown check. **Lock** (`ingest:lock:{slot_id}:{source_id}`) is **still** taken before work; refresh does **not** bypass the lock.
 
 ---
 

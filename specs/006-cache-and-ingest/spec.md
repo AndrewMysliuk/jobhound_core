@@ -11,7 +11,7 @@
 
 **PostgreSQL** is the durable store for normalized vacancies: **upsert** by stable id, **no cross-source merging** (identity is **source + vacancy link** / stable id per `001`).
 
-**Redis** coordinates ingest **per source**: **lock** (no overlapping ingest for the same source) and **cooldown** (minimum interval between successful ingests for the same source). No Redis-backed search-result cache in v1.
+**Redis** coordinates ingest **per (slot, source)**: **lock** (no overlapping ingest for the same slot+source) and **cooldown** (minimum interval between successful ingests for that pair). No Redis-backed search-result cache in v1.
 
 Define **when** ingest hits external collectors vs reads from Postgres, **incremental cursor** (when supported by collectors), **retention** for old job rows, and optional **explicit refresh** (default off).
 
@@ -43,9 +43,9 @@ Define **when** ingest hits external collectors vs reads from Postgres, **increm
 
 ## Redis usage (v1, minimal)
 
-- **`ingest:lock:{source_id}`**: lock so two concurrent ingests for the same source do not run together. **Default TTL: 600 seconds** (code constant). Acquire with **SET NX** (or equivalent).
-- **`ingest:cooldown:{source_id}`**: set after a **successful** ingest; **default TTL: 3600 seconds** (code constant). Blocks a new ingest until expiry unless **explicit refresh** bypasses cooldown (see below).
-- **Source id** in keys is **normalized** (trim, lowercase; stable slug per collector) — see **`contracts/redis-ingest-coordination.md`**.
+- **`ingest:lock:{slot_id}:{source_id}`**: lock so two concurrent ingests for the **same slot and source** do not run together. **Default TTL: 600 seconds** (code constant). Acquire with **SET NX** (or equivalent).
+- **`ingest:cooldown:{slot_id}:{source_id}`**: set after a **successful** ingest for that slot+source; **default TTL: 3600 seconds** (code constant). Blocks a new ingest until expiry unless **explicit refresh** bypasses cooldown (see below).
+- **`slot_id`** is the slot UUID string; **source id** is **normalized** (trim, lowercase; stable slug per collector) — see **`contracts/redis-ingest-coordination.md`**.
 - If Redis is unavailable: **fail closed** — **do not** start a new ingest for that source (log + error). No in-process single-flight fallback in v1.
 
 ## Explicit refresh

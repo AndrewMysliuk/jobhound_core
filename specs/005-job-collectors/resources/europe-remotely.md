@@ -23,7 +23,7 @@ This document is the **interface of what the site exposes** that we can pull fro
 
 The site shows controls such as **“LOAD MORE JOBS”** / **“Show more jobs”**; those buttons trigger the same **`POST admin-ajax.php`** flow documented here. The collector **repeats that HTTP request** (with captured body fields for `action`, page/filters, etc.) — **no headless browser** for MVP.
 
-Pagination: follow **`has_more`**; merge with any cards already in the initial page HTML and **dedupe by job page URL**.
+Pagination: follow **`has_more`**; merge with any cards already in the initial page HTML and **dedupe by job page URL**. The MVP collector caps **AJAX listing pages** at **2 by default** (configurable via `EuropeRemotely.MaxFeedPages` in code, hard-capped) so ingest does not walk hundreds of pages.
 
 ### Relative “posted” times
 

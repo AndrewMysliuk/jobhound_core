@@ -22,14 +22,14 @@ type mockSlotsJobs struct {
 	patchErr error
 }
 
-func (m *mockSlotsJobs) ListJobs(ctx context.Context, slotID string, stage, page, limit int, bucket string) (schema.JobListResponse, error) {
+func (m *mockSlotsJobs) ListJobs(ctx context.Context, slotID string, stage, page, limit int, statusQuery string) (schema.JobListResponse, error) {
 	if m.listErr != nil {
 		return schema.JobListResponse{}, m.listErr
 	}
 	_ = ctx
 	_ = slotID
 	_ = stage
-	_ = bucket
+	_ = statusQuery
 	out := m.listResp
 	out.Page = page
 	out.Limit = limit
@@ -81,8 +81,8 @@ func TestGetStageJobs_queryAnd404(t *testing.T) {
 		}
 	})
 
-	t.Run("stage1_bucket_rejected", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/slots/"+sid+"/stages/1/jobs?bucket=passed", nil)
+	t.Run("stage1_status_filter_rejected", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/slots/"+sid+"/stages/1/jobs?status=PASSED_STAGE_2", nil)
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, req)
 		if rec.Code != http.StatusBadRequest {
@@ -119,10 +119,10 @@ func TestGetStageJobs_queryAnd404(t *testing.T) {
 		}
 	})
 
-	t.Run("invalid_bucket", func(t *testing.T) {
+	t.Run("invalid_status", func(t *testing.T) {
 		msB := &mockSlotsJobs{listErr: slots.ErrInvalidJobListQuery}
 		hB := NewHTTPHandler(nil, Deps{Logger: zerolog.Nop(), Slots: msB, Profile: stubProfile{}})
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/slots/"+sid+"/stages/2/jobs?bucket=nope", nil)
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/slots/"+sid+"/stages/2/jobs?status=BOGUS", nil)
 		rec := httptest.NewRecorder()
 		hB.ServeHTTP(rec, req)
 		if rec.Code != http.StatusBadRequest {

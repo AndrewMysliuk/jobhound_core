@@ -35,8 +35,8 @@ Defaults match **`redis-ingest-coordination.md`** (lock **600** s, cooldown **36
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `JOBHOUND_INGEST_LOCK_TTL_SEC` | No | Redis `ingest:lock:{source_id}` TTL. Default **600**. |
-| `JOBHOUND_INGEST_COOLDOWN_TTL_SEC` | No | Redis `ingest:cooldown:{source_id}` TTL after successful ingest. Default **3600**. |
+| `JOBHOUND_INGEST_LOCK_TTL_SEC` | No | Redis `ingest:lock:{slot_id}:{source_id}` TTL. Default **600**. |
+| `JOBHOUND_INGEST_COOLDOWN_TTL_SEC` | No | Redis `ingest:cooldown:{slot_id}:{source_id}` TTL after successful ingest. Default **3600**. |
 
 `cmd/worker` passes these into `ingest.NewRedisCoordinatorWithTTL` when Redis is configured.
 

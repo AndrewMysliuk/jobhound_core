@@ -1,19 +1,18 @@
-# Local PostgreSQL for development (spec 002). DSN example:
-#   postgres://jobhound:jobhound@localhost:5432/jobhound?sslmode=disable
-# See specs/002-postgres-gorm-migrations/contracts/environment.md
+# Full local stack: Postgres + migrations + Redis + Temporal (+ UI) + agent (debug HTTP) + worker + API.
+# One command: make docker-up
 #
-# Temporal (spec 003): separate Postgres for Temporal persistence, server, Web UI.
-# gRPC frontend on host: localhost:7233 — set JOBHOUND_TEMPORAL_ADDRESS=localhost:7233
-# Web UI on host: http://localhost:8088 — see README and specs/003 contracts.
+# Published ports:
+#   5432  app Postgres   | 6379 Redis | 7233 Temporal gRPC | 8088 Temporal UI
+#   3000  public API  |  3001  agent debug HTTP (collectors) — two processes, two ports
 #
-# Redis (spec 006 ingest coordination): host localhost:6379 — set JOBHOUND_REDIS_URL=redis://localhost:6379/0
+# In-container URLs (not localhost): postgres, redis, temporal — see service env below.
+# Compose loads .env for variable substitution only; ${JOBHOUND_ANTHROPIC_API_KEY:-} passes the key into worker.
+
+x-build-app: &build-app
+  context: .
+  dockerfile: Dockerfile
 
 services:
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-
   postgres:
     image: postgres:16
     environment:
@@ -31,6 +30,18 @@ services:
       retries: 5
       start_period: 10s
 
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile.migrate
+    command: ["up"]
+    environment:
+      JOBHOUND_DATABASE_URL: postgres://jobhound:jobhound@postgres:5432/jobhound?sslmode=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
   temporal-postgresql:
     image: postgres:16
     environment:
@@ -45,11 +56,21 @@ services:
       retries: 10
       start_period: 15s
 
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
   temporal:
     image: temporalio/auto-setup:1.29.1
     depends_on:
       temporal-postgresql:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     environment:
       DB: postgres12
       DB_PORT: "5432"
@@ -65,7 +86,7 @@ services:
       - ./docker/temporal/dynamicconfig:/etc/temporal/config/dynamicconfig
 
   temporal-ui:
-    image: temporalio/ui:2.34.0
+    image: temporalio/ui:2.48.1
     depends_on:
       - temporal
     environment:
@@ -73,6 +94,92 @@ services:
       TEMPORAL_CORS_ORIGINS: http://localhost:3000
     ports:
       - "8088:8080"
+
+  # Waits until Temporal accepts gRPC and default namespace is ready (auto-setup is async after port open).
+  temporal-ready:
+    image: busybox:1.36
+    depends_on:
+      temporal:
+        condition: service_started
+    command:
+      - sh
+      - -c
+      - |
+        i=0
+        while [ $$i -lt 90 ]; do
+          if nc -z temporal 7233 2>/dev/null; then
+            sleep 15
+            exit 0
+          fi
+          i=$$((i+1))
+          sleep 2
+        done
+        echo "temporal-ready: timeout waiting for temporal:7233" >&2
+        exit 1
+    restart: "no"
+
+  agent:
+    build: *build-app
+    image: jobhound-core:local
+    working_dir: /app
+    command: ["/usr/local/bin/agent"]
+    environment:
+      JOBHOUND_DATABASE_URL: postgres://jobhound:jobhound@postgres:5432/jobhound?sslmode=disable
+      JOBHOUND_TEMPORAL_ADDRESS: temporal:7233
+      JOBHOUND_REDIS_URL: redis://redis:6379/0
+      JOBHOUND_DEBUG_HTTP_ADDR: 0.0.0.0:3001
+    ports:
+      - "3001:3001"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  worker:
+    build: *build-app
+    image: jobhound-core:local
+    working_dir: /app
+    command: ["/usr/local/bin/worker"]
+    environment:
+      JOBHOUND_DATABASE_URL: postgres://jobhound:jobhound@postgres:5432/jobhound?sslmode=disable
+      JOBHOUND_TEMPORAL_ADDRESS: temporal:7233
+      JOBHOUND_REDIS_URL: redis://redis:6379/0
+      JOBHOUND_ANTHROPIC_API_KEY: ${JOBHOUND_ANTHROPIC_API_KEY:-}
+      JOBHOUND_ANTHROPIC_MODEL: ${JOBHOUND_ANTHROPIC_MODEL:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_started
+      temporal-ready:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  api:
+    build: *build-app
+    image: jobhound-core:local
+    working_dir: /app
+    command: ["/usr/local/bin/api"]
+    environment:
+      JOBHOUND_DATABASE_URL: postgres://jobhound:jobhound@postgres:5432/jobhound?sslmode=disable
+      JOBHOUND_TEMPORAL_ADDRESS: temporal:7233
+      JOBHOUND_REDIS_URL: redis://redis:6379/0
+      JOBHOUND_API_LISTEN: 0.0.0.0:3000
+      JOBHOUND_API_CORS_ORIGINS: ${JOBHOUND_API_CORS_ORIGINS:-http://localhost:5173,http://localhost:3000}
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_started
+      temporal-ready:
+        condition: service_completed_successfully
+    restart: unless-stopped
 
 volumes:
   jobhound_pgdata:

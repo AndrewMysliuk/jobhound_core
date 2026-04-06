@@ -33,8 +33,8 @@ type JobRepository interface {
 
 	// ListSlotStage1Jobs returns stage-1 pool jobs for the slot (PASSED_STAGE_1 + slot_jobs), sorted posted_at DESC, job_id ASC, paginated.
 	ListSlotStage1Jobs(ctx context.Context, slotID uuid.UUID, offset, limit int) ([]schema.JobListEntry, int64, error)
-	// ListPipelineRunStage2Jobs returns stage-2 outcomes for the run scoped to the slot (join slot_jobs). bucket filters passed/failed when not ListBucketAll.
-	ListPipelineRunStage2Jobs(ctx context.Context, slotID uuid.UUID, pipelineRunID int64, bucket schema.ListBucket, offset, limit int) ([]schema.JobListEntry, int64, error)
-	// ListPipelineRunStage3Jobs returns terminal stage-3 rows for the run scoped to the slot. bucket filters when not ListBucketAll.
-	ListPipelineRunStage3Jobs(ctx context.Context, slotID uuid.UUID, pipelineRunID int64, bucket schema.ListBucket, offset, limit int) ([]schema.JobListEntry, int64, error)
+	// ListPipelineRunStage2Jobs returns stage-2 outcomes for the run scoped to the slot (join slot_jobs). statusFilter empty = all stage-2 statuses; otherwise exact prj.status match.
+	ListPipelineRunStage2Jobs(ctx context.Context, slotID uuid.UUID, pipelineRunID int64, statusFilter string, offset, limit int) ([]schema.JobListEntry, int64, error)
+	// ListPipelineRunStage3Jobs returns terminal stage-3 rows for the run scoped to the slot. statusFilter empty = all terminal stage-3 statuses; otherwise exact prj.status match.
+	ListPipelineRunStage3Jobs(ctx context.Context, slotID uuid.UUID, pipelineRunID int64, statusFilter string, offset, limit int) ([]schema.JobListEntry, int64, error)
 }

@@ -23,9 +23,10 @@ func ParseStageDigit(s string) (int, bool) {
 	return int(s[0] - '0'), true
 }
 
-// ParseJobListQuery extracts page, limit, and bucket from query params, applying defaults.
+// ParseJobListQuery extracts page, limit, and optional status filter from query params, applying defaults.
+// status is non-empty when ?status= is present (stages 2–3 job lists).
 // Returns ok=false if any present value is malformed or out of range.
-func ParseJobListQuery(q map[string][]string) (page, limit int, bucket string, ok bool) {
+func ParseJobListQuery(q map[string][]string) (page, limit int, status string, ok bool) {
 	page = 1
 	if vs := q["page"]; len(vs) > 0 && strings.TrimSpace(vs[0]) != "" {
 		p, err := strconv.Atoi(strings.TrimSpace(vs[0]))
@@ -42,8 +43,8 @@ func ParseJobListQuery(q map[string][]string) (page, limit int, bucket string, o
 		}
 		limit = l
 	}
-	if vs := q["bucket"]; len(vs) > 0 {
-		bucket = strings.TrimSpace(vs[0])
+	if vs := q["status"]; len(vs) > 0 {
+		status = strings.TrimSpace(vs[0])
 	}
-	return page, limit, bucket, true
+	return page, limit, status, true
 }

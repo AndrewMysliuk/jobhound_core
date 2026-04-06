@@ -1,0 +1,16 @@
+# One-shot golang-migrate binary for docker-compose (JOBHOUND_DATABASE_URL from compose env).
+FROM golang:1.24-bookworm AS build
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY cmd/migrate ./cmd/migrate
+COPY internal/config ./internal/config
+RUN CGO_ENABLED=0 go build -o /out/migrate ./cmd/migrate
+
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates \
+	&& rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+COPY --from=build /out/migrate /usr/local/bin/migrate
+COPY migrations ./migrations
+ENTRYPOINT ["/usr/local/bin/migrate", "-path", "/app/migrations"]

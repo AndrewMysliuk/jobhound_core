@@ -285,7 +285,7 @@ func TestRepository_ListSlotStage1Jobs_paginationAndTotal(t *testing.T) {
 	}
 }
 
-func TestRepository_ListPipelineRunStage2Jobs_bucketFilter(t *testing.T) {
+func TestRepository_ListPipelineRunStage2Jobs_statusFilter(t *testing.T) {
 	ctx := context.Background()
 	slotA := uuid.MustParse("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
 	now := time.Date(2026, 4, 1, 12, 0, 0, 0, time.UTC)
@@ -318,25 +318,28 @@ func TestRepository_ListPipelineRunStage2Jobs_bucketFilter(t *testing.T) {
 	if err := db.Exec(`INSERT INTO pipeline_run_jobs (pipeline_run_id, job_id, status) VALUES (1, 'jp', ?), (1, 'jr', ?)`, stP, stR).Error; err != nil {
 		t.Fatal(err)
 	}
-	all, total, err := repo.ListPipelineRunStage2Jobs(ctx, slotA, 1, schema.ListBucketAll, 0, 10)
+	all, total, err := repo.ListPipelineRunStage2Jobs(ctx, slotA, 1, "", 0, 10)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if total != 2 || len(all) != 2 {
 		t.Fatalf("all: total=%d len=%d", total, len(all))
 	}
-	passedOnly, totalP, err := repo.ListPipelineRunStage2Jobs(ctx, slotA, 1, schema.ListBucketPassed, 0, 10)
+	if all[0].PipelineRunStatus == "" || all[1].PipelineRunStatus == "" {
+		t.Fatalf("expected pipeline run status on entries: %+v", all)
+	}
+	passedOnly, totalP, err := repo.ListPipelineRunStage2Jobs(ctx, slotA, 1, stP, 0, 10)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if totalP != 1 || len(passedOnly) != 1 || passedOnly[0].Job.ID != "jp" {
+	if totalP != 1 || len(passedOnly) != 1 || passedOnly[0].Job.ID != "jp" || passedOnly[0].PipelineRunStatus != stP {
 		t.Fatalf("passed: %+v", passedOnly)
 	}
-	failedOnly, totalF, err := repo.ListPipelineRunStage2Jobs(ctx, slotA, 1, schema.ListBucketFailed, 0, 10)
+	failedOnly, totalF, err := repo.ListPipelineRunStage2Jobs(ctx, slotA, 1, stR, 0, 10)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if totalF != 1 || len(failedOnly) != 1 || failedOnly[0].Job.ID != "jr" {
+	if totalF != 1 || len(failedOnly) != 1 || failedOnly[0].Job.ID != "jr" || failedOnly[0].PipelineRunStatus != stR {
 		t.Fatalf("failed: %+v", failedOnly)
 	}
 }

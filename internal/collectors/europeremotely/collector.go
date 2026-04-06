@@ -26,8 +26,12 @@ type feedEnvelope struct {
 	HTML    string `json:"html"`
 }
 
-// maxFeedPages caps AJAX pagination to avoid an infinite loop if has_more stays true.
-const maxFeedPages = 500
+// DefaultMaxFeedPages is the default cap on AJAX listing pages (≈60 jobs/page on the live site).
+// Further pages need explicit MaxFeedPages on the collector (still bounded by maxFeedPagesHardCap).
+const DefaultMaxFeedPages = 2
+
+// maxFeedPagesHardCap bounds MaxFeedPages when set above this value (safety rail).
+const maxFeedPagesHardCap = 500
 
 // EuropeRemotely fetches listings via POST (admin-ajax-style) and job pages via GET.
 type EuropeRemotely struct {
@@ -36,6 +40,9 @@ type EuropeRemotely struct {
 	FeedURL string
 	// FeedForm is base application/x-www-form-urlencoded fields; "page" is overwritten each batch.
 	FeedForm url.Values
+	// MaxFeedPages caps AJAX listing pages (page=1..N). 0 means DefaultMaxFeedPages.
+	// Stops after this many pages even if has_more is still true.
+	MaxFeedPages int
 	// MaxJobs stops after this many jobs are collected (after each detail fetch). 0 = unlimited.
 	MaxJobs int
 	// SiteBase resolves relative links in listing fragments; nil uses DefaultSiteBase().
@@ -75,13 +82,11 @@ func (c *EuropeRemotely) Fetch(ctx context.Context) ([]schema.Job, error) {
 		client = utils.NewHTTPClient()
 	}
 
+	limit := c.maxFeedPagesEffective()
+
 	seen := make(map[string]struct{})
 	var jobs []schema.Job
-	page := 1
-	for {
-		if page > maxFeedPages {
-			return nil, fmt.Errorf("feed page limit exceeded (%d)", maxFeedPages)
-		}
+	for page := 1; page <= limit; page++ {
 		form := cloneValues(c.FeedForm)
 		form.Set("page", strconv.Itoa(page))
 		body, err := postForm(ctx, client, c.FeedURL, form)
@@ -162,9 +167,19 @@ func (c *EuropeRemotely) Fetch(ctx context.Context) ([]schema.Job, error) {
 		if !hasMore {
 			break
 		}
-		page++
 	}
 	return jobs, nil
+}
+
+func (c *EuropeRemotely) maxFeedPagesEffective() int {
+	n := c.MaxFeedPages
+	if n <= 0 {
+		n = DefaultMaxFeedPages
+	}
+	if n > maxFeedPagesHardCap {
+		n = maxFeedPagesHardCap
+	}
+	return n
 }
 
 func (c *EuropeRemotely) countryCode(listingLoc, detailLoc string) string {

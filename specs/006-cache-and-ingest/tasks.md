@@ -12,7 +12,7 @@
 
 1. [x] **`internal/config`** — Definition of done: `JOBHOUND_REDIS_URL`, `JOBHOUND_INGEST_EXPLICIT_REFRESH` loaded and documented in `contracts/environment.md`; no raw `os.Getenv` in feature packages.
 
-2. [x] **Redis coordination** — Definition of done: lock `ingest:lock:{source_id}`, cooldown `ingest:cooldown:{source_id}` per `redis-ingest-coordination.md`; TTL defaults **600** / **3600** s; **fail closed** if Redis unavailable.
+2. [x] **Redis coordination** — Definition of done: lock `ingest:lock:{slot_id}:{source_id}`, cooldown `ingest:cooldown:{slot_id}:{source_id}` per `redis-ingest-coordination.md`; TTL defaults **600** / **3600** s; **fail closed** if Redis unavailable.
 
 3. [x] **Explicit refresh** — Definition of done: when enabled, bypass **cooldown** only; **lock** still acquired before work.
 

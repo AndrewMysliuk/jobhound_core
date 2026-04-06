@@ -156,6 +156,7 @@ func TestFetch_httptest(t *testing.T) {
 		SearchURL:  srv.URL + "/jobsapi/_search",
 		PageSize:   100,
 		Countries:  testCountriesResolver(t),
+		MaxPages:   -1,
 	}
 	jobs, err := coll.Fetch(context.Background())
 	require.NoError(t, err)
@@ -198,10 +199,74 @@ func TestFetch_maxFetchJobs(t *testing.T) {
 		PageSize:     100,
 		Countries:    testCountriesResolver(t),
 		MaxFetchJobs: 2,
+		MaxPages:     -1,
 	}
 	jobs, err := coll.Fetch(context.Background())
 	require.NoError(t, err)
 	require.Len(t, jobs, 2)
 	require.Equal(t, "Role 0", jobs[0].Title)
 	require.Equal(t, "Role 1", jobs[1].Title)
+}
+
+func TestFetch_defaultMaxPages_twoRequests(t *testing.T) {
+	hit := func(i int) map[string]any {
+		return map[string]any{
+			"_source": map[string]any{
+				"title":        fmt.Sprintf("Role %d", i),
+				"slug":         fmt.Sprintf("slug-%d-1502763", i),
+				"company":      "Co",
+				"description":  "<p>x</p>",
+				"pub_date":     "2026-01-01T00:00:00Z",
+				"apply_option": "with_your_ats",
+				"expired":      false,
+			},
+		}
+	}
+	var reqCount int
+	mux := http.NewServeMux()
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	mux.HandleFunc("/jobsapi/_search", func(w http.ResponseWriter, r *http.Request) {
+		reqCount++
+		b, err := io.ReadAll(r.Body)
+		require.NoError(t, err)
+		switch reqCount {
+		case 1:
+			require.Contains(t, string(b), `"from":0`)
+			body, err := json.Marshal(map[string]any{
+				"hits": map[string]any{
+					"total": map[string]any{"value": 100, "relation": "eq"},
+					"hits":  []map[string]any{hit(0), hit(1)},
+				},
+			})
+			require.NoError(t, err)
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write(body)
+		case 2:
+			require.Contains(t, string(b), `"from":2`)
+			body, err := json.Marshal(map[string]any{
+				"hits": map[string]any{
+					"total": map[string]any{"value": 100, "relation": "eq"},
+					"hits":  []map[string]any{hit(2), hit(3)},
+				},
+			})
+			require.NoError(t, err)
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write(body)
+		default:
+			t.Fatalf("unexpected third jobsapi request")
+		}
+	})
+	coll := &WorkingNomads{
+		HTTPClient: srv.Client(),
+		SearchURL:  srv.URL + "/jobsapi/_search",
+		PageSize:   2,
+		Countries:  testCountriesResolver(t),
+	}
+	jobs, err := coll.Fetch(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, 2, reqCount)
+	require.Len(t, jobs, 4)
+	require.Equal(t, "Role 0", jobs[0].Title)
+	require.Equal(t, "Role 3", jobs[3].Title)
 }

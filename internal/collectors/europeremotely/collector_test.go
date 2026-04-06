@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"testing"
 	"time"
 
@@ -155,6 +156,60 @@ func TestFetch_httptest(t *testing.T) {
 	require.NotNil(t, j.Position)
 	require.Equal(t, "backend", *j.Position)
 	require.NotEmpty(t, j.ID)
+}
+
+func TestFetch_maxFeedPagesStopsDespiteHasMore(t *testing.T) {
+	mux := http.NewServeMux()
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+
+	u1 := srv.URL + "/job/one/"
+	u2 := srv.URL + "/job/two/"
+	card := func(u, title string) string {
+		return `<div class="job-card"><h2 class="job-title"><a href="` + u + `">` + title + `</a></h2><div class="company-name">A</div><div class="meta-item meta-location">DE</div><div class="job-time">Posted 1 day ago</div></div>`
+	}
+
+	var ajaxCalls int
+	mux.HandleFunc("/ajax", func(w http.ResponseWriter, r *http.Request) {
+		require.NoError(t, r.ParseForm())
+		ajaxCalls++
+		require.Equal(t, strconv.Itoa(ajaxCalls), r.FormValue("page"))
+		var html string
+		switch ajaxCalls {
+		case 1:
+			html = card(u1, "First")
+		case 2:
+			html = card(u2, "Second")
+		default:
+			t.Fatalf("unexpected ajax call %d", ajaxCalls)
+		}
+		feedBytes, err := json.Marshal(map[string]any{"has_more": true, "html": html})
+		require.NoError(t, err)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(feedBytes)
+	})
+	detailHandler := func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		_, _ = w.Write([]byte(detailFixtureHTML))
+	}
+	mux.HandleFunc("/job/one", detailHandler)
+	mux.HandleFunc("/job/one/", detailHandler)
+	mux.HandleFunc("/job/two", detailHandler)
+	mux.HandleFunc("/job/two/", detailHandler)
+
+	siteBase, err := url.Parse(srv.URL + "/")
+	require.NoError(t, err)
+	coll := &EuropeRemotely{
+		HTTPClient: srv.Client(),
+		FeedURL:    srv.URL + "/ajax",
+		FeedForm:   url.Values{"action": {"test"}},
+		SiteBase:   siteBase,
+		Countries:  testCountriesResolver(t),
+	}
+	jobs, err := coll.Fetch(context.Background())
+	require.NoError(t, err)
+	require.Len(t, jobs, 2)
+	require.Equal(t, 2, ajaxCalls, "must not request page 3 when DefaultMaxFeedPages=2 and has_more is true")
 }
 
 func TestFetch_maxJobsStopsEarly(t *testing.T) {
