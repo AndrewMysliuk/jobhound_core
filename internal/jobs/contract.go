@@ -27,14 +27,14 @@ type JobRepository interface {
 	UpsertSlotJob(ctx context.Context, slotID uuid.UUID, jobID string) error
 	// ListSlotJobsPassedStage1 returns jobs linked to the slot with stage1_status PASSED_STAGE_1 (008 stage-2 pool).
 	ListSlotJobsPassedStage1(ctx context.Context, slotID uuid.UUID) ([]jobdata.Job, error)
-	// ListPassedStage2JobsForRun returns full job rows for pipeline_run_jobs in PASSED_STAGE_2 for this run,
-	// ordered by jobs.posted_at descending (008 stage-3 batch selection; NULL posted_at last).
+	// ListPassedStage2JobsForRun returns full job rows for pipeline_run_jobs with stage2_status PASSED_STAGE_2
+	// for this run (including rows that already have a terminal stage-3 outcome), ordered by jobs.posted_at descending.
 	ListPassedStage2JobsForRun(ctx context.Context, pipelineRunID int64) ([]jobdata.Job, error)
 
 	// ListSlotStage1Jobs returns stage-1 pool jobs for the slot (PASSED_STAGE_1 + slot_jobs), sorted posted_at DESC, job_id ASC, paginated.
 	ListSlotStage1Jobs(ctx context.Context, slotID uuid.UUID, offset, limit int) ([]schema.JobListEntry, int64, error)
-	// ListPipelineRunStage2Jobs returns stage-2 outcomes for the run scoped to the slot (join slot_jobs). statusFilter empty = all stage-2 statuses; otherwise exact prj.status match.
+	// ListPipelineRunStage2Jobs returns rows for the run scoped to the slot (join slot_jobs). statusFilter empty = all run rows; otherwise exact prj.stage2_status match (PASSED_STAGE_2 | REJECTED_STAGE_2). Response status is stage2_status.
 	ListPipelineRunStage2Jobs(ctx context.Context, slotID uuid.UUID, pipelineRunID int64, statusFilter string, offset, limit int) ([]schema.JobListEntry, int64, error)
-	// ListPipelineRunStage3Jobs returns terminal stage-3 rows for the run scoped to the slot. statusFilter empty = all terminal stage-3 statuses; otherwise exact prj.status match.
+	// ListPipelineRunStage3Jobs returns rows with non-null terminal stage3_status. statusFilter empty = both terminals; otherwise exact prj.stage3_status match. Response status is stage3_status.
 	ListPipelineRunStage3Jobs(ctx context.Context, slotID uuid.UUID, pipelineRunID int64, statusFilter string, offset, limit int) ([]schema.JobListEntry, int64, error)
 }

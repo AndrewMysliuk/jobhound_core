@@ -13,3 +13,14 @@ type Slot struct {
 func (Slot) TableName() string {
 	return "slots"
 }
+
+// SlotIdempotency maps POST /slots Idempotency-Key header values to created slot rows.
+type SlotIdempotency struct {
+	IdempotencyKey string `gorm:"column:idempotency_key;primaryKey"`
+	SlotID         string `gorm:"column:slot_id;not null"`
+}
+
+// TableName is the SQL table name.
+func (SlotIdempotency) TableName() string {
+	return "slot_idempotency_keys"
+}

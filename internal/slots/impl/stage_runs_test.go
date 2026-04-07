@@ -76,7 +76,8 @@ func stageRunTestDB(t *testing.T) *gorm.DB {
 		`CREATE TABLE pipeline_run_jobs (
 			pipeline_run_id INTEGER NOT NULL REFERENCES pipeline_runs(id) ON DELETE CASCADE,
 			job_id TEXT NOT NULL,
-			status TEXT NOT NULL,
+			stage2_status TEXT NOT NULL,
+			stage3_status TEXT,
 			stage3_rationale TEXT,
 			PRIMARY KEY (pipeline_run_id, job_id)
 		)`,

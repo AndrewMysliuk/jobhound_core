@@ -29,6 +29,10 @@ func testSlotsDB(t *testing.T) *gorm.DB {
 			name TEXT NOT NULL,
 			created_at DATETIME NOT NULL
 		)`,
+		`CREATE TABLE slot_idempotency_keys (
+			idempotency_key TEXT PRIMARY KEY,
+			slot_id TEXT NOT NULL REFERENCES slots(id) ON DELETE CASCADE
+		)`,
 	} {
 		if err := db.Exec(s).Error; err != nil {
 			t.Fatal(err)
@@ -103,5 +107,36 @@ func TestRepository_List_order(t *testing.T) {
 	}
 	if len(rows) != 2 || rows[0].ID != first.String() || rows[1].ID != second.String() {
 		t.Fatalf("order: %+v", rows)
+	}
+}
+
+func TestRepository_CreateWithIdempotency_replay(t *testing.T) {
+	ctx := context.Background()
+	db := testSlotsDB(t)
+	repo := NewRepository(pgsql.NewGetter(db))
+	key := uuid.MustParse("cccccccc-cccc-4ccc-8ccc-cccccccccccc")
+
+	s1, replay, err := repo.CreateWithIdempotency(ctx, key, "same")
+	if err != nil || replay {
+		t.Fatalf("first: err=%v replay=%v slot=%+v", err, replay, s1)
+	}
+	s2, replay2, err := repo.CreateWithIdempotency(ctx, key, "same")
+	if err != nil || !replay2 || s2.ID != s1.ID {
+		t.Fatalf("replay: err=%v replay=%v s1=%v s2=%v", err, replay2, s1.ID, s2.ID)
+	}
+}
+
+func TestRepository_CreateWithIdempotency_nameConflict(t *testing.T) {
+	ctx := context.Background()
+	db := testSlotsDB(t)
+	repo := NewRepository(pgsql.NewGetter(db))
+	key := uuid.MustParse("dddddddd-dddd-4ddd-8ddd-dddddddddddd")
+
+	if _, _, err := repo.CreateWithIdempotency(ctx, key, "first"); err != nil {
+		t.Fatal(err)
+	}
+	_, _, err := repo.CreateWithIdempotency(ctx, key, "second")
+	if err != slots.ErrIdempotencyKeyConflict {
+		t.Fatalf("want ErrIdempotencyKeyConflict, got %v", err)
 	}
 }

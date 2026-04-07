@@ -117,6 +117,8 @@ Other feature modules: typed request/response (and other wire) structs in **`sch
 
 ## Recent Changes
 
+- 2026-04-07: **Constitution v1.8.3** — principle IV persistence wording tightened (see `.specify/memory/constitution.md`).
+- 2026-04-07: **`pipeline_run_jobs`** — `stage2_status` + optional `stage3_status` in consolidated `000001_initial_schema`; `EffectiveRunJobStatusFromRow` lives in **`internal/pipeline/utils/`** (constitution: no standalone helpers at `internal/pipeline` root).
 - 2026-04-05: **`internal/domain`** — `schema/` + `utils/` kernel layout (was flat `package domain`).
 - 2026-04-05: **`schema/`** — defined as full module **data model** (structs, enums, named model constants, payloads, errors); not limited to HTTP DTOs. Constitution v1.8.0 aligned.
 - 2026-04-05: **Testing** — unit tests at handler / `impl` / `storage` only; no standalone tests for trivial `publicapi/utils`, schema-only, or enum-only code

@@ -14,7 +14,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// normalizeListStatusFilter maps GET ?status= to a pipeline_run_jobs.status filter. Empty means no filter (all rows for that stage list).
+// normalizeListStatusFilter maps GET ?status= to prj.stage2_status or prj.stage3_status. Empty means no filter (all rows for that stage list).
 func normalizeListStatusFilter(stage int, raw string) (string, error) {
 	s := strings.TrimSpace(raw)
 	if s == "" {

@@ -19,6 +19,7 @@ Freeze **routes**, **status codes**, **error `code` strings**, **JSON field name
 | Auth | **None** in MVP; no session headers. |
 | CORS | Required; allowed origins from config — [`environment.md`](./environment.md). |
 | Slot cap | **≤ 3** slots (single implicit user). |
+| `POST /slots` idempotency | Required header **`Idempotency-Key`**: non-nil **UUID** string. Same key + same `name` → **200** with the same slot card (no second workflow). Same key + different `name` → **409** `idempotency_key_conflict`. |
 | Stage 1 re-run | **No** HTTP path to re-start ingest for an **existing** `slot_id`; only **`POST /slots`** starts stage 1 for a **new** slot. |
 
 ### 2.1 Error envelope (all non-2xx JSON errors)
@@ -69,7 +70,7 @@ Freeze **routes**, **status codes**, **error `code` strings**, **JSON field name
 | Method | Path | Success | Notes |
 |--------|------|---------|--------|
 | `GET` | `/api/v1/slots` | **200** | No pagination; max 3 items. |
-| `POST` | `/api/v1/slots` | **201** | Starts stage 1 ingest; body **`{ "name": string }`**. |
+| `POST` | `/api/v1/slots` | **201** or **200** | Header **`Idempotency-Key`** (UUID). Body **`{ "name": string }`**. **201** first create (starts stage 1 ingest); **200** idempotent replay (same key + same name). |
 | `GET` | `/api/v1/slots/{slot_id}` | **200** | Full slot card. |
 | `DELETE` | `/api/v1/slots/{slot_id}` | **204** | Hard delete; empty body. |
 | `GET` | `/api/v1/profile` | **200** | Global stage-3 profile text. |
@@ -100,7 +101,7 @@ List item:
 | `stage_2` | object | At least **`state`**. |
 | `stage_3` | object | At least **`state`**. |
 
-### 4.2 `GET /api/v1/slots/{slot_id}` and `POST /api/v1/slots` — **200** / **201**
+### 4.2 `GET /api/v1/slots/{slot_id}` and `POST /api/v1/slots` — **200** / **201** (`POST`: **201** on first create, **200** on idempotent replay)
 
 | Field | Type |
 |-------|------|

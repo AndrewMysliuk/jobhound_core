@@ -20,7 +20,8 @@ func testJobsDBWithPipelineFK(t *testing.T) *gorm.DB {
 		`CREATE TABLE pipeline_run_jobs (
 			pipeline_run_id INTEGER NOT NULL REFERENCES pipeline_runs(id) ON DELETE CASCADE,
 			job_id TEXT NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
-			status TEXT NOT NULL,
+			stage2_status TEXT NOT NULL,
+			stage3_status TEXT,
 			stage3_rationale TEXT,
 			PRIMARY KEY (pipeline_run_id, job_id)
 		)`,
@@ -56,10 +57,10 @@ func TestRepository_DeleteJobsCreatedBeforeUTC_cascadesPipelineRunJobs(t *testin
 	if err := db.Exec(`INSERT INTO pipeline_runs (id) VALUES (1)`).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Exec(`INSERT INTO pipeline_run_jobs (pipeline_run_id, job_id, status) VALUES (1, 'oldjob', 'PASSED_STAGE_2')`).Error; err != nil {
+	if err := db.Exec(`INSERT INTO pipeline_run_jobs (pipeline_run_id, job_id, stage2_status) VALUES (1, 'oldjob', 'PASSED_STAGE_2')`).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Exec(`INSERT INTO pipeline_run_jobs (pipeline_run_id, job_id, status) VALUES (1, 'newjob', 'PASSED_STAGE_2')`).Error; err != nil {
+	if err := db.Exec(`INSERT INTO pipeline_run_jobs (pipeline_run_id, job_id, stage2_status) VALUES (1, 'newjob', 'PASSED_STAGE_2')`).Error; err != nil {
 		t.Fatal(err)
 	}
 

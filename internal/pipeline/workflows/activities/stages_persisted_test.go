@@ -57,7 +57,8 @@ func testSQLite(t *testing.T) *gorm.DB {
 		`CREATE TABLE pipeline_run_jobs (
 			pipeline_run_id INTEGER NOT NULL REFERENCES pipeline_runs(id) ON DELETE CASCADE,
 			job_id TEXT NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
-			status TEXT NOT NULL,
+			stage2_status TEXT NOT NULL,
+			stage3_status TEXT,
 			stage3_rationale TEXT,
 			PRIMARY KEY (pipeline_run_id, job_id)
 		)`,
@@ -144,15 +145,15 @@ func TestRunPersistPipelineStage2_and_3_persistsAndScoresCappedBatch(t *testing.
 	require.NoError(t, err)
 	require.Len(t, out.Scored, pipeutils.MaxStage3JobsPerPipelineRunExecution, "default cap 20 per 008")
 
-	var nPassed2 int64
+	var nBacklog int64
 	require.NoError(t, db.Model(&pipelinestorage.PipelineRunJob{}).
-		Where("pipeline_run_id = ? AND status = ?", runID, string(pipeline.RunJobPassedStage2)).
-		Count(&nPassed2).Error)
-	require.Equal(t, int64(2), nPassed2, "two jobs remain backlog PASSED_STAGE_2")
+		Where("pipeline_run_id = ? AND stage2_status = ? AND stage3_status IS NULL", runID, string(pipeline.RunJobPassedStage2)).
+		Count(&nBacklog).Error)
+	require.Equal(t, int64(2), nBacklog, "two jobs remain eligible (passed stage2, stage3 not yet run)")
 
 	var nTerm int64
 	require.NoError(t, db.Model(&pipelinestorage.PipelineRunJob{}).
-		Where("pipeline_run_id = ? AND status IN ?", runID, []string{string(pipeline.RunJobPassedStage3), string(pipeline.RunJobRejectedStage3)}).
+		Where("pipeline_run_id = ? AND stage3_status IN ?", runID, []string{string(pipeline.RunJobPassedStage3), string(pipeline.RunJobRejectedStage3)}).
 		Count(&nTerm).Error)
 	require.Equal(t, int64(20), nTerm)
 
@@ -209,11 +210,11 @@ func TestRunPersistPipelineStage3_stage3RejectScore(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	var st string
-	require.NoError(t, db.Raw(
-		`SELECT status FROM pipeline_run_jobs WHERE pipeline_run_id = ? AND job_id = ?`,
-		runID, "a").Scan(&st).Error)
-	require.Equal(t, string(pipeline.RunJobRejectedStage3), st)
+	var pr pipelinestorage.PipelineRunJob
+	require.NoError(t, db.Where("pipeline_run_id = ? AND job_id = ?", runID, "a").First(&pr).Error)
+	require.Equal(t, string(pipeline.RunJobPassedStage2), pr.Stage2Status)
+	require.NotNil(t, pr.Stage3Status)
+	require.Equal(t, string(pipeline.RunJobRejectedStage3), *pr.Stage3Status)
 }
 
 type stubScorer func(context.Context, string, schema.Job) (schema.ScoredJob, error)

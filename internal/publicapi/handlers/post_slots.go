@@ -16,17 +16,34 @@ func (h *HTTPHandler) postSlots(w http.ResponseWriter, r *http.Request) {
 		apputils.WriteAPIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
 		return
 	}
+	idemKey, err := apputils.ParseIdempotencyKeyHeader(r)
+	if err != nil {
+		if errors.Is(err, apputils.ErrIdempotencyKeyMissing) {
+			apputils.WriteAPIError(w, http.StatusBadRequest, "idempotency_key_required", "header Idempotency-Key is required")
+			return
+		}
+		apputils.WriteAPIError(w, http.StatusBadRequest, "invalid_idempotency_key", "header Idempotency-Key must be a non-nil UUID")
+		return
+	}
 	var body schema.CreateSlotRequest
 	if !apputils.ReadValidatedJSON(w, r, logH, schemaCreateSlot, &body) {
 		return
 	}
-	card, err := h.deps.Slots.Create(r.Context(), slotschema.CreateSlotParams{Name: body.Name})
+	res, err := h.deps.Slots.Create(r.Context(), slotschema.CreateSlotParams{Name: body.Name, IdempotencyKey: idemKey})
 	if errors.Is(err, slots.ErrInvalidSlotName) {
 		apputils.WriteAPIError(w, http.StatusBadRequest, "validation_error", "name is required")
 		return
 	}
+	if errors.Is(err, slots.ErrInvalidIdempotencyKey) {
+		apputils.WriteAPIError(w, http.StatusBadRequest, "invalid_idempotency_key", "header Idempotency-Key must be a non-nil UUID")
+		return
+	}
 	if errors.Is(err, slots.ErrSlotLimitReached) {
 		apputils.WriteSlotLimitReached(w, err.Error())
+		return
+	}
+	if errors.Is(err, slots.ErrIdempotencyKeyConflict) {
+		apputils.WriteAPIError(w, http.StatusConflict, "idempotency_key_conflict", err.Error())
 		return
 	}
 	if err != nil {
@@ -34,5 +51,9 @@ func (h *HTTPHandler) postSlots(w http.ResponseWriter, r *http.Request) {
 		apputils.WriteAPIError(w, http.StatusInternalServerError, "internal_error", err.Error())
 		return
 	}
-	apputils.WriteJSON(w, http.StatusCreated, card)
+	status := http.StatusOK
+	if res.Created {
+		status = http.StatusCreated
+	}
+	apputils.WriteJSON(w, status, res.Card)
 }

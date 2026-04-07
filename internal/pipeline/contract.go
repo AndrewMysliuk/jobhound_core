@@ -38,9 +38,9 @@ type PipelineRunRepository interface {
 	// Ordering matches 008: jobs.posted_at descending (NULLs last), then job_id ascending for ties.
 	ListPassedStage2JobIDs(ctx context.Context, pipelineRunID int64) ([]string, error)
 
-	// InvalidateStage3SnapshotsForSlot resets terminal stage-3 outcomes to PASSED_STAGE_2 for every
-	// pipeline_run_jobs row tied to pipeline_runs.slot_id = slotID (008 filter invalidation: stage-3 rules only).
-	// REJECTED_STAGE_2 and PASSED_STAGE_2 rows are unchanged. Returns the number of rows updated.
+	// InvalidateStage3SnapshotsForSlot clears stage3_status and stage3_rationale for every
+	// pipeline_run_jobs row tied to pipeline_runs.slot_id = slotID that has a terminal stage-3 outcome
+	// (008 filter invalidation: stage-3 rules only). stage2_status is unchanged.
 	InvalidateStage3SnapshotsForSlot(ctx context.Context, slotID uuid.UUID) (updated int64, err error)
 	// InvalidateStage2And3SnapshotsForSlot deletes all pipeline_runs for the slot (CASCADE removes pipeline_run_jobs).
 	// Use when stage-2 (keyword) rules change (008: stage 3 depends on stage 2).
@@ -49,6 +49,7 @@ type PipelineRunRepository interface {
 	LatestPipelineRunIDForSlot(ctx context.Context, slotID uuid.UUID) (runID int64, ok bool, err error)
 
 	// ManualPatchStage2Bucket sets PASSED_STAGE_2 or REJECTED_STAGE_2 when a row exists for run+job with a stage-2 outcome (009 PATCH).
+	// Clears stage3_status and stage3_rationale when present (stage 3 depends on stage 2).
 	// Returns ErrManualPatchNotInScope when no matching row.
 	ManualPatchStage2Bucket(ctx context.Context, pipelineRunID int64, jobID string, passed bool) error
 	// ManualPatchStage3Bucket sets PASSED_STAGE_3 or REJECTED_STAGE_3 when a row exists with a terminal stage-3 outcome (009 PATCH).

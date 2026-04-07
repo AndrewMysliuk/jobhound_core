@@ -88,23 +88,30 @@ func (s *Service) List(ctx context.Context) (schema.SlotsListResponse, error) {
 }
 
 // Create implements [slots.API.Create].
-func (s *Service) Create(ctx context.Context, p slotschema.CreateSlotParams) (*schema.SlotCard, error) {
+func (s *Service) Create(ctx context.Context, p slotschema.CreateSlotParams) (slotschema.CreateSlotResult, error) {
 	log := s.methodLog(ctx, "Create")
 	log.Debug().Msg("create")
 	name := strings.TrimSpace(p.Name)
 	if name == "" {
-		return nil, slots.ErrInvalidSlotName
+		return slotschema.CreateSlotResult{}, slots.ErrInvalidSlotName
 	}
-	n, err := s.Repo.Count(ctx)
+	if p.IdempotencyKey == uuid.Nil {
+		return slotschema.CreateSlotResult{}, slots.ErrInvalidIdempotencyKey
+	}
+	row, replay, err := s.Repo.CreateWithIdempotency(ctx, p.IdempotencyKey, name)
 	if err != nil {
-		return nil, err
+		return slotschema.CreateSlotResult{}, err
 	}
-	if n >= slotstorage.MaxSlots {
-		return nil, slots.ErrSlotLimitReached
+	if replay {
+		card, err := s.card(ctx, row)
+		if err != nil {
+			return slotschema.CreateSlotResult{}, err
+		}
+		return slotschema.CreateSlotResult{Card: card, Created: false}, nil
 	}
-	id := uuid.New()
-	if err := s.Repo.Create(ctx, id, name); err != nil {
-		return nil, err
+	id, err := uuid.Parse(row.ID)
+	if err != nil {
+		return slotschema.CreateSlotResult{}, err
 	}
 	in := manualschema.ManualSlotRunWorkflowInput{
 		SlotID:          id,
@@ -114,7 +121,7 @@ func (s *Service) Create(ctx context.Context, p slotschema.CreateSlotParams) (*s
 	}
 	if err := in.Validate(); err != nil {
 		_ = s.Repo.Delete(ctx, id.String())
-		return nil, err
+		return slotschema.CreateSlotResult{}, err
 	}
 	_, err = s.Temporal.ExecuteWorkflow(ctx, client.StartWorkflowOptions{
 		ID:                 ingestWorkflowID(id),
@@ -123,13 +130,17 @@ func (s *Service) Create(ctx context.Context, p slotschema.CreateSlotParams) (*s
 	}, manualschema.ManualSlotRunWorkflowName, in)
 	if err != nil {
 		_ = s.Repo.Delete(ctx, id.String())
-		return nil, err
+		return slotschema.CreateSlotResult{}, err
 	}
-	row, err := s.Repo.GetByID(ctx, id.String())
+	row2, err := s.Repo.GetByID(ctx, id.String())
 	if err != nil {
-		return nil, err
+		return slotschema.CreateSlotResult{}, err
 	}
-	return s.card(ctx, row)
+	card, err := s.card(ctx, row2)
+	if err != nil {
+		return slotschema.CreateSlotResult{}, err
+	}
+	return slotschema.CreateSlotResult{Card: card, Created: true}, nil
 }
 
 // Get implements [slots.API.Get].

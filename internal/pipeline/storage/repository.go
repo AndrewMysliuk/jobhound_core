@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/andrewmysliuk/jobhound_core/internal/pipeline"
+	pipeutils "github.com/andrewmysliuk/jobhound_core/internal/pipeline/utils"
 	"github.com/andrewmysliuk/jobhound_core/internal/platform/pgsql"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -59,14 +60,19 @@ func (r *Repository) SetBroadFilterKeyHash(ctx context.Context, pipelineRunID in
 		Update("broad_filter_key_hash", h).Error
 }
 
-// SetRunJobStatus inserts a new per-run row (stage-2 outcome) or moves PASSED_STAGE_2 to a stage-3 terminal status.
-// Allowed: (no row) → REJECTED_STAGE_2 | PASSED_STAGE_2; PASSED_STAGE_2 → PASSED_STAGE_3 | REJECTED_STAGE_3.
-// Repeating the same status is a no-op.
+// SetRunJobStatus inserts a new per-run row (stage-2 outcome) or sets terminal stage-3 on stage2 passed rows.
+// Allowed: (no row) → REJECTED_STAGE_2 | PASSED_STAGE_2; stage2 passed + no stage3 → PASSED_STAGE_3 | REJECTED_STAGE_3.
+// Repeating the same outcome is a no-op. When a terminal stage-3 outcome exists, stage-2 writes are ignored (Temporal retry idempotency).
 func (r *Repository) SetRunJobStatus(ctx context.Context, pipelineRunID int64, jobID string, status pipeline.RunJobStatus) error {
 	if jobID == "" {
 		return fmt.Errorf("job id is required")
 	}
 	if !status.Valid() {
+		return ErrInvalidRunJobStatus
+	}
+	isStage2 := status == pipeline.RunJobRejectedStage2 || status == pipeline.RunJobPassedStage2
+	isStage3 := status == pipeline.RunJobPassedStage3 || status == pipeline.RunJobRejectedStage3
+	if !isStage2 && !isStage3 {
 		return ErrInvalidRunJobStatus
 	}
 
@@ -75,43 +81,46 @@ func (r *Repository) SetRunJobStatus(ctx context.Context, pipelineRunID int64, j
 	var row PipelineRunJob
 	err := db.Where("pipeline_run_id = ? AND job_id = ?", pipelineRunID, jobID).First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		if status != pipeline.RunJobRejectedStage2 && status != pipeline.RunJobPassedStage2 {
+		if !isStage2 {
 			return ErrInvalidRunJobTransition
 		}
 		return db.Create(&PipelineRunJob{
 			PipelineRunID: pipelineRunID,
 			JobID:         jobID,
-			Status:        string(status),
+			Stage2Status:  string(status),
+			Stage3Status:  nil,
 		}).Error
 	}
 	if err != nil {
 		return err
 	}
 
-	current := pipeline.RunJobStatus(row.Status)
-	if current == status {
-		return nil
-	}
-	// Temporal retry: stage-1/2 persistence runs again; do not downgrade terminal stage-3 rows.
-	if status == pipeline.RunJobRejectedStage2 || status == pipeline.RunJobPassedStage2 {
-		if current == pipeline.RunJobPassedStage3 || current == pipeline.RunJobRejectedStage3 {
-			return nil
-		}
-	}
-
-	switch current {
-	case pipeline.RunJobRejectedStage2, pipeline.RunJobPassedStage3, pipeline.RunJobRejectedStage3:
-		return ErrInvalidRunJobTransition
-	case pipeline.RunJobPassedStage2:
-		if status != pipeline.RunJobPassedStage3 && status != pipeline.RunJobRejectedStage3 {
+	if isStage3 {
+		if row.Stage2Status != string(pipeline.RunJobPassedStage2) {
 			return ErrInvalidRunJobTransition
 		}
+		if row.Stage3Status != nil && *row.Stage3Status == string(status) {
+			return nil
+		}
+		if row.Stage3Status != nil && *row.Stage3Status != string(status) {
+			return ErrInvalidRunJobTransition
+		}
+		st := string(status)
 		return db.Model(&PipelineRunJob{}).
 			Where("pipeline_run_id = ? AND job_id = ?", pipelineRunID, jobID).
-			Update("status", string(status)).Error
-	default:
-		return ErrInvalidRunJobTransition
+			Update("stage3_status", st).Error
 	}
+
+	// Stage 2 update
+	if row.Stage3Status != nil && *row.Stage3Status != "" {
+		return nil
+	}
+	if row.Stage2Status == string(status) {
+		return nil
+	}
+	return db.Model(&PipelineRunJob{}).
+		Where("pipeline_run_id = ? AND job_id = ?", pipelineRunID, jobID).
+		Update("stage2_status", string(status)).Error
 }
 
 // SetRunJobStage3Rationale implements [pipeline.PipelineRunRepository.SetRunJobStage3Rationale].
@@ -144,7 +153,7 @@ func (r *Repository) GetRunJobStatus(ctx context.Context, pipelineRunID int64, j
 	if err != nil {
 		return "", false, err
 	}
-	st := pipeline.RunJobStatus(row.Status)
+	st := pipeutils.EffectiveRunJobStatusFromRow(row.Stage2Status, row.Stage3Status)
 	if !st.Valid() {
 		return "", false, ErrInvalidRunJobStatus
 	}
@@ -154,10 +163,10 @@ func (r *Repository) GetRunJobStatus(ctx context.Context, pipelineRunID int64, j
 const sqlListPassedStage2JobIDs = `
 SELECT prj.job_id FROM pipeline_run_jobs AS prj
 INNER JOIN jobs ON jobs.id = prj.job_id
-WHERE prj.pipeline_run_id = ? AND prj.status = ?
+WHERE prj.pipeline_run_id = ? AND prj.stage2_status = ? AND prj.stage3_status IS NULL
 ORDER BY CASE WHEN jobs.posted_at IS NULL THEN 1 ELSE 0 END ASC, jobs.posted_at DESC, jobs.id ASC`
 
-// ListPassedStage2JobIDs returns job ids in PASSED_STAGE_2 for this run (posted_at DESC, NULLs last; tie-break id ASC).
+// ListPassedStage2JobIDs returns job ids eligible for stage 3: stage2 passed, stage3 not yet terminal (008 ordering).
 func (r *Repository) ListPassedStage2JobIDs(ctx context.Context, pipelineRunID int64) ([]string, error) {
 	var ids []string
 	err := r.get().WithContext(ctx).Raw(sqlListPassedStage2JobIDs,
@@ -178,13 +187,13 @@ func (r *Repository) InvalidateStage3SnapshotsForSlot(ctx context.Context, slotI
 	sub := db.Model(&PipelineRun{}).Select("id").Where("slot_id = ?", s)
 	res := db.Model(&PipelineRunJob{}).
 		Where("pipeline_run_id IN (?)", sub).
-		Where("status IN ?", []string{
+		Where("stage3_status IN ?", []string{
 			string(pipeline.RunJobPassedStage3),
 			string(pipeline.RunJobRejectedStage3),
 		}).
 		Updates(map[string]any{
-			"status":           string(pipeline.RunJobPassedStage2),
-			"stage3_rationale": nil,
+			"stage3_status":    gorm.Expr("NULL"),
+			"stage3_rationale": gorm.Expr("NULL"),
 		})
 	if res.Error != nil {
 		return 0, res.Error
@@ -234,11 +243,15 @@ func (r *Repository) ManualPatchStage2Bucket(ctx context.Context, pipelineRunID 
 	}
 	res := r.get().WithContext(ctx).Model(&PipelineRunJob{}).
 		Where("pipeline_run_id = ? AND job_id = ?", pipelineRunID, jobID).
-		Where("status IN ?", []string{
+		Where("stage2_status IN ?", []string{
 			string(pipeline.RunJobRejectedStage2),
 			string(pipeline.RunJobPassedStage2),
 		}).
-		Update("status", string(want))
+		Updates(map[string]any{
+			"stage2_status":    string(want),
+			"stage3_status":    gorm.Expr("NULL"),
+			"stage3_rationale": gorm.Expr("NULL"),
+		})
 	if res.Error != nil {
 		return res.Error
 	}
@@ -259,13 +272,13 @@ func (r *Repository) ManualPatchStage3Bucket(ctx context.Context, pipelineRunID 
 	}
 	res := r.get().WithContext(ctx).Model(&PipelineRunJob{}).
 		Where("pipeline_run_id = ? AND job_id = ?", pipelineRunID, jobID).
-		Where("status IN ?", []string{
+		Where("stage3_status IN ?", []string{
 			string(pipeline.RunJobPassedStage3),
 			string(pipeline.RunJobRejectedStage3),
 		}).
 		Updates(map[string]any{
-			"status":           string(want),
-			"stage3_rationale": nil,
+			"stage3_status":    string(want),
+			"stage3_rationale": gorm.Expr("NULL"),
 		})
 	if res.Error != nil {
 		return res.Error

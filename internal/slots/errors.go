@@ -9,6 +9,10 @@ var (
 	ErrSlotLimitReached = errors.New("slot limit reached")
 	// ErrInvalidSlotName is returned when POST body name is missing or whitespace-only.
 	ErrInvalidSlotName = errors.New("invalid slot name")
+	// ErrIdempotencyKeyConflict is returned when the same Idempotency-Key is reused with a different name.
+	ErrIdempotencyKeyConflict = errors.New("idempotency key reused with different request body")
+	// ErrInvalidIdempotencyKey is returned when Idempotency-Key is missing or the nil UUID (defensive; handler should reject first).
+	ErrInvalidIdempotencyKey = errors.New("invalid idempotency key")
 	// ErrStageAlreadyRunning is returned when POST …/stages/2|3/run finds that stage’s workflow still running.
 	ErrStageAlreadyRunning = errors.New("stage already running")
 	// ErrNoPipelineRun is returned when stage 3 is requested but the slot has no pipeline_runs row yet.

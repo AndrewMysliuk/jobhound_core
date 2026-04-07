@@ -13,6 +13,6 @@ const Stage1StatusPassed = "PASSED_STAGE_1"
 type JobListEntry struct {
 	Job               jobdata.Job
 	FirstSeenAt       time.Time
-	PipelineRunStatus string  // pipeline_run_jobs.status when listing stage 2 or 3; empty for stage 1
+	PipelineRunStatus string  // stage2_status (stage 2 list) or stage3_status (stage 3 list); empty for stage 1
 	Stage3Rationale   *string // from pipeline_run_jobs when listing stage 3; nil otherwise
 }

@@ -1,11 +1,12 @@
 DROP TABLE IF EXISTS user_profile;
 DROP TABLE IF EXISTS slot_jobs;
 DROP TABLE IF EXISTS ingest_watermarks;
-DROP INDEX IF EXISTS pipeline_run_jobs_run_id_status_idx;
+DROP INDEX IF EXISTS pipeline_run_jobs_run_id_stage2_stage3_idx;
 DROP TABLE IF EXISTS pipeline_run_jobs;
 DROP INDEX IF EXISTS pipeline_runs_slot_id_idx;
 DROP TABLE IF EXISTS pipeline_runs;
 DROP INDEX IF EXISTS slots_created_at_idx;
+DROP TABLE IF EXISTS slot_idempotency_keys;
 DROP TABLE IF EXISTS slots;
 DROP INDEX IF EXISTS jobs_passed_stage1_source_posted_at_idx;
 DROP INDEX IF EXISTS jobs_source_posted_at_idx;

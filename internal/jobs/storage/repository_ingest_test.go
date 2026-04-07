@@ -178,7 +178,8 @@ func TestRepository_SaveIngest_descriptionOnlyDoesNotTouchPipelineRunJobs(t *tes
 		`CREATE TABLE pipeline_run_jobs (
 			pipeline_run_id INTEGER NOT NULL REFERENCES pipeline_runs(id) ON DELETE CASCADE,
 			job_id TEXT NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
-			status TEXT NOT NULL,
+			stage2_status TEXT NOT NULL,
+			stage3_status TEXT,
 			stage3_rationale TEXT,
 			PRIMARY KEY (pipeline_run_id, job_id)
 		)`,
@@ -200,7 +201,7 @@ func TestRepository_SaveIngest_descriptionOnlyDoesNotTouchPipelineRunJobs(t *tes
 	}
 	wantStatus := string(pipeline.RunJobPassedStage2)
 	if err := db.Exec(
-		`INSERT INTO pipeline_run_jobs (pipeline_run_id, job_id, status) VALUES (1, 'j1', ?)`,
+		`INSERT INTO pipeline_run_jobs (pipeline_run_id, job_id, stage2_status) VALUES (1, 'j1', ?)`,
 		wantStatus,
 	).Error; err != nil {
 		t.Fatal(err)
@@ -217,11 +218,11 @@ func TestRepository_SaveIngest_descriptionOnlyDoesNotTouchPipelineRunJobs(t *tes
 
 	var got string
 	if err := db.Raw(
-		`SELECT status FROM pipeline_run_jobs WHERE pipeline_run_id = 1 AND job_id = 'j1'`,
+		`SELECT stage2_status FROM pipeline_run_jobs WHERE pipeline_run_id = 1 AND job_id = 'j1'`,
 	).Scan(&got).Error; err != nil {
 		t.Fatal(err)
 	}
 	if got != wantStatus {
-		t.Fatalf("pipeline_run_jobs.status = %q, want %q", got, wantStatus)
+		t.Fatalf("pipeline_run_jobs.stage2_status = %q, want %q", got, wantStatus)
 	}
 }

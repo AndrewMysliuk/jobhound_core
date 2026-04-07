@@ -19,7 +19,7 @@ import (
 type mockSlots struct {
 	listResp  schema.SlotsListResponse
 	listErr   error
-	createRet *schema.SlotCard
+	createRet slotschema.CreateSlotResult
 	createErr error
 	getRet    *schema.SlotCard
 	getErr    error
@@ -30,7 +30,7 @@ func (m *mockSlots) List(ctx context.Context) (schema.SlotsListResponse, error) 
 	return m.listResp, m.listErr
 }
 
-func (m *mockSlots) Create(ctx context.Context, _ slotschema.CreateSlotParams) (*schema.SlotCard, error) {
+func (m *mockSlots) Create(ctx context.Context, _ slotschema.CreateSlotParams) (slotschema.CreateSlotResult, error) {
 	return m.createRet, m.createErr
 }
 
@@ -83,14 +83,16 @@ func TestSlotsRoutes_tableDriven(t *testing.T) {
 	}
 
 	tests := []struct {
-		name      string
-		mock      *mockSlots
-		method    string
-		path      string
-		body      string
-		wantCode  int
-		checkBody func(t *testing.T, body []byte)
-		skipBody  bool
+		name                  string
+		mock                  *mockSlots
+		method                string
+		path                  string
+		body                  string
+		wantCode              int
+		checkBody             func(t *testing.T, body []byte)
+		skipBody              bool
+		omitIdempotencyKey    bool
+		invalidIdempotencyKey bool
 	}{
 		{
 			name: "get_list_ok",
@@ -122,8 +124,44 @@ func TestSlotsRoutes_tableDriven(t *testing.T) {
 			},
 		},
 		{
+			name:               "post_slots_missing_idempotency_key",
+			mock:               &mockSlots{},
+			method:             http.MethodPost,
+			path:               "/api/v1/slots",
+			body:               `{"name":"n"}`,
+			wantCode:           http.StatusBadRequest,
+			omitIdempotencyKey: true,
+			checkBody: func(t *testing.T, body []byte) {
+				var got schema.APIErrorBody
+				if err := json.Unmarshal(body, &got); err != nil {
+					t.Fatal(err)
+				}
+				if got.Error.Code != "idempotency_key_required" {
+					t.Fatalf("code %q", got.Error.Code)
+				}
+			},
+		},
+		{
+			name:                  "post_slots_invalid_idempotency_key",
+			mock:                  &mockSlots{},
+			method:                http.MethodPost,
+			path:                  "/api/v1/slots",
+			body:                  `{"name":"n"}`,
+			wantCode:              http.StatusBadRequest,
+			invalidIdempotencyKey: true,
+			checkBody: func(t *testing.T, body []byte) {
+				var got schema.APIErrorBody
+				if err := json.Unmarshal(body, &got); err != nil {
+					t.Fatal(err)
+				}
+				if got.Error.Code != "invalid_idempotency_key" {
+					t.Fatalf("code %q", got.Error.Code)
+				}
+			},
+		},
+		{
 			name:   "post_create_ok",
-			mock:   &mockSlots{createRet: sampleCard},
+			mock:   &mockSlots{createRet: slotschema.CreateSlotResult{Card: sampleCard, Created: true}},
 			method: http.MethodPost, path: "/api/v1/slots",
 			body:     `{"name":"n"}`,
 			wantCode: http.StatusCreated,
@@ -134,6 +172,38 @@ func TestSlotsRoutes_tableDriven(t *testing.T) {
 				}
 				if got.ID != sampleCard.ID || got.Name != sampleCard.Name {
 					t.Fatalf("card: %+v", got)
+				}
+			},
+		},
+		{
+			name:   "post_idempotent_replay_200",
+			mock:   &mockSlots{createRet: slotschema.CreateSlotResult{Card: sampleCard, Created: false}},
+			method: http.MethodPost, path: "/api/v1/slots",
+			body:     `{"name":"n"}`,
+			wantCode: http.StatusOK,
+			checkBody: func(t *testing.T, body []byte) {
+				var got schema.SlotCard
+				if err := json.Unmarshal(body, &got); err != nil {
+					t.Fatal(err)
+				}
+				if got.ID != sampleCard.ID {
+					t.Fatalf("card: %+v", got)
+				}
+			},
+		},
+		{
+			name:   "post_idempotency_key_conflict",
+			mock:   &mockSlots{createErr: slots.ErrIdempotencyKeyConflict},
+			method: http.MethodPost, path: "/api/v1/slots",
+			body:     `{"name":"other"}`,
+			wantCode: http.StatusConflict,
+			checkBody: func(t *testing.T, body []byte) {
+				var got schema.APIErrorBody
+				if err := json.Unmarshal(body, &got); err != nil {
+					t.Fatal(err)
+				}
+				if got.Error.Code != "idempotency_key_conflict" {
+					t.Fatalf("code %q", got.Error.Code)
 				}
 			},
 		},
@@ -220,6 +290,13 @@ func TestSlotsRoutes_tableDriven(t *testing.T) {
 				reqBody = bytes.NewReader(nil)
 			}
 			req := httptest.NewRequest(tt.method, tt.path, reqBody)
+			if tt.method == http.MethodPost && tt.path == "/api/v1/slots" && !tt.omitIdempotencyKey {
+				if tt.invalidIdempotencyKey {
+					req.Header.Set("Idempotency-Key", "not-a-uuid")
+				} else {
+					req.Header.Set("Idempotency-Key", "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+				}
+			}
 			if tt.body != "" {
 				req.Header.Set("Content-Type", "application/json")
 			}

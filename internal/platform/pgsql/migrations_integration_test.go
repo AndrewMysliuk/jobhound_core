@@ -92,7 +92,7 @@ func TestMigrationsPipelineRunJobsCascadeOnJobDelete_integration(t *testing.T) {
 	}
 
 	_, err = tx.ExecContext(ctx, `
-		INSERT INTO pipeline_run_jobs (pipeline_run_id, job_id, status)
+		INSERT INTO pipeline_run_jobs (pipeline_run_id, job_id, stage2_status)
 		VALUES ($1, $2, 'PASSED_STAGE_2')`,
 		runID, jobID)
 	if err != nil {
@@ -116,7 +116,7 @@ func TestMigrationsPipelineRunJobsCascadeOnJobDelete_integration(t *testing.T) {
 	}
 }
 
-// TestMigrations007PipelineTables_integration asserts pipeline_runs / pipeline_run_jobs shape, index, and job_id FK CASCADE (007 contracts).
+// TestMigrations007PipelineTables_integration asserts pipeline_runs / pipeline_run_jobs shape, index, and job_id FK CASCADE (007).
 func TestMigrations007PipelineTables_integration(t *testing.T) {
 	sqlDB := migrateUpAndOpenDB(t)
 	t.Cleanup(func() { _ = sqlDB.Close() })
@@ -147,7 +147,8 @@ func TestMigrations007PipelineTables_integration(t *testing.T) {
 	}{
 		"pipeline_run_id":  {"bigint", "NO"},
 		"job_id":           {"text", "NO"},
-		"status":           {"text", "NO"},
+		"stage2_status":    {"text", "NO"},
+		"stage3_status":    {"text", "YES"},
 		"stage3_rationale": {"text", "YES"},
 	})
 
@@ -155,12 +156,12 @@ func TestMigrations007PipelineTables_integration(t *testing.T) {
 	err = sqlDB.QueryRowContext(ctx, `
 		SELECT COUNT(*) FROM pg_indexes
 		WHERE schemaname = 'public' AND tablename = 'pipeline_run_jobs'
-		  AND indexname = 'pipeline_run_jobs_run_id_status_idx'`).Scan(&nIdx)
+		  AND indexname = 'pipeline_run_jobs_run_id_stage2_stage3_idx'`).Scan(&nIdx)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if nIdx != 1 {
-		t.Fatalf("pipeline_run_jobs_run_id_status_idx: got count %d want 1", nIdx)
+		t.Fatalf("pipeline_run_jobs_run_id_stage2_stage3_idx: got count %d want 1", nIdx)
 	}
 
 	var delRule string
@@ -249,6 +250,24 @@ func TestMigrationsSlots009_integration(t *testing.T) {
 		"id":         {"uuid", "NO"},
 		"name":       {"text", "NO"},
 		"created_at": {"timestamp with time zone", "NO"},
+	})
+}
+
+// TestMigrationsSlotIdempotencyKeys009_integration asserts slot_idempotency_keys (POST /slots Idempotency-Key).
+func TestMigrationsSlotIdempotencyKeys009_integration(t *testing.T) {
+	sqlDB := migrateUpAndOpenDB(t)
+	t.Cleanup(func() { _ = sqlDB.Close() })
+
+	cols, err := fetchTableColumns(sqlDB, "slot_idempotency_keys")
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertTableColumns(t, cols, map[string]struct {
+		dataType string
+		nullable string
+	}{
+		"idempotency_key": {"uuid", "NO"},
+		"slot_id":         {"uuid", "NO"},
 	})
 }
 

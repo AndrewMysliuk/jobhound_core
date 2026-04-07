@@ -1,11 +1,21 @@
 // Package schema holds module-local types for the slots feature (API inputs, wire payloads).
 package schema
 
-import apischema "github.com/andrewmysliuk/jobhound_core/internal/publicapi/schema"
+import (
+	apischema "github.com/andrewmysliuk/jobhound_core/internal/publicapi/schema"
+	"github.com/google/uuid"
+)
 
 // CreateSlotParams is the input for creating a slot.
 type CreateSlotParams struct {
-	Name string
+	Name           string
+	IdempotencyKey uuid.UUID
+}
+
+// CreateSlotResult is the outcome of POST /slots (201 on first create, 200 on idempotent replay).
+type CreateSlotResult struct {
+	Card    *apischema.SlotCard
+	Created bool
 }
 
 // GetSlotParams is the input for loading one slot card.
@@ -31,7 +41,7 @@ type RunStage3Params struct {
 	MaxJobs int
 }
 
-// ListJobsParams selects paginated jobs for stages 1–3. StatusQuery is empty (all rows) or an exact pipeline_run_jobs.status for stages 2–3; caller must reject status on stage 1.
+// ListJobsParams selects paginated jobs for stages 1–3. StatusQuery is empty (all rows) or exact stage2_status / stage3_status for stages 2–3; caller must reject status on stage 1.
 type ListJobsParams struct {
 	SlotID      string
 	Stage       int

@@ -22,7 +22,7 @@ LinkedIn (and similar) use a `session.Provider`; start with a cookie file, swap 
 
 ### IV. Postgres as system of record
 
-Vacancies, deduplication, event run history, user profile text, and scoring outcomes live in **PostgreSQL** (via GORM + migrations). No SQLite in the target architecture.
+Vacancies, deduplication, event run history, user profile text, and scoring outcomes live in **PostgreSQL** (via GORM + migrations).
 
 ### V. Temporal for orchestration
 
@@ -123,4 +123,4 @@ Temporal workflow code is isolated from application service code:
 - Amend this file when architecture decisions change; keep it short and actionable.
 - Feature details and order of implementation: `specs/` (per-feature folders, same style as `omg-bo/specs`).
 
-**Version**: 1.8.2 | **Ratified**: 2026-03-29 | **Amended**: 2026-04-05 — testing policy: unit tests at handlers / `impl` / `storage` boundaries; no trivial `utils` / schema / enum tests
+**Version**: 1.8.3 | **Ratified**: 2026-03-29 | **Amended**: 2026-04-07 — principle IV: persistence wording (PostgreSQL via GORM + migrations)

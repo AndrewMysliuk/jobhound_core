@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/andrewmysliuk/jobhound_core/internal/platform/pgsql"
 	"github.com/andrewmysliuk/jobhound_core/internal/slots"
@@ -18,6 +19,8 @@ const MaxSlots = 3
 // Repository persists slots.
 type Repository struct {
 	get pgsql.GormGetter
+	// createMu serializes CreateWithIdempotency (slot cap + idempotency mapping) for single-process API.
+	createMu sync.Mutex
 }
 
 // NewRepository wires slot persistence.
@@ -66,6 +69,53 @@ func (r *Repository) Create(ctx context.Context, id uuid.UUID, name string) erro
 		Name: name,
 	}
 	return r.get().WithContext(ctx).Create(&row).Error
+}
+
+// CreateWithIdempotency inserts a slot and idempotency mapping, or returns an existing slot when the key
+// matches the same name (replay). replay is true when no new slot row was inserted.
+func (r *Repository) CreateWithIdempotency(ctx context.Context, key uuid.UUID, name string) (Slot, bool, error) {
+	r.createMu.Lock()
+	defer r.createMu.Unlock()
+	var out Slot
+	var replay bool
+	err := r.get().WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var idemp SlotIdempotency
+		err := tx.Where("idempotency_key = ?", key.String()).First(&idemp).Error
+		if err == nil {
+			var s Slot
+			if err := tx.Where("id = ?", idemp.SlotID).First(&s).Error; err != nil {
+				return err
+			}
+			if s.Name != name {
+				return slots.ErrIdempotencyKeyConflict
+			}
+			out = s
+			replay = true
+			return nil
+		}
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
+		var n int64
+		if err := tx.Model(&Slot{}).Count(&n).Error; err != nil {
+			return err
+		}
+		if n >= MaxSlots {
+			return slots.ErrSlotLimitReached
+		}
+		id := uuid.New()
+		slotRow := Slot{ID: id.String(), Name: name}
+		if err := tx.Create(&slotRow).Error; err != nil {
+			return err
+		}
+		if err := tx.Create(&SlotIdempotency{IdempotencyKey: key.String(), SlotID: id.String()}).Error; err != nil {
+			return err
+		}
+		out = slotRow
+		replay = false
+		return nil
+	})
+	return out, replay, err
 }
 
 // Delete removes a slot by id or returns [slots.ErrNotFound].

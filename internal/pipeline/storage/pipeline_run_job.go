@@ -4,7 +4,8 @@ package storage
 type PipelineRunJob struct {
 	PipelineRunID   int64   `gorm:"column:pipeline_run_id;primaryKey"`
 	JobID           string  `gorm:"column:job_id;primaryKey;type:text"`
-	Status          string  `gorm:"column:status;type:text;not null"`
+	Stage2Status    string  `gorm:"column:stage2_status;type:text;not null"`
+	Stage3Status    *string `gorm:"column:stage3_status;type:text"`
 	Stage3Rationale *string `gorm:"column:stage3_rationale;type:text"`
 }
 
