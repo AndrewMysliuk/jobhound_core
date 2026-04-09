@@ -1,11 +1,15 @@
 package debughttp
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
+	"time"
 
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/dou"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/europeremotely"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/schema"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/workingnomads"
@@ -31,7 +35,9 @@ func parseCollectorsPOSTBody(b []byte) (schema.CollectorsPOSTBody, error) {
 	if len(bytesTrimSpace(b)) == 0 {
 		return req, nil
 	}
-	if err := json.Unmarshal(b, &req); err != nil {
+	dec := json.NewDecoder(bytes.NewReader(b))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&req); err != nil {
 		return schema.CollectorsPOSTBody{}, err
 	}
 	return req, nil
@@ -61,6 +67,15 @@ func applyEuropeRemotelyOverrides(req *schema.CollectorsPOSTBody, c *europeremot
 	}
 	if req.SearchKeywords != nil {
 		c.FeedForm.Set("search_keywords", *req.SearchKeywords)
+	}
+}
+
+func applyDouOverrides(req *schema.CollectorsPOSTBody, c *dou.DOU) {
+	if req.Search != nil && strings.TrimSpace(*req.Search) != "" {
+		c.Search = strings.TrimSpace(*req.Search)
+	}
+	if req.DouInterRequestDelayMs != nil {
+		c.InterRequestDelay = time.Duration(*req.DouInterRequestDelayMs) * time.Millisecond
 	}
 }
 

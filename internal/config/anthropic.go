@@ -4,8 +4,8 @@ import "os"
 
 // Anthropic (Claude) API — used when wiring real LLM scoring; optional until stage 3 is implemented.
 const (
-	EnvAnthropicAPIKey    = "JOBHOUND_ANTHROPIC_API_KEY"
-	EnvAnthropicModel     = "JOBHOUND_ANTHROPIC_MODEL"
+	EnvAnthropicAPIKey = "JOBHOUND_ANTHROPIC_API_KEY"
+	EnvAnthropicModel  = "JOBHOUND_ANTHROPIC_MODEL"
 	// Models that support Messages API structured outputs (output_config.format json_schema); see Anthropic structured outputs docs.
 	//
 	// Toggle default for local A/B: comment one line, uncomment the other (or set JOBHOUND_ANTHROPIC_MODEL).

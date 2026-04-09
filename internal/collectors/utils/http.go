@@ -3,6 +3,7 @@ package utils
 import (
 	"net"
 	"net/http"
+	"net/http/cookiejar"
 	"time"
 )
 
@@ -32,6 +33,16 @@ var DefaultHTTPTimeout = 30 * time.Second
 // NewHTTPClient returns an *http.Client with DefaultHTTPTimeout and a shared transport tuned for collectors.
 func NewHTTPClient() *http.Client {
 	return &http.Client{
+		Timeout:   DefaultHTTPTimeout,
+		Transport: collectorTransport(),
+	}
+}
+
+// NewHTTPClientWithJar returns an *http.Client like NewHTTPClient but with an in-memory cookie jar (e.g. DOU CSRF cookie).
+func NewHTTPClientWithJar() *http.Client {
+	jar, _ := cookiejar.New(nil)
+	return &http.Client{
+		Jar:       jar,
 		Timeout:   DefaultHTTPTimeout,
 		Transport: collectorTransport(),
 	}

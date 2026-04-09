@@ -3,7 +3,7 @@
 **Spec**: `005-job-collectors`  
 **Implementation**: `internal/collectors/handlers/debughttp`
 
-Local-only JSON body for **`POST /debug/collectors/europe_remotely`** and **`POST /debug/collectors/working_nomads`**.  
+Local-only JSON body for **`POST /debug/collectors/europe_remotely`**, **`POST /debug/collectors/working_nomads`**, and **`POST /debug/collectors/dou_ua`**.  
 **`Content-Type: application/json`**. No URL query parameters for these options.
 
 ---
@@ -39,14 +39,29 @@ type DebugCollectorsRequest = {
 
   /**
    * Europe Remotely only: form field `search_keywords`. Applied after `feed_form` and overrides the same key.
-   * Ignored on `working_nomads`.
+   * Ignored on `working_nomads` and `dou_ua`.
    */
   search_keywords?: string;
+
+  /**
+   * DOU.ua only: listing / xhr-load query param `search` (see `resources/dou.md`).
+   * Ignored on `europe_remotely` and `working_nomads`.
+   */
+  search?: string;
+
+  /**
+   * DOU.ua only: inter-request delay override in milliseconds (default from `JOBHOUND_COLLECTOR_DOU_INTER_REQUEST_DELAY_MS`).
+   * Ignored on other routes.
+   */
+  dou_inter_request_delay_ms?: number;
 };
 ```
 
-`query`, `sort`, `page_size`, and `_source` are **ignored** on `europe_remotely`.  
-`feed_form` and `search_keywords` are **ignored** on `working_nomads`.
+`query`, `sort`, `page_size`, and `_source` are **ignored** on `europe_remotely` and `dou_ua`.  
+`feed_form` and `search_keywords` are **ignored** on `working_nomads` and `dou_ua`.  
+`search` and `dou_inter_request_delay_ms` are **ignored** on `europe_remotely` and `working_nomads`.
+
+**`limit`** on **`dou_ua`**: when a concrete `*dou.DOU` is wired, maps to **`MaxJobs`** for that request (early stop). Omitted default `200` still applies to the JSON response cap for stub collectors; see **`../spec.md`**.
 
 ### Europe Remotely: keywords + ad hoc filters
 
@@ -109,6 +124,16 @@ Exact clause shapes depend on their index mapping; if something returns an error
       }
     }
   }
+}
+```
+
+### DOU.ua — search + sample cap
+
+```json
+{
+  "limit": 25,
+  "search": "frontend",
+  "dou_inter_request_delay_ms": 500
 }
 ```
 

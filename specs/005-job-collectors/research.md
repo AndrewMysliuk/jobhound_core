@@ -5,7 +5,7 @@
 **Date**: 2026-03-30  
 **Last Updated**: 2026-04-02
 
-Short inventory and pointers. **Wire/DOM/JSON detail** is normative in **`resources/europe-remotely.md`** and **`resources/working-nomads.md`**, not duplicated here.
+Short inventory and pointers. **Wire/DOM/JSON detail** is normative in **`resources/europe-remotely.md`**, **`resources/working-nomads.md`**, and **`resources/dou.md`**, not duplicated here.
 
 ---
 
@@ -15,6 +15,7 @@ Short inventory and pointers. **Wire/DOM/JSON detail** is normative in **`resour
 |--------|-----------|----------------|
 | Europe Remotely | `POST` `admin-ajax.php` → JSON + HTML fragment; `GET` job page | `encoding/json` + **goquery** on fragment + full page |
 | Working Nomads | `POST` `jobsapi/_search` → Elasticsearch-shaped JSON | **`encoding/json`** only for core fields |
+| DOU.ua | `GET` listing + `POST` `xhr-load` → JSON + HTML fragment; `GET` detail | `encoding/json` + **goquery**; **`http.Client` with cookie jar** for CSRF cookie |
 
 ## 2. Test strategy (aligned with `004`)
 

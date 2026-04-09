@@ -18,8 +18,8 @@ import (
 	profilestorage "github.com/andrewmysliuk/jobhound_core/internal/profile/storage"
 	publicapihandlers "github.com/andrewmysliuk/jobhound_core/internal/publicapi/handlers"
 	slotsimpl "github.com/andrewmysliuk/jobhound_core/internal/slots/impl"
-	slotsutils "github.com/andrewmysliuk/jobhound_core/internal/slots/utils"
 	slotstorage "github.com/andrewmysliuk/jobhound_core/internal/slots/storage"
+	slotsutils "github.com/andrewmysliuk/jobhound_core/internal/slots/utils"
 	"go.temporal.io/sdk/client"
 )
 

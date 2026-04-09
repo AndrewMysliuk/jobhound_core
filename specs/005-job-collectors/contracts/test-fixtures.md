@@ -88,7 +88,56 @@ Shape per `../resources/working-nomads.md`:
 
 ---
 
+## DOU.ua — listing HTML (excerpt)
+
+Hidden CSRF + one `li.l-vacancy` per `../resources/dou.md`:
+
+```html
+<!doctype html><html><body>
+<input type="hidden" name="csrfmiddlewaretoken" value="fixturecsrf">
+<li class="l-vacancy">
+  <div class="date">9 квітня</div>
+  <div class="title">
+    <a class="vt" href="https://jobs.dou.ua/companies/acme/vacancies/353313/">Go Engineer</a>
+    <strong><a class="company" href="https://jobs.dou.ua/companies/acme/">Acme UA</a></strong>
+  </div>
+  <span class="cities">Україна</span>
+</li>
+</body></html>
+```
+
+---
+
+## DOU.ua — `xhr-load` JSON
+
+```json
+{
+  "html": "<li class=\"l-vacancy\"><div class=\"date\">7 квітня</div><div class=\"title\"><a class=\"vt\" href=\"https://jobs.dou.ua/companies/other/vacancies/353314/\">Second Role</a><strong><a class=\"company\" href=\"https://jobs.dou.ua/companies/other/\">Other Co</a></strong></div><span class=\"cities\">Україна</span></li>",
+  "last": true,
+  "num": 2
+}
+```
+
+---
+
+## DOU.ua — job detail HTML (excerpt)
+
+```html
+<!doctype html><html><body>
+<h1 class="g-h2">Go Engineer</h1>
+<div class="date">8 квітня 2026</div>
+<div class="sh-info">
+  <span class="place">Київ, Україна</span>
+  <span class="salary">до $5000</span>
+</div>
+<div class="b-typo vacancy-section"><p>Remote golang work.</p></div>
+<a class="badge" href="https://jobs.dou.ua/vacancies/?category=backend">Backend</a>
+</body></html>
+```
+
+---
+
 ## Related
 
-- `../resources/europe-remotely.md`, `../resources/working-nomads.md`
+- `../resources/europe-remotely.md`, `../resources/working-nomads.md`, `../resources/dou.md`
 - `collector.md`

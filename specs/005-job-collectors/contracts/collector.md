@@ -32,6 +32,7 @@ Use a **fixed lowercase string** per board for `Job.Source` and for `StableJobID
 | ----------------- | -------------------- |
 | Europe Remotely   | `europe_remotely`    |
 | Working Nomads    | `working_nomads`     |
+| DOU.ua            | `dou_ua`             |
 
 Implementation may wrap these in a Go typed const block; the **string value** above is what matters for identity.
 
@@ -49,7 +50,7 @@ Implementation may wrap these in a Go typed const block; the **string value** ab
 | Decode / parse | bad JSON, envelope missing required fields | explicit in message |
 | Per-job required data | missing **listing `URL`**, card/hit cannot be parsed to contract, required DOM/JSON missing | **abort entire `Fetch`** with error — do not return a partial slice for that run |
 
-**Exception (Europe Remotely only, dates):** if **`posted_display`** (listing or detail) cannot be parsed to an absolute time, set **`PostedAt`** to zero, emit a **structured warning** (log) including the raw string, and **continue** that job if all other required fields are present. See **`domain-mapping-mvp.md`**.
+**Exception (Europe Remotely and DOU.ua, dates):** if **`posted_display`** (listing or detail) cannot be parsed to an absolute time, set **`PostedAt`** to zero, emit a **structured warning** (log) including the raw string, and **continue** that job if all other required fields are present. See **`domain-mapping-mvp.md`**.
 
 Do not return `Job` rows with empty **`URL`** (listing page) when the contract requires it.
 
@@ -64,5 +65,5 @@ Offline tests use **`httptest`** and bodies documented in **`contracts/test-fixt
 - `spec.md`
 - [`specs/000-epic-overview/product-concept-draft.md`](../../000-epic-overview/product-concept-draft.md) — slots and stage-1 vs `006`
 - `domain-mapping-mvp.md`
-- `sources-inventory.md`, `../resources/europe-remotely.md`, `../resources/working-nomads.md`
+- `sources-inventory.md`, `../resources/europe-remotely.md`, `../resources/working-nomads.md`, `../resources/dou.md`
 - `test-fixtures.md`

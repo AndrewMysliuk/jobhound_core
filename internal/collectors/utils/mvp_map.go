@@ -42,17 +42,24 @@ func InferPosition(title, description string, tags []string) *string {
 	return nil
 }
 
-// RemoteMVPRule sets Remote true iff "remote" appears in title, plain description, or tags.
-func RemoteMVPRule(title, description string, tags []string) *bool {
+// RemoteMVPRule sets Remote true when title, description, tags, or optional location
+// hints (e.g. DOU listing cities + detail place line) contain English "remote" or
+// Ukrainian "віддалено" (DOU.ua marks remote roles in the place span).
+func RemoteMVPRule(title, description string, tags []string, locationHints ...string) *bool {
 	b := strings.Builder{}
-	b.WriteString(strings.ToLower(title))
+	b.WriteString(strings.ToLower(strings.TrimSpace(title)))
 	b.WriteByte(' ')
-	b.WriteString(strings.ToLower(description))
+	b.WriteString(strings.ToLower(strings.TrimSpace(description)))
 	b.WriteByte(' ')
 	for _, t := range tags {
-		b.WriteString(strings.ToLower(t))
+		b.WriteString(strings.ToLower(strings.TrimSpace(t)))
 		b.WriteByte(' ')
 	}
-	v := strings.Contains(b.String(), "remote")
+	for _, h := range locationHints {
+		b.WriteString(strings.ToLower(strings.TrimSpace(h)))
+		b.WriteByte(' ')
+	}
+	text := b.String()
+	v := strings.Contains(text, "remote") || strings.Contains(text, "віддалено")
 	return &v
 }

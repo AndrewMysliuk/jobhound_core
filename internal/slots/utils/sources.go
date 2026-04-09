@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/dou"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/europeremotely"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/workingnomads"
 	"github.com/andrewmysliuk/jobhound_core/internal/ingest"
@@ -11,5 +12,6 @@ func DefaultIngestSourceIDs() []string {
 	return []string{
 		ingest.NormalizeSourceID(europeremotely.SourceName),
 		ingest.NormalizeSourceID(workingnomads.SourceName),
+		ingest.NormalizeSourceID(dou.SourceName),
 	}
 }

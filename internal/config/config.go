@@ -16,6 +16,8 @@ type Config struct {
 	DataDir string
 	// DebugHTTPAddr enables cmd/agent local debug HTTP when non-empty (see EnvDebugHTTPAddr); flag -debug-http-addr overrides.
 	DebugHTTPAddr string
+	// DouCollector configures the DOU.ua collector (005-job-collectors).
+	DouCollector DouCollectorConfig
 
 	AnthropicAPIKey     string
 	AnthropicModel      string
@@ -42,6 +44,7 @@ func Load() Config {
 		Logging:         LoadLoggingFromEnv(),
 		DataDir:         loadDataDirFromEnv(),
 		DebugHTTPAddr:   loadDebugHTTPAddrFromEnv(),
+		DouCollector:    LoadDouCollectorFromEnv(),
 		AnthropicAPIKey: LoadAnthropicAPIKeyFromEnv(),
 		AnthropicModel:  model,
 	}

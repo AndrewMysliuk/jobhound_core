@@ -22,6 +22,7 @@ var countryAliases = map[string]string{
 	"holland":         "NL",
 	"czechia":         "CZ",
 	"czech republic":  "CZ",
+	"україна":         "UA",
 }
 
 type countryRecord struct {

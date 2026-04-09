@@ -39,6 +39,7 @@ When these land, **`jobs`** storage needs matching columns — see **`jobs-table
 - **Working Nomads:** parse **`_source.pub_date`** (ISO-8601). Parse failure for a hit → **entire `Fetch` error** (WN dates are authoritative structured data).
 - **Europe Remotely:** prefer **absolute** detail line **`li.date-posted`** when it parses as a calendar date. Otherwise parse **relative** phrases from listing or detail **`posted_display`** (e.g. “Posted 12 hours ago”) using an **anchor** of **`time.Now().UTC()`** at parse time. Implementation may use a small **regex/table** for English phrases and/or a library such as **[github.com/olebedev/when](https://github.com/olebedev/when)**; **new site phrases** are added over time (spec/tests updated when discovered).
 - **Europe — soft date failure:** if a **relative** (or unrecognized) **`posted_display`** cannot be parsed, set **`PostedAt` to zero**, **log a warning** with the raw string, and **do not** fail **`Fetch`** for that reason alone (see **`collector.md`**). Unparseable **absolute** detail date attempts should follow the same soft rule if the rest of the job is valid.
+- **DOU.ua:** parse Ukrainian calendar phrases from listing/detail **`div.date`** (e.g. `9 квітня`, `8 квітня 2026`) with month-name table + optional year; anchor **`time.Now().UTC()`** when year is omitted (if parsed date is implausibly in the future vs anchor, treat as previous calendar year). **Soft failure** matches Europe: unparseable display → **`PostedAt` zero** + warning, continue (**`collector.md`**).
 
 ### `Position` (`*string`)
 
@@ -81,6 +82,25 @@ Resolve **`CountryCode`** (ISO 3166-1 alpha-2) using **`data/countries.json`** (
 
 ---
 
+## DOU.ua → `Job`
+
+| `Job` field | Source (see `../resources/dou.md`) |
+| ----------- | ---------------------------------- |
+| `Source` | `dou_ua` |
+| `Title` | Detail `h1.g-h2` (fallback: listing `div.title a.vt`) |
+| `Company` | Listing `div.title strong a.company` (no separate detail company selector in wire doc) |
+| `URL` | Canonical vacancy URL from listing card |
+| `ApplyURL` | `""` when not exposed on detail (future: map site apply control if product agrees) |
+| `Description` | Plain text from detail `div.b-typo.vacancy-section` |
+| `PostedAt` | Detail `div.date` when Ukrainian phrase parses; else listing `div.date`; else zero + warn |
+| `Remote` | Bool rule (title + description + `a.badge` texts as tags) |
+| `CountryCode` | From listing `span.cities` / detail `div.sh-info span.place` + countries dictionary |
+| `SalaryRaw` | Detail `div.sh-info span.salary` when present |
+| `Tags` | Text from detail `a.badge` links (optional; empty if none) |
+| `Position` | Keyword inference only (`*string`); nil if no group matches |
+
+---
+
 ## Working Nomads → `Job`
 
 | `Job` field | Source (see `../resources/working-nomads.md`) |
@@ -117,4 +137,4 @@ If a new `apply_option` value appears at runtime, **`Fetch` must error** (do not
 - `collector.md`
 - [`specs/000-epic-overview/product-concept-draft.md`](../../000-epic-overview/product-concept-draft.md)
 - `jobs-table-extension.md`
-- `../resources/europe-remotely.md`, `../resources/working-nomads.md`
+- `../resources/europe-remotely.md`, `../resources/working-nomads.md`, `../resources/dou.md`

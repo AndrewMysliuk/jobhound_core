@@ -14,6 +14,7 @@ import (
 
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/bootstrap"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/dou"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/europeremotely"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/handlers/debughttp"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/workingnomads"
@@ -72,7 +73,7 @@ func main() {
 		return
 	}
 
-	er, wn, err := bootstrap.MVPCollectors(ctx, nil, appCfg.DataDir)
+	er, wn, douColl, err := bootstrap.MVPCollectors(ctx, nil, appCfg.DataDir, appCfg.DouCollector)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
@@ -87,14 +88,18 @@ func main() {
 		if x, ok := er.(*europeremotely.EuropeRemotely); ok {
 			erConcrete = x
 		}
-		if err := runDebugHTTPServer(log, addr, er, wn, wnConcrete, erConcrete); err != nil {
+		var douConcrete *dou.DOU
+		if x, ok := douColl.(*dou.DOU); ok {
+			douConcrete = x
+		}
+		if err := runDebugHTTPServer(log, addr, er, wn, douColl, wnConcrete, erConcrete, douConcrete); err != nil {
 			log.Error().Err(err).Msg("debug http")
 			os.Exit(1)
 		}
 		return
 	}
 
-	coll := bootstrap.MVPMulti(er, wn, &log)
+	coll := bootstrap.MVPMulti(er, wn, douColl, &log)
 	p := &impl.Pipeline{
 		Collector: coll,
 		Scorer:    llmmock.Scorer{},
@@ -109,10 +114,10 @@ func main() {
 	fmt.Fprintln(os.Stderr, "jobhound_core: noop pipeline run ok")
 }
 
-func runDebugHTTPServer(log zerolog.Logger, addr string, europeRemotely, workingNomads collectors.Collector, workingNomadsConcrete *workingnomads.WorkingNomads, europeRemotelyConcrete *europeremotely.EuropeRemotely) error {
+func runDebugHTTPServer(log zerolog.Logger, addr string, europeRemotely, workingNomads, douUa collectors.Collector, workingNomadsConcrete *workingnomads.WorkingNomads, europeRemotelyConcrete *europeremotely.EuropeRemotely, douUaConcrete *dou.DOU) error {
 	srv := &http.Server{
 		Addr:    addr,
-		Handler: debughttp.NewHTTPHandler(europeRemotely, workingNomads, workingNomadsConcrete, europeRemotelyConcrete, log),
+		Handler: debughttp.NewHTTPHandler(europeRemotely, workingNomads, douUa, workingNomadsConcrete, europeRemotelyConcrete, douUaConcrete, log),
 	}
 
 	errCh := make(chan error, 1)
@@ -127,6 +132,7 @@ func runDebugHTTPServer(log zerolog.Logger, addr string, europeRemotely, working
 		Str("route_health", "GET /health").
 		Str("route_europe", debughttp.PathEuropeRemotely).
 		Str("route_working_nomads", debughttp.PathWorkingNomads).
+		Str("route_dou_ua", debughttp.PathDouUA).
 		Msg("debug http listening")
 
 	quit := make(chan os.Signal, 1)

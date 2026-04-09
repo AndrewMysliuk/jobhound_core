@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/dou"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/europeremotely"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/workingnomads"
 	"github.com/andrewmysliuk/jobhound_core/internal/domain/schema"
@@ -15,7 +16,7 @@ import (
 	"github.com/rs/zerolog"
 )
 
-func runCollectorDebug(w http.ResponseWriter, r *http.Request, logH zerolog.Logger, coll collectors.Collector, wnConcrete *workingnomads.WorkingNomads, erConcrete *europeremotely.EuropeRemotely) {
+func runCollectorDebug(w http.ResponseWriter, r *http.Request, logH zerolog.Logger, coll collectors.Collector, wnConcrete *workingnomads.WorkingNomads, erConcrete *europeremotely.EuropeRemotely, douConcrete *dou.DOU) {
 	if coll == nil {
 		logH.Error().Msg("collector not configured")
 		http.Error(w, "collector not configured", http.StatusInternalServerError)
@@ -54,6 +55,7 @@ func runCollectorDebug(w http.ResponseWriter, r *http.Request, logH zerolog.Logg
 
 	isWN := coll.Name() == workingnomads.SourceName && wnConcrete != nil
 	isER := coll.Name() == europeremotely.SourceName && erConcrete != nil
+	isDOU := coll.Name() == dou.SourceName && douConcrete != nil
 	switch {
 	case isWN:
 		c := *wnConcrete
@@ -63,6 +65,14 @@ func runCollectorDebug(w http.ResponseWriter, r *http.Request, logH zerolog.Logg
 		} else if limit == 0 {
 			// resolveLimit(0) = unlimited jobs; lift DefaultMaxPages so debug can scrape beyond MVP cap.
 			c.MaxPages = -1
+		}
+		jobs, fetchErr = c.Fetch(ctx)
+		upstreamFetched = len(jobs)
+	case isDOU:
+		c := *douConcrete
+		applyDouOverrides(&req, &c)
+		if limit > 0 {
+			c.MaxJobs = limit
 		}
 		jobs, fetchErr = c.Fetch(ctx)
 		upstreamFetched = len(jobs)
@@ -98,7 +108,7 @@ func runCollectorDebug(w http.ResponseWriter, r *http.Request, logH zerolog.Logg
 		Collector: coll.Name(),
 		Count:     len(jobs),
 	}
-	if !isWN && !isER && upstreamFetched > len(jobs) {
+	if !isWN && !isER && !isDOU && upstreamFetched > len(jobs) {
 		resp.UpstreamFetched = upstreamFetched
 	}
 

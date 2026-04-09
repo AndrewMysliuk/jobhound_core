@@ -11,32 +11,36 @@ import (
 	"strings"
 
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/dou"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/europeremotely"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/multi"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/utils"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/workingnomads"
+	"github.com/andrewmysliuk/jobhound_core/internal/config"
 	"github.com/rs/zerolog"
 )
 
-// MVPCollectors returns Europe Remotely and Working Nomads as separate collectors.
-// (shared HTTP client and countries). Use for debug HTTP per-source routes or tests.
+// MVPCollectors returns Europe Remotely, Working Nomads, and DOU.ua as separate collectors.
+// (shared HTTP client without jar for ER/WN; DOU uses its own jar-backed client).
+// Use for debug HTTP per-source routes or tests.
 // httpClient may be nil (defaults from collectors/utils). dataDir is JOBHOUND_DATA_DIR semantics:
 // empty uses subdirectory "data" under the current working directory for countries.json.
-func MVPCollectors(ctx context.Context, httpClient *http.Client, dataDir string) (europeRemotely, workingNomads collectors.Collector, err error) {
+// douCfg comes from config.Load().DouCollector (JOBHOUND_COLLECTOR_DOU_*).
+func MVPCollectors(ctx context.Context, httpClient *http.Client, dataDir string, douCfg config.DouCollectorConfig) (europeRemotely, workingNomads, douUa collectors.Collector, err error) {
 	if httpClient == nil {
 		httpClient = utils.NewHTTPClient()
 	}
 	cr, err := loadCountryResolver(dataDir)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	nonce, err := europeremotely.DiscoverNonce(ctx, httpClient)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	siteBase, err := europeremotely.DefaultSiteBase()
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	er := &europeremotely.EuropeRemotely{
 		HTTPClient: httpClient,
@@ -53,22 +57,29 @@ func MVPCollectors(ctx context.Context, httpClient *http.Client, dataDir string)
 		HTTPClient: httpClient,
 		Countries:  cr,
 	}
-	return er, wn, nil
+	douColl := &dou.DOU{
+		HTTPClient:        utils.NewHTTPClientWithJar(),
+		Search:            douCfg.Search,
+		MaxJobs:           douCfg.MaxJobsPerFetch,
+		InterRequestDelay: douCfg.InterRequestDelay,
+		Countries:         cr,
+	}
+	return er, wn, douColl, nil
 }
 
-// MVPMulti wraps Europe Remotely and Working Nomads collectors in one collectors.Collector (MVP order).
+// MVPMulti wraps MVP collectors in one collectors.Collector (order: Europe Remotely, Working Nomads, DOU.ua).
 // Optional log: per-source Fetch failures log at Warn on multi.All when OnSourceError is unset.
-func MVPMulti(europeRemotely, workingNomads collectors.Collector, log *zerolog.Logger) collectors.Collector {
-	return &multi.All{Collectors: []collectors.Collector{europeRemotely, workingNomads}, Log: log}
+func MVPMulti(europeRemotely, workingNomads, douUa collectors.Collector, log *zerolog.Logger) collectors.Collector {
+	return &multi.All{Collectors: []collectors.Collector{europeRemotely, workingNomads, douUa}, Log: log}
 }
 
-// MVPCollector returns a single collectors.Collector that runs Europe Remotely and Working Nomads.
-func MVPCollector(ctx context.Context, httpClient *http.Client, dataDir string, log *zerolog.Logger) (collectors.Collector, error) {
-	er, wn, err := MVPCollectors(ctx, httpClient, dataDir)
+// MVPCollector returns a single collectors.Collector that runs all MVP sources.
+func MVPCollector(ctx context.Context, httpClient *http.Client, dataDir string, douCfg config.DouCollectorConfig, log *zerolog.Logger) (collectors.Collector, error) {
+	er, wn, d, err := MVPCollectors(ctx, httpClient, dataDir, douCfg)
 	if err != nil {
 		return nil, err
 	}
-	return MVPMulti(er, wn, log), nil
+	return MVPMulti(er, wn, d, log), nil
 }
 
 func loadCountryResolver(dataDir string) (*utils.CountryResolver, error) {
