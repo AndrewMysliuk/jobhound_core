@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/djinni"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/dou"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/europeremotely"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/himalayas"
@@ -25,6 +26,9 @@ const PathDouUA = "POST /debug/collectors/dou_ua"
 // PathHimalayas is the registered method+path for the Himalayas debug fetch.
 const PathHimalayas = "POST /debug/collectors/himalayas"
 
+// PathDjinni is the registered method+path for the Djinni debug fetch.
+const PathDjinni = "POST /debug/collectors/djinni"
+
 // HTTPHandler wires debug routes on a ServeMux (omg-bo style: handler.go + registerRoutes + one file per route).
 type HTTPHandler struct {
 	mux   *http.ServeMux
@@ -35,22 +39,25 @@ type HTTPHandler struct {
 	workingNomads          collectors.Collector
 	douUa                  collectors.Collector
 	himalayas              collectors.Collector
+	djinni                 collectors.Collector
 	workingNomadsConcrete  *workingnomads.WorkingNomads
 	europeRemotelyConcrete *europeremotely.EuropeRemotely
 	douUaConcrete          *dou.DOU
 	himalayasConcrete      *himalayas.Himalayas
+	djinniConcrete         *djinni.Djinni
 }
 
 // NewHTTPHandler returns a handler with GET /health and POST /debug/collectors/* registered.
-// europeRemotely, workingNomads, and douUa must not be nil; himalayas may be nil (route returns 500).
+// europeRemotely, workingNomads, douUa, and djinni must not be nil; himalayas may be nil (route returns 500).
 // Concrete types may be nil (tests); when set, POST bodies can override per-source settings without mutating bootstrap.
 // log is the binary root logger (e.g. from logging.NewRoot); use zerolog.Nop() in tests.
 func NewHTTPHandler(
-	europeRemotely, workingNomads, douUa, himalayasColl collectors.Collector,
+	europeRemotely, workingNomads, douUa, himalayasColl, djinniColl collectors.Collector,
 	workingNomadsConcrete *workingnomads.WorkingNomads,
 	europeRemotelyConcrete *europeremotely.EuropeRemotely,
 	douUaConcrete *dou.DOU,
 	himalayasConcrete *himalayas.Himalayas,
+	djinniConcrete *djinni.Djinni,
 	log zerolog.Logger,
 ) *HTTPHandler {
 	h := &HTTPHandler{
@@ -60,10 +67,12 @@ func NewHTTPHandler(
 		workingNomads:          workingNomads,
 		douUa:                  douUa,
 		himalayas:              himalayasColl,
+		djinni:                 djinniColl,
 		workingNomadsConcrete:  workingNomadsConcrete,
 		europeRemotelyConcrete: europeRemotelyConcrete,
 		douUaConcrete:          douUaConcrete,
 		himalayasConcrete:      himalayasConcrete,
+		djinniConcrete:         djinniConcrete,
 	}
 	h.registerRoutes()
 	h.chain = logging.RequestIDMiddleware(h.mux)
@@ -76,6 +85,7 @@ func (h *HTTPHandler) registerRoutes() {
 	h.mux.HandleFunc(PathWorkingNomads, h.postWorkingNomads)
 	h.mux.HandleFunc(PathDouUA, h.postDouUA)
 	h.mux.HandleFunc(PathHimalayas, h.postHimalayas)
+	h.mux.HandleFunc(PathDjinni, h.postDjinni)
 }
 
 // ServeHTTP applies request-id middleware then dispatches to registered routes.

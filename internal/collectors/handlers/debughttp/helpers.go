@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/djinni"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/dou"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/europeremotely"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/himalayas"
@@ -77,6 +78,18 @@ func applyDouOverrides(req *schema.CollectorsPOSTBody, c *dou.DOU) {
 	}
 	if req.DouInterRequestDelayMs != nil {
 		c.InterRequestDelay = time.Duration(*req.DouInterRequestDelayMs) * time.Millisecond
+	}
+}
+
+func applyDjinniOverrides(req *schema.CollectorsPOSTBody, c *djinni.Djinni) {
+	if req.AllKeywords != nil && strings.TrimSpace(*req.AllKeywords) != "" {
+		c.AllKeywords = strings.TrimSpace(*req.AllKeywords)
+	}
+	if req.DjinniPage != nil && *req.DjinniPage > 0 {
+		c.StartPage = *req.DjinniPage
+	}
+	if req.DjinniInterRequestDelayMs != nil {
+		c.InterRequestDelay = time.Duration(*req.DjinniInterRequestDelayMs) * time.Millisecond
 	}
 }
 

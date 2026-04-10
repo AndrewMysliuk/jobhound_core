@@ -1,6 +1,6 @@
 # Tasks: Job collectors (MVP sources)
 
-**Last Updated**: 2026-04-10  
+**Last Updated**: 2026-04-11  
 **Input**: `spec.md`, `plan.md`, `research.md`, `contracts/*`, `resources/*`  
 **Tests**: REQUIRED — `**go test ./...`** without live network; `**httptest**` + bodies aligned with `**contracts/test-fixtures.md**`. Wire shapes and selectors: `**resources/europe-remotely.md**`, `**resources/working-nomads.md**`, `**resources/dou.md**` (DOU.ua).
 
@@ -93,3 +93,23 @@
 6. [x] **Wire-up + debug HTTP** — Definition of done: `internal/collectors/bootstrap` registers Himalayas when configured; `handlers/debughttp` adds **`POST /debug/collectors/himalayas`** (or agreed path) + `handler.go` registration; optional JSON keys **`q`**, **`page`**, **`use_search`** (bool) / **`max_pages`** documented in **`contracts/debug-http-collectors.md`** and `schema/debug_http.go` if used.
 
 7. [x] **Inventory + spec glue** — Definition of done: after implementation verification, `contracts/sources-inventory.md` Notes unchanged unless wire changed; `spec.md` / `research.md` reference **`resources/himalayas.md`** in fetch/debug sections.
+
+---
+
+## K. Djinni (fifth collector; HTML + JSON-LD)
+
+**Wire**: **`resources/djinni.md`** — `GET` `https://djinni.co/jobs/?all_keywords=…&search_type=full-text&page=N` (~**15** jobs/page); **`GET`** each **`/jobs/{id}-{slug}/`**; parse listing cards (**`job-item__position`**, company span, link `href`); **detail** `JobPosting` in **`application/ld+json`**; listing page may embed a **JSON array** of `JobPosting` (optional use). **`baseSalary`** → opaque **`SalaryRaw`**. **Inter-request delay** (default **400 ms**, env — see **`contracts/environment.md`**). **`Job.Source`**: **`djinni`**. **`FetchWithSlotSearch`**: map **`SlotSearchQuery`** → **`all_keywords`**.
+
+1. [x] **Spec + contracts** — Definition of done: `contracts/collector.md` already lists **`djinni`** and slot mapping; `contracts/domain-mapping-mvp.md` Djinni table + **`PostedAt`** rule; `contracts/sources-inventory.md` row 5 **T2 (fact)**; `contracts/environment.md` planned env names; **`resources/djinni.md`** matches captured selectors (listing meta row, JSON-LD array note).
+
+2. [x] **Fixtures** — Definition of done: `contracts/test-fixtures.md` fenced samples — minimal listing HTML fragment (one card + link + optional `ld+json` array excerpt) and minimal detail HTML with one `JobPosting` script (include **`baseSalary`** min/max example).
+
+3. [x] **Config** — Definition of done: `internal/config/collectors_djinni.go` loads **`JOBHOUND_COLLECTOR_DJINNI_INTER_REQUEST_DELAY_MS`** and **`JOBHOUND_COLLECTOR_DJINNI_MAX_JOBS_PER_FETCH`** per **`contracts/environment.md`**; defaults align with DOU-style politeness.
+
+4. [x] **Implement collector** — Definition of done: `internal/collectors/djinni/` implements **`collectors.Collector`** + **`SlotSearchFetcher`**; pagination until **&lt; 15** jobs or empty; delay between HTTP calls; map JSON-LD → **`domain.Job`** per **`domain-mapping-mvp.md`** (**`Remote`**: **`TELECOMMUTE`** **or** **`RemoteMVPRule`** with listing meta hints); **`utils.CanonicalListingURL`** + **`AssignStableID`**; cap jobs per fetch; errors per **`collector.md`**.
+
+5. [x] **Unit tests — Djinni** — Definition of done: **`httptest`** listing + detail without live network; at least one full **`domain.Job`** (or agreed field subset) including **`SalaryRaw`** from **`baseSalary`** and **`PostedAt`** from ISO **`datePosted`**.
+
+6. [x] **Wire-up + debug HTTP** — Definition of done: `internal/collectors/bootstrap` registers Djinni when configured; `handlers/debughttp` adds **`POST /debug/collectors/djinni`** + `handler.go` registration; optional JSON keys **`all_keywords`**, **`djinni_page`**, **`djinni_inter_request_delay_ms`** documented in **`contracts/debug-http-collectors.md`** and `internal/collectors/schema/debug_http.go` if used; **`limit`** maps to **`MaxJobs`** when wired.
+
+7. [x] **Inventory status** — Definition of done: after ship, set Djinni row **Status** to **MVP** or keep **Planned** per product phasing; **`spec.md`** acceptance criteria updated if Djinni becomes MVP.

@@ -42,6 +42,7 @@ type SlotSearchFetcher interface {
 | `working_nomads` | Elasticsearch **`multi_match`** over title / description / tags / category (implementation-defined fields). |
 | `dou_ua` | Vacancies **`search`** query param (**overrides** static config search for that run). |
 | `himalayas` | Search API **`q`** (`UseSearch` + search endpoint). |
+| `djinni` | Listing query **`all_keywords`** with **`search_type=full-text`** (see `resources/djinni.md`). |
 
 ## Relationship to orchestration (MVP)
 
@@ -57,6 +58,7 @@ Use a **fixed lowercase string** per board for `Job.Source` and for `StableJobID
 | Working Nomads    | `working_nomads`     |
 | DOU.ua            | `dou_ua`             |
 | Himalayas         | `himalayas`          |
+| Djinni            | `djinni`             |
 
 Implementation may wrap these in a Go typed const block; the **string value** above is what matters for identity.
 
@@ -89,5 +91,5 @@ Offline tests use **`httptest`** and bodies documented in **`contracts/test-fixt
 - `spec.md`
 - [`specs/000-epic-overview/product-concept-draft.md`](../../000-epic-overview/product-concept-draft.md) — slots and stage-1 vs `006`
 - `domain-mapping-mvp.md`
-- `sources-inventory.md`, `../resources/europe-remotely.md`, `../resources/working-nomads.md`, `../resources/dou.md`, `../resources/himalayas.md`
+- `sources-inventory.md`, `../resources/europe-remotely.md`, `../resources/working-nomads.md`, `../resources/dou.md`, `../resources/himalayas.md`, `../resources/djinni.md`
 - `test-fixtures.md`

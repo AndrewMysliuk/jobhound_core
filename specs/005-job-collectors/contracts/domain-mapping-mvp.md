@@ -23,7 +23,7 @@ Target shape: **`domain.Job`** in `internal/domain/job.go`, plus **planned field
 | `Position` | `*string` | **Nil** = no MVP keyword match; non-nil = inferred label (see below) |
 | `TimezoneOffsets` | `[]float64` | Optional **UTC offset hours** from the board (e.g. Himalayas `timezoneRestrictions`); empty or `nil` = none / unknown |
 
-**`Remote` (MVP rule):** collectors set **`Job.Remote`** to non-nil **`true`** or **`false`**: **`true`** if the substring **`remote`** or Ukrainian **`віддалено`** appears (case-insensitive) in any of: **`Title`**, normalized **plain-text `Description`**, **tag strings** from the board, or **extra strings** documented per source (implemented via **`collectors/utils.RemoteMVPRule`** — e.g. DOU listing/detail location text; Himalayas **`excerpt`** and comma-joined **`locationRestrictions`**). Otherwise **`false`**. **`nil`** remains valid for legacy or unknown rows (see `004` broad filter); MVP sources always populate **`true`**/**`false`** per this rule.
+**`Remote` (MVP rule):** collectors set **`Job.Remote`** to non-nil **`true`** or **`false`**: **`true`** if the substring **`remote`**, Ukrainian **`віддалено`**, or Ukrainian phrase **`віддалена робота`** appears (case-insensitive) in any of: **`Title`**, normalized **plain-text `Description`**, **tag strings** from the board, or **extra strings** documented per source (implemented via **`collectors/utils.RemoteMVPRule`** — e.g. DOU listing/detail location text; Himalayas **`excerpt`** and comma-joined **`locationRestrictions`**). Otherwise **`false`**. **`nil`** remains valid for legacy or unknown rows (see `004` broad filter); MVP sources always populate **`true`**/**`false`** per this rule.
 
 When these land, **`jobs`** storage needs matching columns — see **`jobs-table-extension.md`** (including **`timezone_offsets`** when **`TimezoneOffsets`** is implemented).
 
@@ -42,6 +42,7 @@ When these land, **`jobs`** storage needs matching columns — see **`jobs-table
 - **Europe — soft date failure:** if a **relative** (or unrecognized) **`posted_display`** cannot be parsed, set **`PostedAt` to zero**, **log a warning** with the raw string, and **do not** fail **`Fetch`** for that reason alone (see **`collector.md`**). Unparseable **absolute** detail date attempts should follow the same soft rule if the rest of the job is valid.
 - **DOU.ua:** parse Ukrainian calendar phrases from listing/detail **`div.date`** (e.g. `9 квітня`, `8 квітня 2026`) with month-name table + optional year; anchor **`time.Now().UTC()`** when year is omitted (if parsed date is implausibly in the future vs anchor, treat as previous calendar year). **Soft failure** matches Europe: unparseable display → **`PostedAt` zero** + warning, continue (**`collector.md`**).
 - **Himalayas:** parse **`pubDate`** as **Unix epoch seconds** (integer) → **`time.Unix(sec, 0).UTC()`**. Missing, zero, or non-numeric → **`PostedAt` zero** + warning, continue (**soft failure**, same spirit as Europe/DOU).
+- **Djinni:** parse **`datePosted`** from detail **`JobPosting`** JSON-LD (ISO-8601 datetime string). Missing, empty, or parse error → **`PostedAt` zero** + warning, continue (**soft failure**, same spirit as Himalayas).
 
 ### `Position` (`*string`)
 
@@ -157,9 +158,30 @@ Wire: **`../resources/himalayas.md`** (`GET` JSON only).
 
 ---
 
+## Djinni → `Job`
+
+Wire: **`../resources/djinni.md`** — listing **`GET`** + detail **`GET`**; primary fields from detail **`application/ld+json`** **`JobPosting`**.
+
+| `Job` field | Source |
+| ----------- | ------ |
+| `Source` | `djinni` |
+| `Title` | JSON-LD **`title`** |
+| `Company` | JSON-LD **`hiringOrganization.name`** |
+| `URL` | Absolute URL from JSON-LD **`url`**, normalized (strip query/fragment); must match canonical **`/jobs/{id}-{slug}/`** pattern |
+| `ApplyURL` | **`""`** (apply flows are Djinni-login-gated in normal UX — revisit only if a stable external apply URL is documented) |
+| `Description` | Plain text from JSON-LD **`description`** (escape sequences / newlines as delivered) |
+| `PostedAt` | JSON-LD **`datePosted`** per **PostedAt** rules above |
+| `Remote` | If JSON-LD **`jobLocationType`** equals **`TELECOMMUTE`** (case-insensitive), set **`true`**. Otherwise **`collectors/utils.RemoteMVPRule`** over **title**, plain **description**, **tag** strings (see **`Tags`**), plus **extra hints**: join the listing meta line fragments documented in **`resources/djinni.md`** (remote-only phrase, **`location-text`**, English/Ukrainian experience and language chips) as separate strings passed to the same helper pattern as DOU/Himalayas location hints. |
+| `CountryCode` | Prefer ISO **alpha-2** from **`applicantLocationRequirements`** / nested **`address.addressCountry`** when present; else map **`jobLocation.address`** country strings through **`data/countries.json`**; **`addressRegion`** text like **Europe** alone → **`""`** if no ISO match |
+| `SalaryRaw` | Format opaque string from JSON-LD **`baseSalary`** (`MonetaryAmount` → min/max + currency + unit, e.g. month); if absent, optional fallback to listing salary preview text (**`strong.text-success`**) then **`""`** |
+| `Tags` | JSON-LD **`category`** as first tag when non-empty; append trimmed text from listing/detail **`div.job-item__tags span.badge`** when available (dedupe, preserve order) |
+| `Position` | Keyword inference only (`*string`) over **title + description + tags** |
+
+---
+
 ## Related
 
 - `collector.md`
 - [`specs/000-epic-overview/product-concept-draft.md`](../../000-epic-overview/product-concept-draft.md)
 - `jobs-table-extension.md`
-- `../resources/europe-remotely.md`, `../resources/working-nomads.md`, `../resources/dou.md`, `../resources/himalayas.md`
+- `../resources/europe-remotely.md`, `../resources/working-nomads.md`, `../resources/dou.md`, `../resources/himalayas.md`, `../resources/djinni.md`

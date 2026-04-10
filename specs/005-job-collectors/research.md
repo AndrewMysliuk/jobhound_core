@@ -3,9 +3,9 @@
 **Branch**: `005-job-collectors`  
 **Spec**: `specs/005-job-collectors/spec.md`  
 **Date**: 2026-03-30  
-**Last Updated**: 2026-04-10
+**Last Updated**: 2026-04-11
 
-Short inventory and pointers. **Wire/DOM/JSON detail** is normative in **`resources/europe-remotely.md`**, **`resources/working-nomads.md`**, **`resources/dou.md`**, and **`resources/himalayas.md`**, not duplicated here.
+Short inventory and pointers. **Wire/DOM/JSON detail** is normative in **`resources/europe-remotely.md`**, **`resources/working-nomads.md`**, **`resources/dou.md`**, **`resources/himalayas.md`**, and **`resources/djinni.md`**, not duplicated here.
 
 ---
 
@@ -17,6 +17,7 @@ Short inventory and pointers. **Wire/DOM/JSON detail** is normative in **`resour
 | Working Nomads | `POST` `jobsapi/_search` → Elasticsearch-shaped JSON | **`encoding/json`** only for core fields |
 | DOU.ua | `GET` listing + `POST` `xhr-load` → JSON + HTML fragment; `GET` detail | `encoding/json` + **goquery**; **`http.Client` with cookie jar** for CSRF cookie |
 | Himalayas | `GET` `/jobs/api` and `/jobs/api/search` → JSON | **`encoding/json`** only; **no** RSC/HTML parse (`internal/collectors/himalayas`) |
+| Djinni (planned) | `GET` listing + `GET` detail → HTML + **`application/ld+json`** | **goquery** for listing links / hints; **`encoding/json`** for `JobPosting`; inter-request delay |
 
 ## 2. Test strategy (aligned with `004`)
 

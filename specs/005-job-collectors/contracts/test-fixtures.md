@@ -176,7 +176,65 @@ Shape per `../resources/himalayas.md` (envelope + one job; field names camelCase
 
 ---
 
+## Djinni — listing HTML (one card + optional JSON-LD array excerpt)
+
+Selectors per `../resources/djinni.md`. Optional array note: a listing page may include `<script type="application/ld+json">` with a JSON array of `JobPosting` objects (MVP still uses detail `GET` as primary).
+
+```html
+<html><body><div>
+<a href="/jobs/424242-fixture-role/"><h2 class="job-item__position">Senior Frontend Engineer</h2></a>
+<span class="small text-gray-800 opacity-75 font-weight-500">Acme Corp</span>
+<div class="col-auto"><div class="fs-5"><strong class="text-success">до $650</strong></div></div>
+</div>
+<script type="application/ld+json">
+[
+  {
+    "@type": "JobPosting",
+    "identifier": "424242",
+    "title": "Senior Frontend Engineer",
+    "url": "https://djinni.co/jobs/424242-fixture-role/"
+  }
+]
+</script>
+</body></html>
+```
+
+---
+
+## Djinni — job detail HTML (`JobPosting` + `baseSalary`)
+
+```html
+<html><body>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "JobPosting",
+  "identifier": "424242",
+  "url": "https://djinni.co/jobs/424242-fixture-role/",
+  "title": "Senior Frontend Engineer",
+  "description": "<p>Build React apps.</p>",
+  "datePosted": "2026-03-28T10:00:00Z",
+  "jobLocationType": "TELECOMMUTE",
+  "hiringOrganization": { "@type": "Organization", "name": "Acme Corp" },
+  "category": "Fullstack",
+  "baseSalary": {
+    "@type": "MonetaryAmount",
+    "currency": "USD",
+    "value": {
+      "@type": "QuantitativeValue",
+      "minValue": 550,
+      "maxValue": 650,
+      "unitText": "MONTH"
+    }
+  }
+}
+</script>
+</body></html>
+```
+
+---
+
 ## Related
 
-- `../resources/europe-remotely.md`, `../resources/working-nomads.md`, `../resources/dou.md`, `../resources/himalayas.md`
+- `../resources/europe-remotely.md`, `../resources/working-nomads.md`, `../resources/dou.md`, `../resources/himalayas.md`, `../resources/djinni.md`
 - `collector.md`

@@ -27,4 +27,10 @@ type CollectorsPOSTBody struct {
 	UseSearch *bool `json:"use_search,omitempty"`
 	// Himalayas: cap HTTP pages per run (ignored on other routes).
 	MaxPages *int `json:"max_pages,omitempty"`
+	// Djinni: listing all_keywords (ignored on other routes).
+	AllKeywords *string `json:"all_keywords,omitempty"`
+	// Djinni: first listing page (1-based; ignored on other routes).
+	DjinniPage *int `json:"djinni_page,omitempty"`
+	// Djinni: inter-request delay override in milliseconds (ignored on other routes).
+	DjinniInterRequestDelayMs *int `json:"djinni_inter_request_delay_ms,omitempty"`
 }

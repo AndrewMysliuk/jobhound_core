@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/djinni"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/dou"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/europeremotely"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/himalayas"
@@ -17,7 +18,7 @@ import (
 	"github.com/rs/zerolog"
 )
 
-func runCollectorDebug(w http.ResponseWriter, r *http.Request, logH zerolog.Logger, coll collectors.Collector, wnConcrete *workingnomads.WorkingNomads, erConcrete *europeremotely.EuropeRemotely, douConcrete *dou.DOU, himConcrete *himalayas.Himalayas) {
+func runCollectorDebug(w http.ResponseWriter, r *http.Request, logH zerolog.Logger, coll collectors.Collector, wnConcrete *workingnomads.WorkingNomads, erConcrete *europeremotely.EuropeRemotely, douConcrete *dou.DOU, himConcrete *himalayas.Himalayas, djinConcrete *djinni.Djinni) {
 	if coll == nil {
 		logH.Error().Msg("collector not configured")
 		http.Error(w, "collector not configured", http.StatusInternalServerError)
@@ -58,6 +59,7 @@ func runCollectorDebug(w http.ResponseWriter, r *http.Request, logH zerolog.Logg
 	isER := coll.Name() == europeremotely.SourceName && erConcrete != nil
 	isDOU := coll.Name() == dou.SourceName && douConcrete != nil
 	isHim := coll.Name() == himalayas.SourceName && himConcrete != nil
+	isDjin := coll.Name() == djinni.SourceName && djinConcrete != nil
 	switch {
 	case isWN:
 		c := *wnConcrete
@@ -94,6 +96,14 @@ func runCollectorDebug(w http.ResponseWriter, r *http.Request, logH zerolog.Logg
 		}
 		jobs, fetchErr = c.Fetch(ctx)
 		upstreamFetched = len(jobs)
+	case isDjin:
+		c := *djinConcrete
+		applyDjinniOverrides(&req, &c)
+		if limit > 0 {
+			c.MaxJobs = limit
+		}
+		jobs, fetchErr = c.Fetch(ctx)
+		upstreamFetched = len(jobs)
 	default:
 		jobs, fetchErr = coll.Fetch(ctx)
 		upstreamFetched = len(jobs)
@@ -118,7 +128,7 @@ func runCollectorDebug(w http.ResponseWriter, r *http.Request, logH zerolog.Logg
 		Collector: coll.Name(),
 		Count:     len(jobs),
 	}
-	if !isWN && !isER && !isDOU && !isHim && upstreamFetched > len(jobs) {
+	if !isWN && !isER && !isDOU && !isHim && !isDjin && upstreamFetched > len(jobs) {
 		resp.UpstreamFetched = upstreamFetched
 	}
 

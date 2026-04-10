@@ -3,7 +3,7 @@
 **Spec**: `005-job-collectors`  
 **Implementation**: `internal/collectors/handlers/debughttp`
 
-Local-only JSON body for **`POST /debug/collectors/europe_remotely`**, **`POST /debug/collectors/working_nomads`**, **`POST /debug/collectors/dou_ua`**, and **`POST /debug/collectors/himalayas`**.  
+Local-only JSON body for **`POST /debug/collectors/europe_remotely`**, **`POST /debug/collectors/working_nomads`**, **`POST /debug/collectors/dou_ua`**, **`POST /debug/collectors/himalayas`**, and (when wired) **`POST /debug/collectors/djinni`**.  
 **`Content-Type: application/json`**. No URL query parameters for these options.
 
 ---
@@ -69,13 +69,27 @@ type DebugCollectorsRequest = {
 
   /** Himalayas only: stop after N API pages in browse or search mode (implementation-defined default). */
   max_pages?: number;
+
+  /** Djinni only (when route exists): maps to listing `all_keywords` (`search_type=full-text` fixed in collector). */
+  all_keywords?: string;
+
+  /** Djinni only: 1-based listing `page=` query param; omitted → `1`. (Distinct from Himalayas `page`.) */
+  djinni_page?: number;
+
+  /**
+   * Djinni only: inter-request delay override in milliseconds (default from `JOBHOUND_COLLECTOR_DJINNI_INTER_REQUEST_DELAY_MS`).
+   * Ignored on other routes.
+   */
+  djinni_inter_request_delay_ms?: number;
 };
 ```
 
-`query`, `sort`, `page_size`, and `_source` are **ignored** on `europe_remotely`, `dou_ua`, and `himalayas`.  
-`feed_form` and `search_keywords` are **ignored** on `working_nomads`, `dou_ua`, and `himalayas`.  
-`search` and `dou_inter_request_delay_ms` are **ignored** on `europe_remotely`, `working_nomads`, and `himalayas`.  
-`q`, `page`, `use_search`, and `max_pages` are **only** read for `himalayas`; `europe_remotely`, `working_nomads`, and `dou_ua` ignore them. See **`../tasks.md`** § J.
+`query`, `sort`, `page_size`, and `_source` are **ignored** on `europe_remotely`, `dou_ua`, `himalayas`, and `djinni`.  
+`feed_form` and `search_keywords` are **ignored** on `working_nomads`, `dou_ua`, `himalayas`, and `djinni`.  
+`search` and `dou_inter_request_delay_ms` are **ignored** on `europe_remotely`, `working_nomads`, `himalayas`, and `djinni`.  
+`q`, `use_search`, and `max_pages` are **only** read for `himalayas` (and `page` for Himalayas search mode).  
+`all_keywords`, `djinni_inter_request_delay_ms`, and **`djinni_page`** are **only** read for `djinni` when wired.  
+`europe_remotely`, `working_nomads`, and `dou_ua` ignore Himalayas and Djinni-only keys. See **`../tasks.md`** § J and § K.
 
 **`limit`** on **`dou_ua`**: when a concrete `*dou.DOU` is wired, maps to **`MaxJobs`** for that request (early stop). Omitted default `200` still applies to the JSON response cap for stub collectors; see **`../spec.md`**.
 
@@ -162,6 +176,17 @@ Exact clause shapes depend on their index mapping; if something returns an error
   "q": "vue",
   "page": 1,
   "max_pages": 2
+}
+```
+
+### Djinni — listing + delay (when route exists)
+
+```json
+{
+  "limit": 30,
+  "all_keywords": "frontend",
+  "djinni_page": 1,
+  "djinni_inter_request_delay_ms": 500
 }
 ```
 
