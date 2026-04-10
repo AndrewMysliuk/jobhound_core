@@ -1,12 +1,13 @@
 # Tasks: Job collectors (MVP sources)
 
-**Last Updated**: 2026-04-09  
+**Last Updated**: 2026-04-10  
 **Input**: `spec.md`, `plan.md`, `research.md`, `contracts/*`, `resources/*`  
 **Tests**: REQUIRED — `**go test ./...`** without live network; `**httptest**` + bodies aligned with `**contracts/test-fixtures.md**`. Wire shapes and selectors: `**resources/europe-remotely.md**`, `**resources/working-nomads.md**`, `**resources/dou.md**` (DOU.ua).
 
 ## A. Contracts & docs
 
 1. [x] **Contracts match intent** — Definition of done: `collector.md`, `domain-mapping-mvp.md`, `test-fixtures.md`, `resources/*` reviewed; no contradictions with `plan.md` Resolved decisions.
+2. [x] **`SlotSearchFetcher`** — Definition of done: `contracts/collector.md` documents optional interface, per-source wire mapping, and **non-mutation** rule; all MVP collectors implement **`FetchWithSlotSearch`**; **`006`** ingest calls it when **`SlotSearchQuery`** is set.
 
 ## B. Domain & persistence (if in scope for this PR)
 
@@ -72,3 +73,23 @@
 5. [x] **Wire-up + debug HTTP** — Definition of done: composition root (`internal/collectors/bootstrap` or equivalent) registers DOU with MVP collectors; `internal/collectors/handlers/debughttp` adds `POST /debug/collectors/dou_ua` (or agreed name) + `handler.go` registration; update `contracts/debug-http-collectors.md` and `internal/collectors/schema/debug_http.go` for any DOU-specific JSON keys (e.g. `search` override, `limit` mapping).
 
 6. [x] **Inventory** — Definition of done: `contracts/sources-inventory.md` row 3: **Tier (fact) T2** and Notes updated once collector is verified; `research.md` one-line pointer to `resources/dou.md` if still useful.
+
+---
+
+## J. Himalayas (fourth collector; public JSON API)
+
+**Wire**: **`resources/himalayas.md`** — `GET https://himalayas.app/jobs/api` (`offset` / `limit` ≤ 20) and/or `GET https://himalayas.app/jobs/api/search` (`page`, filters). **No** Next.js RSC / HTML crawl. Respect **429** (document backoff or surface error per product). **Operator**: attribution + syndication limits on [himalayas.app/api](https://himalayas.app/api).
+
+1. [x] **Domain + persistence** — Definition of done: `TimezoneOffsets []float64` on **`domain.Job`** (see **`contracts/domain-mapping-mvp.md`**); migration + GORM field per **`contracts/jobs-table-extension.md`** (`timezone_offsets` JSON); JSON debug output includes offsets when wired.
+
+2. [x] **Spec + contracts (Himalayas prose)** — Definition of done: `contracts/collector.md` lists **`himalayas`** `Job.Source`; `contracts/domain-mapping-mvp.md` Himalayas table + `PostedAt` / `Remote` / **`TimezoneOffsets`**; `contracts/sources-inventory.md` row 4 **T2 (fact)**; `contracts/test-fixtures.md` minimal envelope; **`tasks.md`** § J present.
+
+3. [x] **Fixtures** — Definition of done: tests use fenced sample from **`contracts/test-fixtures.md`** (Himalayas section) or a copy under `internal/collectors/himalayas/testdata/`; asserts decode + at least one mapped **`domain.Job`** field subset (title, company, URL, `PostedAt` from Unix, `TimezoneOffsets`, `Remote` when excerpt/categories contain `remote`).
+
+4. [x] **Implement collector** — Definition of done: `internal/collectors/himalayas/` (or agreed package name) implements **`collectors.Collector`**; paginate browse and/or search per **`resources/himalayas.md`**; map JSON → **`domain.Job`** per **`domain-mapping-mvp.md`** (including **`RemoteMVPRule`** with **`excerpt`** + joined **`locationRestrictions`** as extra hints, same idea as DOU location hints); **`utils.CanonicalListingURL`** + **`AssignStableID`**; errors per **`collector.md`**.
+
+5. [x] **Unit tests — Himalayas** — Definition of done: **`httptest`** returns JSON body from fixtures — no live network; table-driven cases for browse pagination stop condition and one search page if both modes are implemented.
+
+6. [x] **Wire-up + debug HTTP** — Definition of done: `internal/collectors/bootstrap` registers Himalayas when configured; `handlers/debughttp` adds **`POST /debug/collectors/himalayas`** (or agreed path) + `handler.go` registration; optional JSON keys **`q`**, **`page`**, **`use_search`** (bool) / **`max_pages`** documented in **`contracts/debug-http-collectors.md`** and `schema/debug_http.go` if used.
+
+7. [x] **Inventory + spec glue** — Definition of done: after implementation verification, `contracts/sources-inventory.md` Notes unchanged unless wire changed; `spec.md` / `research.md` reference **`resources/himalayas.md`** in fetch/debug sections.

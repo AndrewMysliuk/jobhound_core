@@ -154,6 +154,34 @@ func (c *WorkingNomads) Fetch(ctx context.Context) ([]schema.Job, error) {
 	return all, nil
 }
 
+// FetchWithSlotSearch implements collectors.SlotSearchFetcher (Elasticsearch multi_match on listing fields).
+func (c *WorkingNomads) FetchWithSlotSearch(ctx context.Context, slotQuery string) ([]schema.Job, error) {
+	q := strings.TrimSpace(slotQuery)
+	if q == "" {
+		return c.Fetch(ctx)
+	}
+	type multiMatchBody struct {
+		MultiMatch struct {
+			Query    string   `json:"query"`
+			Fields   []string `json:"fields"`
+			Type     string   `json:"type"`
+			Operator string   `json:"operator"`
+		} `json:"multi_match"`
+	}
+	var body multiMatchBody
+	body.MultiMatch.Query = q
+	body.MultiMatch.Fields = []string{"title^2", "description", "tags", "all_tags", "category_name"}
+	body.MultiMatch.Type = "best_fields"
+	body.MultiMatch.Operator = "and"
+	raw, err := json.Marshal(body)
+	if err != nil {
+		return nil, fmt.Errorf("working nomads: slot search query: %w", err)
+	}
+	c2 := *c
+	c2.Query = json.RawMessage(raw)
+	return c2.Fetch(ctx)
+}
+
 func postJSON(ctx context.Context, client *http.Client, rawURL string, payload []byte) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, rawURL, bytes.NewReader(payload))
 	if err != nil {

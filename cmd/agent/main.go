@@ -17,6 +17,7 @@ import (
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/dou"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/europeremotely"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/handlers/debughttp"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/himalayas"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/workingnomads"
 	"github.com/andrewmysliuk/jobhound_core/internal/config"
 	llmmock "github.com/andrewmysliuk/jobhound_core/internal/llm/mock"
@@ -73,7 +74,7 @@ func main() {
 		return
 	}
 
-	er, wn, douColl, err := bootstrap.MVPCollectors(ctx, nil, appCfg.DataDir, appCfg.DouCollector)
+	er, wn, douColl, himColl, err := bootstrap.MVPCollectors(ctx, nil, appCfg.DataDir, appCfg.DouCollector, appCfg.HimalayasCollector)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
@@ -92,14 +93,18 @@ func main() {
 		if x, ok := douColl.(*dou.DOU); ok {
 			douConcrete = x
 		}
-		if err := runDebugHTTPServer(log, addr, er, wn, douColl, wnConcrete, erConcrete, douConcrete); err != nil {
+		var himConcrete *himalayas.Himalayas
+		if x, ok := himColl.(*himalayas.Himalayas); ok {
+			himConcrete = x
+		}
+		if err := runDebugHTTPServer(log, addr, er, wn, douColl, himColl, wnConcrete, erConcrete, douConcrete, himConcrete); err != nil {
 			log.Error().Err(err).Msg("debug http")
 			os.Exit(1)
 		}
 		return
 	}
 
-	coll := bootstrap.MVPMulti(er, wn, douColl, &log)
+	coll := bootstrap.MVPMulti(er, wn, douColl, himColl, &log)
 	p := &impl.Pipeline{
 		Collector: coll,
 		Scorer:    llmmock.Scorer{},
@@ -114,10 +119,10 @@ func main() {
 	fmt.Fprintln(os.Stderr, "jobhound_core: noop pipeline run ok")
 }
 
-func runDebugHTTPServer(log zerolog.Logger, addr string, europeRemotely, workingNomads, douUa collectors.Collector, workingNomadsConcrete *workingnomads.WorkingNomads, europeRemotelyConcrete *europeremotely.EuropeRemotely, douUaConcrete *dou.DOU) error {
+func runDebugHTTPServer(log zerolog.Logger, addr string, europeRemotely, workingNomads, douUa, himColl collectors.Collector, workingNomadsConcrete *workingnomads.WorkingNomads, europeRemotelyConcrete *europeremotely.EuropeRemotely, douUaConcrete *dou.DOU, himalayasConcrete *himalayas.Himalayas) error {
 	srv := &http.Server{
 		Addr:    addr,
-		Handler: debughttp.NewHTTPHandler(europeRemotely, workingNomads, douUa, workingNomadsConcrete, europeRemotelyConcrete, douUaConcrete, log),
+		Handler: debughttp.NewHTTPHandler(europeRemotely, workingNomads, douUa, himColl, workingNomadsConcrete, europeRemotelyConcrete, douUaConcrete, himalayasConcrete, log),
 	}
 
 	errCh := make(chan error, 1)
@@ -133,6 +138,7 @@ func runDebugHTTPServer(log zerolog.Logger, addr string, europeRemotely, working
 		Str("route_europe", debughttp.PathEuropeRemotely).
 		Str("route_working_nomads", debughttp.PathWorkingNomads).
 		Str("route_dou_ua", debughttp.PathDouUA).
+		Str("route_himalayas", debughttp.PathHimalayas).
 		Msg("debug http listening")
 
 	quit := make(chan os.Signal, 1)

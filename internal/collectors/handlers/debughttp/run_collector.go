@@ -10,13 +10,14 @@ import (
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/dou"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/europeremotely"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/himalayas"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/workingnomads"
 	"github.com/andrewmysliuk/jobhound_core/internal/domain/schema"
 	"github.com/andrewmysliuk/jobhound_core/internal/platform/logging"
 	"github.com/rs/zerolog"
 )
 
-func runCollectorDebug(w http.ResponseWriter, r *http.Request, logH zerolog.Logger, coll collectors.Collector, wnConcrete *workingnomads.WorkingNomads, erConcrete *europeremotely.EuropeRemotely, douConcrete *dou.DOU) {
+func runCollectorDebug(w http.ResponseWriter, r *http.Request, logH zerolog.Logger, coll collectors.Collector, wnConcrete *workingnomads.WorkingNomads, erConcrete *europeremotely.EuropeRemotely, douConcrete *dou.DOU, himConcrete *himalayas.Himalayas) {
 	if coll == nil {
 		logH.Error().Msg("collector not configured")
 		http.Error(w, "collector not configured", http.StatusInternalServerError)
@@ -56,6 +57,7 @@ func runCollectorDebug(w http.ResponseWriter, r *http.Request, logH zerolog.Logg
 	isWN := coll.Name() == workingnomads.SourceName && wnConcrete != nil
 	isER := coll.Name() == europeremotely.SourceName && erConcrete != nil
 	isDOU := coll.Name() == dou.SourceName && douConcrete != nil
+	isHim := coll.Name() == himalayas.SourceName && himConcrete != nil
 	switch {
 	case isWN:
 		c := *wnConcrete
@@ -84,6 +86,14 @@ func runCollectorDebug(w http.ResponseWriter, r *http.Request, logH zerolog.Logg
 		}
 		jobs, fetchErr = c.Fetch(ctx)
 		upstreamFetched = len(jobs)
+	case isHim:
+		c := *himConcrete
+		applyHimalayasOverrides(&req, &c)
+		if limit > 0 {
+			c.MaxFetchJobs = limit
+		}
+		jobs, fetchErr = c.Fetch(ctx)
+		upstreamFetched = len(jobs)
 	default:
 		jobs, fetchErr = coll.Fetch(ctx)
 		upstreamFetched = len(jobs)
@@ -108,7 +118,7 @@ func runCollectorDebug(w http.ResponseWriter, r *http.Request, logH zerolog.Logg
 		Collector: coll.Name(),
 		Count:     len(jobs),
 	}
-	if !isWN && !isER && !isDOU && upstreamFetched > len(jobs) {
+	if !isWN && !isER && !isDOU && !isHim && upstreamFetched > len(jobs) {
 		resp.UpstreamFetched = upstreamFetched
 	}
 

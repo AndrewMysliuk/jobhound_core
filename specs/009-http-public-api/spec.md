@@ -2,7 +2,7 @@
 
 **Feature Branch**: `009-http-public-api`  
 **Created**: 2026-03-29  
-**Last Updated**: 2026-04-04  
+**Last Updated**: 2026-04-10  
 **Status**: Draft  
 
 **Product narrative**: [`../000-epic-overview/product-concept-draft.md`](../000-epic-overview/product-concept-draft.md) — search **slot** as the unit of work, **§2** (hard delete; immutable broad string after first successful ingest — different broad → new slot), **§5** (resets when stage-2/3 rules or profile change), **§6** (MVP without auth; **`user_id`** reserved), **§7** (API-first).
@@ -22,7 +22,7 @@ Stage math, persistence, and Temporal remain **`002` / `004` / `006` / `007` / `
 3. **`POST …/stages/3/run`**: delete **stage 3 only**; recompute from the current stage-2 outcome. Body includes **`max_jobs`** (how many jobs from stage-2 **passed** to score in **this** run)—see below.
 4. **Concurrency guard**: at most **one** active run **per stage** (2 or 3) for a given `slot_id`. A second `POST` while that stage is **`running`** → **`409`** with code `stage_already_running`.
 5. **Slot cap**: at most **3** slots (MVP, single implicit user). Exceeding → **`409`**, code `slot_limit_reached`.
-6. **Ingest sources**: the client sends only **`name`** (broad string). **All** sources are the **backend-configured** set; there is **no** per-slot source filter in the API.
+6. **Ingest sources**: the client sends only **`name`** (non-empty trimmed string). That value is stored on the slot **and** used as the **stage-1 per-source search keyword**: each backend-configured collector runs its **native** search for that string when supported (`005` **`SlotSearchFetcher`** — see **`006`**). **All** sources are the **backend-configured** set; there is **no** per-slot source filter in the API.
 
 ## Conventions
 
@@ -111,6 +111,8 @@ Creates a slot and **immediately** starts **stage 1** (ingest).
   "name": "golang backend"
 }
 ```
+
+**Semantics**: **`name`** is the slot’s display label **and** the **search query** for stage-1 fetches: it is copied into **`ManualSlotRunWorkflowInput.SlotSearchQuery`** and then into each child **`IngestSourceInput.SlotSearchQuery`** so boards filter listings by this string (per-source wire details in **`005`** `collector.md`). It is **not** only metadata.
 
 **Response `201`**: same shape as **`GET /api/v1/slots/{slot_id}`** (full `stage_*` objects with timestamps as available).
 

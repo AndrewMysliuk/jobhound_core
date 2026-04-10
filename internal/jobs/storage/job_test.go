@@ -54,6 +54,18 @@ func stringSliceEqual(a, b []string) bool {
 	return true
 }
 
+func floatSliceEqual(a, b []float64) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
 func domainJobEqual(a, b schema.Job) bool {
 	if a.ID != b.ID || a.Source != b.Source || a.Title != b.Title || a.Company != b.Company ||
 		a.URL != b.URL || a.ApplyURL != b.ApplyURL || a.Description != b.Description ||
@@ -61,6 +73,9 @@ func domainJobEqual(a, b schema.Job) bool {
 		return false
 	}
 	if !stringSliceEqual(a.Tags, b.Tags) {
+		return false
+	}
+	if !floatSliceEqual(a.TimezoneOffsets, b.TimezoneOffsets) {
 		return false
 	}
 	if !strPtrEqual(a.Position, b.Position) {
@@ -161,6 +176,11 @@ func TestNewJobModel(t *testing.T) {
 			wantCountry: "",
 		},
 		{
+			name:        "timezone offsets json",
+			in:          schema.Job{TimezoneOffsets: []float64{5.5, -3.5}},
+			wantCountry: "",
+		},
+		{
 			name:       "user_id nil stays nil",
 			in:         schema.Job{UserID: nil},
 			wantUserID: nil,
@@ -204,6 +224,9 @@ func TestNewJobModel(t *testing.T) {
 			}
 			if !bytes.Equal(got.Tags, encodeJobTags(tc.in.Tags)) {
 				t.Fatalf("Tags: got %s want %s", got.Tags, encodeJobTags(tc.in.Tags))
+			}
+			if !bytes.Equal(got.TimezoneOffsets, encodeTimezoneOffsets(tc.in.TimezoneOffsets)) {
+				t.Fatalf("TimezoneOffsets: got %s want %s", got.TimezoneOffsets, encodeTimezoneOffsets(tc.in.TimezoneOffsets))
 			}
 			if !strPtrEqual(got.Position, tc.in.Position) {
 				t.Fatalf("Position: got %v want %v", got.Position, tc.in.Position)
@@ -268,10 +291,12 @@ func TestJob_ToDomain(t *testing.T) {
 			m: Job{
 				ID: "id1", Source: "src", Title: "t", Company: "co", URL: "https://list",
 				ApplyURL: &apply, Description: "desc", PostedAt: &posted, UserID: &uid,
+				TimezoneOffsets: encodeTimezoneOffsets([]float64{8}),
 			},
 			want: schema.Job{
 				ID: "id1", Source: "src", Title: "t", Company: "co", URL: "https://list",
 				ApplyURL: apply, Description: "desc", PostedAt: posted, UserID: &uid,
+				TimezoneOffsets: []float64{8},
 			},
 		},
 	}
@@ -341,6 +366,15 @@ func TestJobModel_roundTrip(t *testing.T) {
 			},
 			want: schema.Job{
 				ID: "j3", SalaryRaw: "€80k", Tags: []string{"go", "backend"}, Position: strPtr("backend"),
+			},
+		},
+		{
+			name: "timezone offsets",
+			in: schema.Job{
+				ID: "jtz", TimezoneOffsets: []float64{5.5},
+			},
+			want: schema.Job{
+				ID: "jtz", TimezoneOffsets: []float64{5.5},
 			},
 		},
 	}

@@ -1,4 +1,5 @@
 -- Consolidated initial schema (former 000001–000005): jobs, pipeline, watermarks, slots, slot_jobs, user_profile.
+-- jobs.timezone_offsets: 005 Himalayas / contracts/jobs-table-extension.md.
 -- See specs/002-postgres-gorm-migrations/contracts/jobs-schema.md,
 -- specs/006-cache-and-ingest/contracts/ingest-watermark-and-filter-key.md,
 -- specs/007-llm-policy-and-caps/contracts/pipeline-run-job-status.md (pipeline_run_jobs: stage2_status + optional stage3_status),
@@ -20,6 +21,7 @@ CREATE TABLE jobs (
     country_code TEXT NOT NULL DEFAULT '',
     salary_raw TEXT NOT NULL DEFAULT '',
     tags JSONB NOT NULL DEFAULT '[]'::jsonb,
+    timezone_offsets JSONB NOT NULL DEFAULT '[]'::jsonb,
     position TEXT,
     stage1_status TEXT
         CONSTRAINT jobs_stage1_status_check

@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"math"
 	"slices"
 	"strings"
 
@@ -29,7 +30,25 @@ func jobEqualForIngestSkip(a, b schema.Job) bool {
 	if !ptrEqualString(a.Stage1Status, b.Stage1Status) {
 		return false
 	}
-	return stringSliceEqualSorted(a.Tags, b.Tags)
+	if !stringSliceEqualSorted(a.Tags, b.Tags) {
+		return false
+	}
+	return float64SliceEqual(a.TimezoneOffsets, b.TimezoneOffsets)
+}
+
+func float64SliceEqual(a, b []float64) bool {
+	if len(a) == 0 && len(b) == 0 {
+		return true
+	}
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if math.Float64bits(a[i]) != math.Float64bits(b[i]) {
+			return false
+		}
+	}
+	return true
 }
 
 func ptrEqualString(a, b *string) bool {

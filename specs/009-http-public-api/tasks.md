@@ -48,7 +48,7 @@
 ## E. Slots endpoints
 
 1. [x] **`GET /api/v1/slots`** — Definition of done: returns all slots (≤ **3**); list items use compact **`stage_*`** (`state` only) per spec.  
-2. [x] **`POST /api/v1/slots`** — Definition of done: body **`name`** only; **creates** slot and **starts stage 1** ingest; response **201** matches full **`GET /slots/{id}`** shape; **409** `slot_limit_reached` with **`limit`: 3**.  
+2. [x] **`POST /api/v1/slots`** — Definition of done: body **`name`** only (non-empty trimmed); **creates** slot and **starts stage 1** ingest with **`SlotSearchQuery`** = that **`name`** per **`contracts/http-public-api.md`**; response **201** matches full **`GET /slots/{id}`** shape; **409** `slot_limit_reached` with **`limit`: 3**.  
 3. [x] **`GET /api/v1/slots/{slot_id}`** — Definition of done: **200** full card; **404** when missing.  
 4. [x] **`DELETE /api/v1/slots/{slot_id}`** — Definition of done: **204** hard delete; **404** when missing.  
 5. [x] **Tests** — Definition of done: table-driven tests for **404**, **409** cap, and happy path with mocked **`impl`**.

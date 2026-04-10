@@ -11,6 +11,7 @@ import (
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/bootstrap"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/dou"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/europeremotely"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/himalayas"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/workingnomads"
 	"github.com/andrewmysliuk/jobhound_core/internal/config"
 	"github.com/andrewmysliuk/jobhound_core/internal/ingest"
@@ -97,7 +98,7 @@ func main() {
 			ingestRedis = ingest.NewRedisCoordinatorWithTTL(rdb, appCfg.Ingest.LockTTLSeconds, appCfg.Ingest.CooldownTTLSeconds)
 			ingestWatermarks = ingest.NewGormWatermarkStore(getter)
 			bootCtx, bcancel := context.WithTimeout(context.Background(), 2*time.Minute)
-			er, wn, douColl, err := bootstrap.MVPCollectors(bootCtx, nil, appCfg.DataDir, appCfg.DouCollector)
+			er, wn, douColl, himColl, err := bootstrap.MVPCollectors(bootCtx, nil, appCfg.DataDir, appCfg.DouCollector, appCfg.HimalayasCollector)
 			bcancel()
 			if err != nil {
 				log.Error().Err(err).Msg("collectors bootstrap")
@@ -107,6 +108,9 @@ func main() {
 				ingest.NormalizeSourceID(europeremotely.SourceName): er,
 				ingest.NormalizeSourceID(workingnomads.SourceName):  wn,
 				ingest.NormalizeSourceID(dou.SourceName):            douColl,
+			}
+			if himColl != nil {
+				ingestCollectors[ingest.NormalizeSourceID(himalayas.SourceName)] = himColl
 			}
 			ingestExplicitRefresh = appCfg.Ingest.ExplicitRefresh
 		}

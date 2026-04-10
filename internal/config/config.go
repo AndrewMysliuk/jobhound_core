@@ -18,6 +18,8 @@ type Config struct {
 	DebugHTTPAddr string
 	// DouCollector configures the DOU.ua collector (005-job-collectors).
 	DouCollector DouCollectorConfig
+	// HimalayasCollector configures the Himalayas JSON collector (005-job-collectors).
+	HimalayasCollector HimalayasCollectorConfig
 
 	AnthropicAPIKey     string
 	AnthropicModel      string
@@ -37,15 +39,16 @@ func Load() Config {
 		model = DefaultAnthropicModel
 	}
 	return Config{
-		Database:        LoadDatabaseFromEnv(),
-		API:             LoadAPIFromEnv(),
-		Ingest:          LoadIngestFromEnv(),
-		Pipeline:        LoadPipelineFromEnv(),
-		Logging:         LoadLoggingFromEnv(),
-		DataDir:         loadDataDirFromEnv(),
-		DebugHTTPAddr:   loadDebugHTTPAddrFromEnv(),
-		DouCollector:    LoadDouCollectorFromEnv(),
-		AnthropicAPIKey: LoadAnthropicAPIKeyFromEnv(),
-		AnthropicModel:  model,
+		Database:           LoadDatabaseFromEnv(),
+		API:                LoadAPIFromEnv(),
+		Ingest:             LoadIngestFromEnv(),
+		Pipeline:           LoadPipelineFromEnv(),
+		Logging:            LoadLoggingFromEnv(),
+		DataDir:            loadDataDirFromEnv(),
+		DebugHTTPAddr:      loadDebugHTTPAddrFromEnv(),
+		DouCollector:       LoadDouCollectorFromEnv(),
+		HimalayasCollector: LoadHimalayasCollectorFromEnv(),
+		AnthropicAPIKey:    LoadAnthropicAPIKeyFromEnv(),
+		AnthropicModel:     model,
 	}
 }

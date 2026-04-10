@@ -11,6 +11,7 @@ import (
 
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/dou"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/europeremotely"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/himalayas"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/schema"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/workingnomads"
 )
@@ -76,6 +77,21 @@ func applyDouOverrides(req *schema.CollectorsPOSTBody, c *dou.DOU) {
 	}
 	if req.DouInterRequestDelayMs != nil {
 		c.InterRequestDelay = time.Duration(*req.DouInterRequestDelayMs) * time.Millisecond
+	}
+}
+
+func applyHimalayasOverrides(req *schema.CollectorsPOSTBody, c *himalayas.Himalayas) {
+	if req.Q != nil {
+		c.SearchQuery = strings.TrimSpace(*req.Q)
+	}
+	if req.Page != nil && *req.Page > 0 {
+		c.SearchStartPage = *req.Page
+	}
+	if req.UseSearch != nil {
+		c.UseSearch = *req.UseSearch
+	}
+	if req.MaxPages != nil {
+		c.MaxPages = *req.MaxPages
 	}
 }
 

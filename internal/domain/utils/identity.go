@@ -33,6 +33,7 @@ func NormalizeListingURL(raw string) (string, error) {
 	u.Scheme = strings.ToLower(u.Scheme)
 	u.Host = strings.ToLower(u.Host)
 	u.Fragment = ""
+	u.RawQuery = ""
 	if len(u.Path) > 1 && strings.HasSuffix(u.Path, "/") {
 		u.Path = strings.TrimSuffix(u.Path, "/")
 	}

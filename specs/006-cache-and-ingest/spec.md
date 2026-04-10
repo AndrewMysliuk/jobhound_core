@@ -2,7 +2,7 @@
 
 **Feature Branch**: `006-cache-and-ingest`  
 **Created**: 2026-03-29  
-**Last Updated**: 2026-04-02  
+**Last Updated**: 2026-04-10  
 **Status**: Draft
 
 **Product narrative**: [`../000-epic-overview/product-concept-draft.md`](../000-epic-overview/product-concept-draft.md) — search slots, stage-1 refresh vs filter resets, Redis keyed by `source_id`.
@@ -40,6 +40,12 @@ Define **when** ingest hits external collectors vs reads from Postgres, **increm
 
 - **Watermark** = **per `(slot_id, source_id)`** **cursor** stored in **PostgreSQL** (table **`ingest_watermarks`**) for “fetch only newer than X” when the collector supports it (`005`). Cursor value is **opaque** to this spec (`005` defines payload). Two slots hitting the **same** source **must not** share one cursor — each slot advances its own watermark.
 - Until a collector exposes incremental semantics, ingest follows that collector’s **full-fetch** behavior; the watermark row may exist with **`cursor` unused** for that pair.
+
+## Slot search query (`IngestSourceInput`)
+
+- **`RunIngestSource`** input includes optional **`SlotSearchQuery`** (trimmed string), propagated from **`008`** **`ManualSlotRunWorkflowInput.SlotSearchQuery`** (e.g. **`009`** slot **`name`** on create).
+- When **non-empty**, ingest calls **`005`** **`SlotSearchFetcher.FetchWithSlotSearch`** when implemented for that source, so the external board applies that string as a **native search** (see **`005`** `contracts/collector.md`). When **empty**, ingest uses **`Fetch`** / **`FetchIncremental`** as today.
+- **Interaction with incremental**: a **non-empty** **`SlotSearchQuery`** uses the **search-scoped** fetch path for that run, **not** the incremental watermark path (search results are not defined as a cursor continuation of an unscoped browse feed). When the query is **empty** and the collector implements **`IncrementalCollector`**, watermark semantics apply as documented above.
 
 ## Redis usage (v1, minimal)
 

@@ -1,7 +1,7 @@
 # Sources inventory (job collectors)
 
 **Spec**: `005-job-collectors`  
-**Last Updated**: 2026-04-09  
+**Last Updated**: 2026-04-10  
 **Status**: Draft
 
 ## Purpose
@@ -10,8 +10,8 @@ Single place for **which sites** we ingest from, **MVP vs later**, and **expecte
 
 ## Planned implementation order
 
-1. **MVP (shipped):** Europe Remotely, Working Nomads, DOU.ua — rows 1–3 below.
-2. **Then:** Himalayas, Djinni, Wellfound — exact sequence can move after per-site spikes (API vs HTML, rate limits).
+1. **MVP (shipped):** Europe Remotely, Working Nomads, DOU.ua, Himalayas — rows 1–4 below.
+2. **Then:** Djinni, Wellfound — exact sequence can move after per-site spikes (API vs HTML, rate limits).
 3. **Built In** — **before LinkedIn**: still usually browsable without login, but often heavy client-side rendering; confirm tier and wire in a spike.
 4. **LinkedIn Jobs** — **last**: session/cookies, fragile selectors, and the strictest operational constraints — treat as the final integration.
 
@@ -40,7 +40,7 @@ There is **no separate “public API tier”** in requirements: delivery is **HT
 | 1   | Europe Remotely ([euremotejobs.com](https://euremotejobs.com/)) | **MVP** | **T2** (fact) | `specs/005-job-collectors/resources/europe-remotely.md` — WP `admin-ajax.php` (`has_more` + HTML fragment), detail GET |
 | 2   | [Working Nomads](https://www.workingnomads.com/) | **MVP** | **T2** (fact) | `specs/005-job-collectors/resources/working-nomads.md` — `POST` `jobsapi/_search` (Elasticsearch JSON); listing + description from `_source`; canonical URL `https://www.workingnomads.com/jobs/{slug}` (`?job=` alias) |
 | 3   | [DOU.ua vacancies](https://jobs.dou.ua/vacancies/?descr=1) | **MVP** | **T2** (fact) | `specs/005-job-collectors/resources/dou.md` — `GET` listing (`search` + `descr=1`), `POST` `xhr-load` (CSRF + `count`) JSON `html` / `last` / `num`, detail `GET`; cookie jar + goquery |
-| 4   | [Himalayas](https://himalayas.app/jobs)          | Planned | T2 / T3                              | Public job browse without login; site also advertises a Remote jobs API — prefer documented API in spike if it fits product |
+| 4   | [Himalayas](https://himalayas.app/jobs)          | **MVP** | **T2 (fact)**                        | Public JSON API only (no RSC/HTML crawl): `GET` `https://himalayas.app/jobs/api` + `.../jobs/api/search` — see `specs/005-job-collectors/resources/himalayas.md` and [Remote Jobs API](https://himalayas.app/api); max **20** jobs per request on browse; rate limit **429** |
 | 5   | [Djinni](https://djinni.co/jobs/)                | Planned | T2 + session or T3                   | Auth / rate limits stronger than plain boards |
 | 6   | [Wellfound](https://wellfound.com/jobs)          | Planned | T3 + session                         | Dynamic UI + account flows for some actions |
 | 7   | [Built In](https://builtin.com/jobs)           | Planned | T2 / T3 (regional subsites)          | **Before LinkedIn** in rollout order; often heavy front-end |
@@ -60,5 +60,6 @@ After each **spike**, update **Tier (theory)** → **Tier (fact)** and **Notes**
 - `specs/005-job-collectors/resources/europe-remotely.md` — MVP source 1
 - `specs/005-job-collectors/resources/working-nomads.md` — MVP source 2 (`_search` JSON)
 - `specs/005-job-collectors/resources/dou.md` — MVP source 3 (HTML + xhr-load)
+- `specs/005-job-collectors/resources/himalayas.md` — MVP source 4 (public JSON API)
 - `.specify/memory/constitution.md` — `Collector` contract, `session.Provider` for headless
 

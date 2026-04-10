@@ -212,6 +212,17 @@ func (c *DOU) Fetch(ctx context.Context) ([]schema.Job, error) {
 	return jobs, nil
 }
 
+// FetchWithSlotSearch implements collectors.SlotSearchFetcher (overrides config Search).
+func (c *DOU) FetchWithSlotSearch(ctx context.Context, slotQuery string) ([]schema.Job, error) {
+	q := strings.TrimSpace(slotQuery)
+	if q == "" {
+		return c.Fetch(ctx)
+	}
+	c2 := *c
+	c2.Search = q
+	return c2.Fetch(ctx)
+}
+
 func (c *DOU) maxJobsEffective() int {
 	n := c.MaxJobs
 	if n <= 0 {

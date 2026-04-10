@@ -14,6 +14,7 @@ func TestNormalizeListingURL_equivalence(t *testing.T) {
 		"https://EXAMPLE.com/jobs/42",
 		"https://example.com/jobs/42/",
 		"https://example.com/jobs/42#section",
+		"https://example.com/jobs/42?ref=1",
 	}
 	for _, raw := range cases {
 		t.Run(raw, func(t *testing.T) {

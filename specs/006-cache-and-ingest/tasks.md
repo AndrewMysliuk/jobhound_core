@@ -38,7 +38,7 @@
 
 ## E. Collectors & orchestration
 
-1. [x] **Collector integration** — Definition of done: ingest activities call `005` collectors; respect lock/cooldown/refresh.
+1. [x] **Collector integration** — Definition of done: ingest activities call `005` collectors; respect lock/cooldown/refresh; when **`IngestSourceInput.SlotSearchQuery`** is set, call **`SlotSearchFetcher`** per **`006`** `spec.md` (section **Slot search query**).
 
 2. [x] **Temporal** — Definition of done: workflows/activities registered per `003` patterns; ingest entrypoints wired in `cmd/worker` as needed.
 

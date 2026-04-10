@@ -2,7 +2,7 @@
 
 **Feature Branch**: `008-manual-search-workflow`  
 **Created**: 2026-03-29  
-**Last Updated**: 2026-04-05  
+**Last Updated**: 2026-04-10  
 **Status**: Draft  
 
 **Product narrative**: [`../000-epic-overview/product-concept-draft.md`](../000-epic-overview/product-concept-draft.md) — **§2**–**§5** as updated with **`009`**; **§3** (repeat ingest on the same slot is **not** in public HTTP MVP—see **`009`**).
@@ -19,7 +19,7 @@ The outcome is a **stable request/response contract** (DTOs in module `schema/`)
 
 ## Product model (UI vs engine)
 
-- **Three user-visible phases**: (1) pull listings per **backend-configured** sources (client supplies only the broad keyword string on slot create—**`009`**), (2) include/exclude filters → passed / not passed, (3) LLM scoring → passed / not passed. The backend may add identifiers (`pipeline_run_id`, Temporal ids, etc.).
+- **Three user-visible phases**: (1) pull listings per **backend-configured** sources using the slot **`name`** as the **per-source search query** on create (**`009`** → **`SlotSearchQuery`** → **`005`** / **`006`**), (2) include/exclude filters → passed / not passed, (3) LLM scoring → passed / not passed. The backend may add identifiers (`pipeline_run_id`, Temporal ids, etc.).
 - **HTTP MVP (`009`)**: create slot → **stage 1** runs once; client then **`POST …/stages/2/run`** (invalidates 2+3, recomputes **2 only**), then **`POST …/stages/3/run`** with **`max_jobs`** when ready. A single parent workflow that runs **1 → 2 → 3** in one shot is **not** the default public API shape; it may still be used from **CLI/tests** via composite run kinds.
 - **Parallelism**: fetches to **different sources are independent**—run **in parallel** (e.g. one child `IngestSourceWorkflow` per `source_id`). Scaling to many sources does not require sequential crawling.
 

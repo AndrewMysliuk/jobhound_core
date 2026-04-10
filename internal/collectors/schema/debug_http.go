@@ -19,4 +19,12 @@ type CollectorsPOSTBody struct {
 	Search *string `json:"search,omitempty"`
 	// DOU.ua: inter-request delay override in milliseconds (ignored on other routes).
 	DouInterRequestDelayMs *int `json:"dou_inter_request_delay_ms,omitempty"`
+	// Himalayas: search free-text q (ignored on other routes).
+	Q *string `json:"q,omitempty"`
+	// Himalayas: 1-based search page (ignored on other routes).
+	Page *int `json:"page,omitempty"`
+	// Himalayas: use /jobs/api/search instead of browse (ignored on other routes).
+	UseSearch *bool `json:"use_search,omitempty"`
+	// Himalayas: cap HTTP pages per run (ignored on other routes).
+	MaxPages *int `json:"max_pages,omitempty"`
 }

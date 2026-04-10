@@ -137,7 +137,46 @@ Hidden CSRF + one `li.l-vacancy` per `../resources/dou.md`:
 
 ---
 
+## Himalayas — `/jobs/api/search` response (minimal)
+
+Shape per `../resources/himalayas.md` (envelope + one job; field names camelCase as in live API):
+
+```json
+{
+  "comments": "fixture",
+  "updatedAt": 1775215868,
+  "offset": 0,
+  "limit": 20,
+  "totalCount": 2,
+  "jobs": [
+    {
+      "title": "Software Engineer - Vue.JS - Offshore",
+      "excerpt": "Vue JS experience and remote collaboration.",
+      "companyName": "Photon Interactive UK Limited",
+      "companySlug": "photon-interactive-uk-limited",
+      "companyLogo": "https://cdn-images.himalayas.app/example",
+      "employmentType": "Full Time",
+      "minSalary": null,
+      "maxSalary": null,
+      "seniority": ["Mid-level", "Senior"],
+      "currency": "USD",
+      "locationRestrictions": ["India"],
+      "timezoneRestrictions": [5.5],
+      "categories": ["Remote-Software-Engineer", "Software-Engineer"],
+      "parentCategories": ["Developer"],
+      "description": "<p>Build web apps. Originally posted on <a href=\"https://himalayas.app\">Himalayas</a></p>",
+      "pubDate": 1774053663,
+      "expiryDate": 1775873930,
+      "applicationLink": "https://himalayas.app/companies/photon-interactive-uk-limited/jobs/software-engineer-vue-js-offshore",
+      "guid": "https://himalayas.app/companies/photon-interactive-uk-limited/jobs/software-engineer-vue-js-offshore"
+    }
+  ]
+}
+```
+
+---
+
 ## Related
 
-- `../resources/europe-remotely.md`, `../resources/working-nomads.md`, `../resources/dou.md`
+- `../resources/europe-remotely.md`, `../resources/working-nomads.md`, `../resources/dou.md`, `../resources/himalayas.md`
 - `collector.md`

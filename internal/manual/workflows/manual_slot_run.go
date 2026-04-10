@@ -155,9 +155,10 @@ func runParallelIngest(ctx workflow.Context, agg *manualschema.ManualSlotRunAggr
 			WorkflowTaskTimeout: time.Minute,
 		})
 		inIngest := ingestschema.IngestSourceInput{
-			SlotID:          in.SlotID,
-			SourceID:        src,
-			ExplicitRefresh: explicitRefresh,
+			SlotID:            in.SlotID,
+			SourceID:          src,
+			ExplicitRefresh:   explicitRefresh,
+			SlotSearchQuery:   in.SlotSearchQuery,
 		}
 		futures[i] = workflow.ExecuteChildWorkflow(childCtx, ingest_workflows.IngestSourceWorkflowName, inIngest)
 	}

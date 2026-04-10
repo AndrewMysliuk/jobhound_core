@@ -2,7 +2,7 @@
 
 **Feature Branch**: `005-job-collectors`  
 **Created**: 2026-03-29  
-**Last Updated**: 2026-04-09  
+**Last Updated**: 2026-04-10  
 **Status**: Implemented
 
 ## Goal
@@ -13,7 +13,7 @@ Per-source **`Collector`** implementations **fetch** listings and **normalize** 
 
 **Source of truth**: [`specs/000-epic-overview/product-concept-draft.md`](../000-epic-overview/product-concept-draft.md) — search slots, stage-1 broad ingest, reset rules, and multi-user **reservations** in schema.
 
-- **This epic** owns **HTTP fetch + normalization per board** (`pipeline.Collector`). It does **not** own **slot** lifecycle, the **immutable stage-1 broad keyword string**, **bound sources per slot**, **upsert**, **watermarks / delta refresh**, or **Redis ingest coordination** — those are **`006`** (and API shapes in **`008` / `009`** when implemented).
+- **This epic** owns **HTTP fetch + normalization per board** (`internal/collectors.Collector` and optional **`SlotSearchFetcher`** — see **`contracts/collector.md`**). It does **not** own **slot** lifecycle, **bound sources per slot**, **upsert**, **watermarks / delta refresh**, or **Redis ingest coordination** — those are **`006`** (and API shapes in **`008` / `009`**). The **slot keyword string** for stage-1 search is chosen by the client (**`009`** **`name`**) and passed into ingest as **`SlotSearchQuery`**; collectors implement **`FetchWithSlotSearch`** where the board supports it.
 - **Orchestration** may run **one collector per bound source in parallel** for a slot’s stage-1 run; **failure of one source does not cancel others** unless a higher-level workflow defines otherwise — see **`contracts/collector.md`**.
 - **`Job.UserID`** is **not** filled from site HTML/API by MVP collectors; orchestration/persistence may set it when writing **slot-scoped** rows (see **`contracts/domain-mapping-mvp.md`**).
 
@@ -27,20 +27,20 @@ Canonical **MVP normalization and error policy** (description text, `Remote`, `P
 
 - **`internal/collectors/`** — one package (or subtree) per source.
 - **`internal/collectors/utils`** — shared HTTP, `data/countries.json` matching, dates, URL normalization.
-- **`internal/pipeline`** — calls **`pipeline.Collector`** only; **no** site-specific parsing there.
+- **`internal/pipeline`** — stage logic only; **no** site-specific parsing there. **`internal/ingest`** wires **`005`** collectors.
 
 Details: **`contracts/collector.md`**.
 
 ## Pagination (MVP)
 
-Listing UIs use buttons such as **“Load more”** / **“Show more jobs”**; the collector **does not** drive a browser. It repeats the same **HTTP** calls the UI uses (**`admin-ajax.php`** + `has_more` for Europe Remotely; **`jobsapi/_search`** with `from` / `size` for Working Nomads; **`xhr-load`** + `last` for DOU.ua). See **`resources/europe-remotely.md`**, **`resources/working-nomads.md`**, and **`resources/dou.md`**.
+Listing UIs use buttons such as **“Load more”** / **“Show more jobs”**; the collector **does not** drive a browser. It repeats the same **HTTP** calls the UI uses (**`admin-ajax.php`** + `has_more` for Europe Remotely; **`jobsapi/_search`** with `from` / `size` for Working Nomads; **`xhr-load`** + `last` for DOU.ua; **public JSON** `jobs/api` + `jobs/api/search` for Himalayas — no RSC). See **`resources/europe-remotely.md`**, **`resources/working-nomads.md`**, **`resources/dou.md`**, and **`resources/himalayas.md`**.
 
 ## Sources
 
 Canonical list in **`contracts/sources-inventory.md`**.
 
-- **MVP:** Europe Remotely, Working Nomads, DOU.ua.
-- **Planned:** five further rows in the inventory; **rollout order** (Built In before LinkedIn, LinkedIn last) is in **`contracts/sources-inventory.md`** § Planned implementation order.
+- **MVP:** Europe Remotely, Working Nomads, DOU.ua, Himalayas (**`resources/himalayas.md`**).
+- **Planned:** further rows in the inventory (Djinni, Wellfound, …); **rollout order** (Built In before LinkedIn, LinkedIn last) is in **`contracts/sources-inventory.md`** § Planned implementation order.
 
 **Remote OK** is out of scope (inventory).
 
@@ -49,16 +49,17 @@ Canonical list in **`contracts/sources-inventory.md`**.
 - **Europe Remotely:** `POST` `admin-ajax.php` JSON (`has_more` + HTML fragment) + job detail **`GET`** — **T2**. A **captured request body** from browser DevTools should be recorded in **`resources/europe-remotely.md`** when available (`action`, filters, pagination fields).
 - **Working Nomads:** `POST` `jobsapi/_search` JSON — **T2**; HTML shell not required for core fields.
 - **DOU.ua:** `GET` listing + `POST` `xhr-load` JSON (`html` / `last` / `num`) + detail **`GET`** — **T2**; cookie jar for CSRF.
+- **Himalayas:** `GET` **`/jobs/api`** and **`/jobs/api/search`** — **T2**; JSON only (see **`resources/himalayas.md`**; `internal/collectors/himalayas`).
 - **Rod:** only when a source cannot be served without JS/session.
 
 ## Normalized fields
 
-MVP mapping and planned **`SalaryRaw` / `Tags` / `Position`**: **`contracts/domain-mapping-mvp.md`**.  
+MVP mapping and planned **`SalaryRaw` / `Tags` / `Position` / `TimezoneOffsets`**: **`contracts/domain-mapping-mvp.md`**.  
 Persistence extension for **`jobs`**: **`contracts/jobs-table-extension.md`**.
 
 ## Temporary debug HTTP (before `009`)
 
-To manually verify collectors without the public API spec, a **local-only** debug server lives under **`cmd/agent`**: flag **`-debug-http-addr`** or env **`JOBHOUND_DEBUG_HTTP_ADDR`** (see **`contracts/environment.md`**). It serves **`GET /health`** and **one POST route per MVP source** — `POST /debug/collectors/europe_remotely`, `POST /debug/collectors/working_nomads`, and `POST /debug/collectors/dou_ua` — so each site can be exercised in isolation (e.g. Postman, curl). It is **not** the product HTTP API; **`specs/009-http-public-api`** remains the contract for public endpoints. Do not expose debug routes in production builds.
+To manually verify collectors without the public API spec, a **local-only** debug server lives under **`cmd/agent`**: flag **`-debug-http-addr`** or env **`JOBHOUND_DEBUG_HTTP_ADDR`** (see **`contracts/environment.md`**). It serves **`GET /health`** and **one POST route per wired source** — `POST /debug/collectors/europe_remotely`, `POST /debug/collectors/working_nomads`, `POST /debug/collectors/dou_ua`, and **`POST /debug/collectors/himalayas`** — so each site can be exercised in isolation (e.g. Postman, curl). It is **not** the product HTTP API; **`specs/009-http-public-api`** remains the contract for public endpoints. Do not expose debug routes in production builds.
 
 **Implementation**: `internal/collectors/handlers/debughttp`.
 
@@ -99,7 +100,7 @@ Example:
 
 - **`ok`**, **`collector`** (source name), **`count`** — length of **`jobs`** in this response.
 - **`upstream_fetched`** — optional; set only when Europe Remotely (or another path that full-fetches then truncates) returned more rows than JSON `limit` after a full fetch.
-- **`jobs`** — array of normalized vacancies: all MVP **`domain.Job`** fields exposed for debugging: `id`, `source`, `title`, `company`, `url`, `apply_url`, `description`, `posted_at` (RFC3339nano, UTC, if known), `remote`, `country_code`, `salary_raw`, `tags`, `position`, `user_id`. This is for human verification of **`contracts/domain-mapping-mvp.md`** mapping, not the public API schema.
+- **`jobs`** — array of normalized vacancies: all MVP **`domain.Job`** fields exposed for debugging: `id`, `source`, `title`, `company`, `url`, `apply_url`, `description`, `posted_at` (RFC3339nano, UTC, if known), `remote`, `country_code`, `salary_raw`, `tags`, `position`, `timezone_offsets` (when present), `user_id`. This is for human verification of **`contracts/domain-mapping-mvp.md`** mapping, not the public API schema.
 
 Working Nomads **`query` / `sort` / `page_size` / `_source`** are documented above as part of the **same** JSON object as `limit`. See **`resources/working-nomads.md`** for the site wire format; request field types and date examples: **`contracts/debug-http-collectors.md`**. **Pipeline** date/keyword rules remain **`specs/004-pipeline-stages`**; this body only exercises **site-side** filters.
 
@@ -134,7 +135,7 @@ Offline: **`httptest`** + bodies from **`contracts/test-fixtures.md`** (or copie
 
 ## Acceptance criteria
 
-1. **Europe Remotely**, **Working Nomads**, and **DOU.ua** each implement **`pipeline.Collector`**, with **`Name()`** / **`Fetch`** semantics per **`contracts/collector.md`** and normalization per **`contracts/domain-mapping-mvp.md`**.
+1. **Europe Remotely**, **Working Nomads**, **DOU.ua**, and **Himalayas** each implement **`collectors.Collector`** (wired from **`internal/pipeline`**), with **`Name()`** / **`Fetch`** semantics per **`contracts/collector.md`** and normalization per **`contracts/domain-mapping-mvp.md`**.
 2. **No HTTP retries**; failures surface as **`error`** per collector contract (with Europe **date** soft-fail rule where specified).
 3. **Unit tests** cover parsing/mapping using **`contracts/test-fixtures.md`** (or `testdata/` copies) — **no mandatory live network** for **`go test ./...`**; details in **`tasks.md`** sections D.2 and E.2.
 4. Site-specific HTTP and DOM/JSON shapes stay in **`internal/collectors/...`**; **`internal/pipeline`** does not import per-site parsers.
@@ -144,13 +145,13 @@ Offline: **`httptest`** + bodies from **`contracts/test-fixtures.md`** (or copie
 
 - [`specs/000-epic-overview/product-concept-draft.md`](../000-epic-overview/product-concept-draft.md) — global MVP behavior (slots, stage 1–3, resets)
 - `contracts/collector.md` — boundary + errors + `Job.Source` strings
-- `contracts/domain-mapping-mvp.md` — Europe Remotely + Working Nomads + DOU.ua → `Job`
+- `contracts/domain-mapping-mvp.md` — Europe Remotely + Working Nomads + DOU.ua + Himalayas → `Job`
 - `contracts/jobs-table-extension.md` — optional SQL columns
 - `contracts/test-fixtures.md` — fenced sample bodies
 - `contracts/sources-inventory.md`
 - `contracts/environment.md` — T3 env placeholder
 - `contracts/debug-http-collectors.md` — debug POST JSON types + date `query` examples
-- `resources/europe-remotely.md`, `resources/working-nomads.md`, `resources/dou.md`
+- `resources/europe-remotely.md`, `resources/working-nomads.md`, `resources/dou.md`, `resources/himalayas.md`
 - `plan.md`, `tasks.md`, `research.md`, `checklists/requirements.md`
 - `specs/000-epic-overview/spec.md`, `.specify/memory/constitution.md`
 - `specs/004-pipeline-stages/spec.md` — consumes normalized `Job`

@@ -4,6 +4,7 @@ package ingest_activities
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors"
@@ -77,7 +78,22 @@ func (a *IngestActivities) RunIngestSource(ctx context.Context, in ingestschema.
 	var list []schema.Job
 	var usedIncr bool
 	var nextCursor string
-	if inc, ok := col.(collectors.IncrementalCollector); ok {
+	slotQ := strings.TrimSpace(in.SlotSearchQuery)
+	if slotQ != "" {
+		if sf, ok := col.(collectors.SlotSearchFetcher); ok {
+			list, err = sf.FetchWithSlotSearch(ctx, slotQ)
+			if err != nil {
+				log.Error().Err(err).Msg("fetch with slot search")
+				return nil, err
+			}
+		} else {
+			list, err = col.Fetch(ctx)
+			if err != nil {
+				log.Error().Err(err).Msg("fetch")
+				return nil, err
+			}
+		}
+	} else if inc, ok := col.(collectors.IncrementalCollector); ok {
 		usedIncr = true
 		cur, err := a.Watermarks.GetCursor(ctx, in.SlotID, id)
 		if err != nil {

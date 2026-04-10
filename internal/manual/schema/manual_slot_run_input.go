@@ -20,6 +20,9 @@ type ManualSlotRunWorkflowInput struct {
 	// RunKindDeltaIngestThenPipeline which forces false (006 incremental path).
 	ExplicitRefresh bool
 
+	// SlotSearchQuery is passed to each IngestSourceWorkflow child (ingest: per-source job search).
+	SlotSearchQuery string
+
 	BroadRules   pipeline.BroadFilterRules
 	KeywordRules pipeline.KeywordRules
 	// BroadFilterKeyHash optional SHA-256 hex persisted on pipeline_runs when stage 2 runs (006).

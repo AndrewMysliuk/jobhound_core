@@ -20,6 +20,7 @@ Freeze **routes**, **status codes**, **error `code` strings**, **JSON field name
 | CORS | Required; allowed origins from config — [`environment.md`](./environment.md). |
 | Slot cap | **≤ 3** slots (single implicit user). |
 | `POST /slots` idempotency | Required header **`Idempotency-Key`**: non-nil **UUID** string. Same key + same `name` → **200** with the same slot card (no second workflow). Same key + different `name` → **409** `idempotency_key_conflict`. |
+| **`name` at slot create** | Stored as the slot label **and** passed to stage-1 ingest as **`SlotSearchQuery`** (trimmed): each configured source runs a **source-native job search** when the collector supports it (`005` **`SlotSearchFetcher`**). Empty `name` after trim is invalid (**400**). |
 | Stage 1 re-run | **No** HTTP path to re-start ingest for an **existing** `slot_id`; only **`POST /slots`** starts stage 1 for a **new** slot. |
 
 ### 2.1 Error envelope (all non-2xx JSON errors)
@@ -70,7 +71,7 @@ Freeze **routes**, **status codes**, **error `code` strings**, **JSON field name
 | Method | Path | Success | Notes |
 |--------|------|---------|--------|
 | `GET` | `/api/v1/slots` | **200** | No pagination; max 3 items. |
-| `POST` | `/api/v1/slots` | **201** or **200** | Header **`Idempotency-Key`** (UUID). Body **`{ "name": string }`**. **201** first create (starts stage 1 ingest); **200** idempotent replay (same key + same name). |
+| `POST` | `/api/v1/slots` | **201** or **200** | Header **`Idempotency-Key`** (UUID). Body **`{ "name": string }`**: non-empty after trim; used as **per-source search keyword** for stage-1 ingest (see §2). **201** first create (starts stage 1 ingest); **200** idempotent replay (same key + same name). |
 | `GET` | `/api/v1/slots/{slot_id}` | **200** | Full slot card. |
 | `DELETE` | `/api/v1/slots/{slot_id}` | **204** | Hard delete; empty body. |
 | `GET` | `/api/v1/profile` | **200** | Global stage-3 profile text. |
@@ -95,7 +96,7 @@ List item:
 | Field | Type | Notes |
 |-------|------|--------|
 | `id` | string | `slot_id` |
-| `name` | string | Broad string from client |
+| `name` | string | Slot label and **stage-1 search query** (same value as sent on create; see §2). |
 | `created_at` | string (RFC3339) | |
 | `stage_1` | object | At least **`state`**. |
 | `stage_2` | object | At least **`state`**. |
@@ -208,7 +209,7 @@ Add more stable codes as needed (e.g. `invalid_page`); prefer reusing **400** wi
 
 | HTTP | Run kind (`manual-workflow.md` §3) | Notes |
 |------|-----------------------------------|--------|
-| **`POST /api/v1/slots`** | **`INGEST_SOURCES`** | Parallel ingest per configured source; **`name`** only from client; sources from backend config. |
+| **`POST /api/v1/slots`** | **`INGEST_SOURCES`** | Parallel ingest per configured source; workflow input includes **`SlotSearchQuery`** = trimmed **`name`**; each **`IngestSourceWorkflow`** gets **`IngestSourceInput.SlotSearchQuery`** (see **`008`** / **`006`**). Sources from backend config. |
 | **`POST …/stages/2/run`** | **`PIPELINE_STAGE2`** | Pass **`include`**, **`exclude`** into workflow input per `internal/manual/schema`. |
 | **`POST …/stages/3/run`** | **`PIPELINE_STAGE3`** | Pass **`max_jobs`** (effective batch after min with policy). |
 
@@ -222,4 +223,6 @@ Add more stable codes as needed (e.g. `invalid_page`); prefer reusing **400** wi
 - [`../plan.md`](../plan.md), [`../tasks.md`](../tasks.md)  
 - [`../../008-manual-search-workflow/contracts/manual-workflow.md`](../../008-manual-search-workflow/contracts/manual-workflow.md)  
 - [`../../008-manual-search-workflow/contracts/filter-invalidation.md`](../../008-manual-search-workflow/contracts/filter-invalidation.md)  
+- [`../../006-cache-and-ingest/spec.md`](../../006-cache-and-ingest/spec.md) — ingest **`SlotSearchQuery`** / incremental interaction  
+- [`../../005-job-collectors/contracts/collector.md`](../../005-job-collectors/contracts/collector.md) — **`SlotSearchFetcher`**  
 - [`./environment.md`](./environment.md)

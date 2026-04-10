@@ -21,7 +21,7 @@ Logical **run kind** selects which steps execute. Go names are implementation de
 
 | Run kind (logical) | Stage-1 ingest | Stage 2 (snapshot) | Stage 3 (snapshot) | Notes |
 |--------------------|----------------|--------------------|---------------------|--------|
-| `INGEST_SOURCES` | Yes, **parallel** per `source_id` | No | No | **`006`** lock / cooldown / watermarks; **`IngestSourceInput.SlotID`** required; writes **`slot_jobs`** + **`PASSED_STAGE_1`** where applicable. Used when **`009`** creates a slot (HTTP does **not** expose re-ingest on the same `slot_id`). |
+| `INGEST_SOURCES` | Yes, **parallel** per `source_id` | No | No | **`006`** lock / cooldown / watermarks; **`IngestSourceInput.SlotID`** required; **`IngestSourceInput.SlotSearchQuery`** optional (trimmed). When set (e.g. **`009`** slot **`name`**), ingest uses **`005`** **`SlotSearchFetcher`** per source so listings are **search-scoped**; when empty, default **`Fetch`** / incremental path. Writes **`slot_jobs`** + **`PASSED_STAGE_1`** where applicable. Used when **`009`** creates a slot (HTTP does **not** expose re-ingest on the same `slot_id`). |
 | `PIPELINE_STAGE2` | No | Yes | No | Pool = **`slot_jobs`** ∩ **`jobs`** with **`stage1_status = PASSED_STAGE_1`**. Produces stage-2 pass/fail snapshot. **`009`**: maps to **`POST …/stages/2/run`**; wipes stages **2+3** first; does **not** start stage 3. |
 | `PIPELINE_STAGE3` | No | No | Yes | Pool = **`PASSED_STAGE_2`** for the active **`pipeline_run_id`**. LLM batch: up to **`max_jobs`** (HTTP: **1–100** from **`009`**; **`007`** may cap further—use **min** of policy and request). Order: **`posted_at`** DESC, **`job_id`** ASC. |
 | `PIPELINE_STAGE2_THEN_STAGE3` | No | Yes | Yes | After stage 2 completes, run stage 3 on the new stage-2 snapshot. For **CLI/tests** or future product; **not** the default **`009`** flow (client calls stage 2 and 3 separately). |
@@ -51,8 +51,8 @@ Logical **run kind** selects which steps execute. Go names are implementation de
 
 ### 4.2 Parent “manual slot run” workflow (implemented)
 
-1. Input: **`slot_id`**, optional **`user_id`**, **run kind**, parameters (sources, `ExplicitRefresh`, **`004`** rules **`include`/`exclude`** for stage 2, profile text, **`max_jobs`** for stage 3 from HTTP, optional **`pipeline_run_id`** for stage-3-only).
-2. **Ingest kinds**: start **child** `IngestSourceWorkflow` per `source_id` **in parallel**; aggregate per-source outputs.
+1. Input: **`slot_id`**, optional **`user_id`**, **run kind**, parameters (sources, `ExplicitRefresh`, **`SlotSearchQuery`** (trimmed; **`009`** copies slot **`name`** here on create; empty = unscoped default fetch per collector / **`006`**), **`004`** rules **`include`/`exclude`** for stage 2, profile text, **`max_jobs`** for stage 3 from HTTP, optional **`pipeline_run_id`** for stage-3-only).
+2. **Ingest kinds**: start **child** `IngestSourceWorkflow` per `source_id` **in parallel**; each child payload includes the same **`SlotSearchQuery`** as the parent when set; aggregate per-source outputs.
 3. When stage 2 or 3 runs: **`CreateRun(ctx, &slotID)`** when a new **`pipeline_runs`** row is required; pass **`pipeline_run_id`** into stage-2 and/or stage-3 units as defined by **`007`**.
 4. **Order**: stage 2 **before** stage 3 when both run in one parent execution.
 5. Aggregate counts/errors (§5); return Temporal **workflow id** / **run id** and **`pipeline_run_id`** when created.
@@ -102,7 +102,7 @@ JSON tags are defined on `internal/manual/schema.ManualSlotRunAggregate` and nes
 
 | Item | Status |
 |------|--------|
-| **`IngestSourceWorkflow`** + **`RunIngestSource`** | **Implemented** — per-job **`slot_jobs`** row after **`SaveIngest`**; **`jobs.stage1_status = PASSED_STAGE_1`** set only via **`SaveIngest`** (006/007). |
+| **`IngestSourceWorkflow`** + **`RunIngestSource`** | **Implemented** — per-job **`slot_jobs`** row after **`SaveIngest`**; **`jobs.stage1_status = PASSED_STAGE_1`** set only via **`SaveIngest`** (006/007); **`SlotSearchQuery`** on ingest input + **`005`** **`SlotSearchFetcher`** when non-empty. |
 | **`slot_jobs` table + GORM model** | **Implemented** — migration **`000002`**, **`internal/jobs/storage.SlotJob`**, **`ListSlotJobsPassedStage1`** / **`UpsertSlotJob`** (§6). |
 | **Separate stage-2 and stage-3 Temporal units** | **Implemented** — **`PersistPipelineStage2Activity`** / **`PersistPipelineStage3Activity`**. |
 | **Parent manual slot workflow** | **Implemented** — **`ManualSlotRunWorkflow`** (`internal/manual/workflows`). |
@@ -116,4 +116,6 @@ JSON tags are defined on `internal/manual/schema.ManualSlotRunAggregate` and nes
 - [`../../003-temporal-orchestration/contracts/environment.md`](../../003-temporal-orchestration/contracts/environment.md)
 - [`../../004-pipeline-stages/contracts/pipeline-stages.md`](../../004-pipeline-stages/contracts/pipeline-stages.md)
 - [`../../006-cache-and-ingest/contracts/redis-ingest-coordination.md`](../../006-cache-and-ingest/contracts/redis-ingest-coordination.md)
+- [`../../006-cache-and-ingest/spec.md`](../../006-cache-and-ingest/spec.md) — slot search query + incremental interaction
+- [`../../005-job-collectors/contracts/collector.md`](../../005-job-collectors/contracts/collector.md) — **`SlotSearchFetcher`**
 - [`../../007-llm-policy-and-caps/contracts/pipeline-run-job-status.md`](../../007-llm-policy-and-caps/contracts/pipeline-run-job-status.md)

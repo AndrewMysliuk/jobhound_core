@@ -40,7 +40,7 @@ func (s stubCollector) Fetch(context.Context) ([]schema.Job, error) {
 
 func TestHealth(t *testing.T) {
 	t.Parallel()
-	srv := httptest.NewServer(NewHTTPHandler(stubCollector{name: "europe_remotely"}, stubCollector{name: "working_nomads"}, stubCollector{name: "dou_ua"}, nil, nil, nil, zerolog.Nop()))
+	srv := httptest.NewServer(NewHTTPHandler(stubCollector{name: "europe_remotely"}, stubCollector{name: "working_nomads"}, stubCollector{name: "dou_ua"}, stubCollector{name: "himalayas"}, nil, nil, nil, nil, zerolog.Nop()))
 	t.Cleanup(srv.Close)
 	res, err := http.Get(srv.URL + "/health")
 	if err != nil {
@@ -68,7 +68,7 @@ func TestEuropeRemotely_ok(t *testing.T) {
 		},
 	}
 	wn := stubCollector{name: "working_nomads"}
-	srv := httptest.NewServer(NewHTTPHandler(er, wn, stubCollector{name: "dou_ua"}, nil, nil, nil, zerolog.Nop()))
+	srv := httptest.NewServer(NewHTTPHandler(er, wn, stubCollector{name: "dou_ua"}, stubCollector{name: "himalayas"}, nil, nil, nil, nil, zerolog.Nop()))
 	t.Cleanup(srv.Close)
 	res, err := http.Post(srv.URL+"/debug/collectors/europe_remotely", "application/json", strings.NewReader(`{"limit":0}`))
 	if err != nil {
@@ -100,7 +100,7 @@ func TestWorkingNomads_ok(t *testing.T) {
 			{ID: "c", Title: "T3", Source: "working_nomads"},
 		},
 	}
-	srv := httptest.NewServer(NewHTTPHandler(er, wn, stubCollector{name: "dou_ua"}, nil, nil, nil, zerolog.Nop()))
+	srv := httptest.NewServer(NewHTTPHandler(er, wn, stubCollector{name: "dou_ua"}, stubCollector{name: "himalayas"}, nil, nil, nil, nil, zerolog.Nop()))
 	t.Cleanup(srv.Close)
 	res, err := http.Post(srv.URL+"/debug/collectors/working_nomads", "application/json", strings.NewReader(`{"limit":0}`))
 	if err != nil {
@@ -129,7 +129,7 @@ func TestDouUA_ok(t *testing.T) {
 			{ID: "d1", Title: "DOU T", Source: "dou_ua"},
 		},
 	}
-	srv := httptest.NewServer(NewHTTPHandler(er, wn, du, nil, nil, nil, zerolog.Nop()))
+	srv := httptest.NewServer(NewHTTPHandler(er, wn, du, stubCollector{name: "himalayas"}, nil, nil, nil, nil, zerolog.Nop()))
 	t.Cleanup(srv.Close)
 	res, err := http.Post(srv.URL+"/debug/collectors/dou_ua", "application/json", strings.NewReader(`{"limit":0}`))
 	if err != nil {
@@ -152,7 +152,7 @@ func TestEuropeRemotely_fetchError(t *testing.T) {
 	t.Parallel()
 	er := stubCollector{name: "europe_remotely", err: errors.New("boom")}
 	wn := stubCollector{name: "working_nomads"}
-	srv := httptest.NewServer(NewHTTPHandler(er, wn, stubCollector{name: "dou_ua"}, nil, nil, nil, zerolog.Nop()))
+	srv := httptest.NewServer(NewHTTPHandler(er, wn, stubCollector{name: "dou_ua"}, stubCollector{name: "himalayas"}, nil, nil, nil, nil, zerolog.Nop()))
 	t.Cleanup(srv.Close)
 	res, err := http.Post(srv.URL+"/debug/collectors/europe_remotely", "application/json", strings.NewReader(`{"limit":0}`))
 	if err != nil {
@@ -179,7 +179,7 @@ func TestEuropeRemotely_defaultLimitTruncates(t *testing.T) {
 	}
 	er := stubCollector{name: "europe_remotely", jobs: jobs}
 	wn := stubCollector{name: "working_nomads"}
-	srv := httptest.NewServer(NewHTTPHandler(er, wn, stubCollector{name: "dou_ua"}, nil, nil, nil, zerolog.Nop()))
+	srv := httptest.NewServer(NewHTTPHandler(er, wn, stubCollector{name: "dou_ua"}, stubCollector{name: "himalayas"}, nil, nil, nil, nil, zerolog.Nop()))
 	t.Cleanup(srv.Close)
 	res, err := http.Post(srv.URL+"/debug/collectors/europe_remotely", "application/json", nil)
 	if err != nil {
@@ -202,7 +202,7 @@ func TestInvalidLimitBody(t *testing.T) {
 	t.Parallel()
 	er := stubCollector{name: "europe_remotely"}
 	wn := stubCollector{name: "working_nomads"}
-	srv := httptest.NewServer(NewHTTPHandler(er, wn, stubCollector{name: "dou_ua"}, nil, nil, nil, zerolog.Nop()))
+	srv := httptest.NewServer(NewHTTPHandler(er, wn, stubCollector{name: "dou_ua"}, stubCollector{name: "himalayas"}, nil, nil, nil, nil, zerolog.Nop()))
 	t.Cleanup(srv.Close)
 	res, err := http.Post(srv.URL+"/debug/collectors/europe_remotely", "application/json", strings.NewReader(`{"limit":-1}`))
 	if err != nil {
@@ -248,7 +248,7 @@ func TestEuropeRemotely_debugPassesSearchKeywordsToFeed(t *testing.T) {
 		SiteBase:   siteBase,
 	}
 	wn := stubCollector{name: "working_nomads"}
-	dbg := httptest.NewServer(NewHTTPHandler(er, wn, stubCollector{name: "dou_ua"}, nil, er, nil, zerolog.Nop()))
+	dbg := httptest.NewServer(NewHTTPHandler(er, wn, stubCollector{name: "dou_ua"}, stubCollector{name: "himalayas"}, nil, er, nil, nil, zerolog.Nop()))
 	t.Cleanup(dbg.Close)
 
 	res, err := http.Post(dbg.URL+"/debug/collectors/europe_remotely", "application/json", strings.NewReader(`{"limit":1,"search_keywords":"vue"}`))

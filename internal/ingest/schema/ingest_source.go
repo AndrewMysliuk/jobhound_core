@@ -9,6 +9,9 @@ type IngestSourceInput struct {
 	SlotID          uuid.UUID
 	SourceID        string
 	ExplicitRefresh bool
+	// SlotSearchQuery is the slot display name used as the per-source search keyword (public API POST /slots).
+	// Empty means full default listing for sources that support unscoped fetch.
+	SlotSearchQuery string
 }
 
 // IngestSourceOutput summarizes ingest work for observability.

@@ -171,6 +171,22 @@ func (c *EuropeRemotely) Fetch(ctx context.Context) ([]schema.Job, error) {
 	return jobs, nil
 }
 
+// FetchWithSlotSearch implements collectors.SlotSearchFetcher (admin-ajax search_keywords).
+func (c *EuropeRemotely) FetchWithSlotSearch(ctx context.Context, slotQuery string) ([]schema.Job, error) {
+	q := strings.TrimSpace(slotQuery)
+	if q == "" {
+		return c.Fetch(ctx)
+	}
+	if strings.TrimSpace(c.FeedURL) == "" || c.FeedForm == nil {
+		return c.Fetch(ctx)
+	}
+	c2 := *c
+	form := cloneValues(c.FeedForm)
+	form.Set("search_keywords", q)
+	c2.FeedForm = form
+	return c2.Fetch(ctx)
+}
+
 func (c *EuropeRemotely) maxFeedPagesEffective() int {
 	n := c.MaxFeedPages
 	if n <= 0 {

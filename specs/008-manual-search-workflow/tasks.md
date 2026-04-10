@@ -51,7 +51,7 @@
 ## F. Parent “manual slot run” workflow
 
 1. [x] **Input/output schema** — Definition of done: workflow input includes **`slot_id`**, run kind, and parameters per [`contracts/manual-workflow.md`](./contracts/manual-workflow.md) §3–§4; output matches §5 aggregate (counts, optional `pipeline_run_id`, ingest map, `error_summary`).  
-2. [x] **Parallel ingest** — Definition of done: for ingest kinds, **one child `IngestSourceWorkflow` per `source_id`** (or equivalent parallelism); aggregate per-source results.  
+2. [x] **Parallel ingest** — Definition of done: for ingest kinds, **one child `IngestSourceWorkflow` per `source_id`** (or equivalent parallelism); aggregate per-source results. Each child **`IngestSourceInput`** carries the parent’s **`SlotSearchQuery`** when set (**`009`** slot **`name`**) so **`006`** can call **`005`** **`SlotSearchFetcher`**.  
 3. [x] **`pipeline_runs`** — Definition of done: **`CreateRun(ctx, slotID)`** (or agreed API) when a new run header is required; pass **`pipeline_run_id`** into stage-2/stage-3 units per **`007`**.  
 4. [x] **Ordering** — Definition of done: when both stage 2 and 3 run in one execution, **stage 2 completes before stage 3**; workflow code remains **deterministic** (I/O only in activities).  
 5. [x] **Tests** — Definition of done: in-memory Temporal test covers at least one run kind end-to-end (e.g. `PIPELINE_STAGE2` only + mock storage, or full path with integration tag).

@@ -235,6 +235,7 @@ func TestRunIngestSource_writesSlotJobMembership(t *testing.T) {
 			country_code TEXT NOT NULL DEFAULT '',
 			salary_raw TEXT NOT NULL DEFAULT '',
 			tags TEXT NOT NULL DEFAULT '[]',
+			timezone_offsets TEXT NOT NULL DEFAULT '[]',
 			position TEXT,
 			user_id TEXT,
 			stage1_status TEXT,

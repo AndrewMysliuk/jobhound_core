@@ -24,7 +24,9 @@ type Job struct {
 	Tags []string
 	// Position is nil when no MVP keyword group matched; otherwise a canonical label (005).
 	Position *string
-	UserID   *string // optional; nil/empty = unset (future multi-user scope)
+	// TimezoneOffsets holds board-reported UTC offset hours (e.g. Himalayas); nil or empty = none (005).
+	TimezoneOffsets []float64
+	UserID          *string // optional; nil/empty = unset (future multi-user scope)
 	// Stage1Status is nil for legacy rows or before ingest completes broad stage 1; PASSED_STAGE_1 when stored (007).
 	Stage1Status *string
 }

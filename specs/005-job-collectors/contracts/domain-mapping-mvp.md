@@ -21,10 +21,11 @@ Target shape: **`domain.Job`** in `internal/domain/job.go`, plus **planned field
 | `SalaryRaw` | `string` | Opaque compensation text from the board; `""` if none |
 | `Tags` | `[]string` | Skill/topic labels |
 | `Position` | `*string` | **Nil** = no MVP keyword match; non-nil = inferred label (see below) |
+| `TimezoneOffsets` | `[]float64` | Optional **UTC offset hours** from the board (e.g. Himalayas `timezoneRestrictions`); empty or `nil` = none / unknown |
 
-**`Remote` (MVP rule):** collectors set **`Job.Remote`** to non-nil **`true`** or **`false`**: **`true`** if the substring **`remote`** appears (case-insensitive) in any of: **`Title`**, normalized **plain-text `Description`**, or **tag strings** from the board (see per-source columns). Otherwise **`false`**. **`nil`** remains valid for legacy or unknown rows (see `004` broad filter); MVP sources always populate **`true`**/**`false`** per this rule.
+**`Remote` (MVP rule):** collectors set **`Job.Remote`** to non-nil **`true`** or **`false`**: **`true`** if the substring **`remote`** or Ukrainian **`віддалено`** appears (case-insensitive) in any of: **`Title`**, normalized **plain-text `Description`**, **tag strings** from the board, or **extra strings** documented per source (implemented via **`collectors/utils.RemoteMVPRule`** — e.g. DOU listing/detail location text; Himalayas **`excerpt`** and comma-joined **`locationRestrictions`**). Otherwise **`false`**. **`nil`** remains valid for legacy or unknown rows (see `004` broad filter); MVP sources always populate **`true`**/**`false`** per this rule.
 
-When these land, **`jobs`** storage needs matching columns — see **`jobs-table-extension.md`**.
+When these land, **`jobs`** storage needs matching columns — see **`jobs-table-extension.md`** (including **`timezone_offsets`** when **`TimezoneOffsets`** is implemented).
 
 ---
 
@@ -40,6 +41,7 @@ When these land, **`jobs`** storage needs matching columns — see **`jobs-table
 - **Europe Remotely:** prefer **absolute** detail line **`li.date-posted`** when it parses as a calendar date. Otherwise parse **relative** phrases from listing or detail **`posted_display`** (e.g. “Posted 12 hours ago”) using an **anchor** of **`time.Now().UTC()`** at parse time. Implementation may use a small **regex/table** for English phrases and/or a library such as **[github.com/olebedev/when](https://github.com/olebedev/when)**; **new site phrases** are added over time (spec/tests updated when discovered).
 - **Europe — soft date failure:** if a **relative** (or unrecognized) **`posted_display`** cannot be parsed, set **`PostedAt` to zero**, **log a warning** with the raw string, and **do not** fail **`Fetch`** for that reason alone (see **`collector.md`**). Unparseable **absolute** detail date attempts should follow the same soft rule if the rest of the job is valid.
 - **DOU.ua:** parse Ukrainian calendar phrases from listing/detail **`div.date`** (e.g. `9 квітня`, `8 квітня 2026`) with month-name table + optional year; anchor **`time.Now().UTC()`** when year is omitted (if parsed date is implausibly in the future vs anchor, treat as previous calendar year). **Soft failure** matches Europe: unparseable display → **`PostedAt` zero** + warning, continue (**`collector.md`**).
+- **Himalayas:** parse **`pubDate`** as **Unix epoch seconds** (integer) → **`time.Unix(sec, 0).UTC()`**. Missing, zero, or non-numeric → **`PostedAt` zero** + warning, continue (**soft failure**, same spirit as Europe/DOU).
 
 ### `Position` (`*string`)
 
@@ -93,7 +95,7 @@ Resolve **`CountryCode`** (ISO 3166-1 alpha-2) using **`data/countries.json`** (
 | `ApplyURL` | `""` when not exposed on detail (future: map site apply control if product agrees) |
 | `Description` | Plain text from detail `div.b-typo.vacancy-section` |
 | `PostedAt` | Detail `div.date` when Ukrainian phrase parses; else listing `div.date`; else zero + warn |
-| `Remote` | Bool rule (title + description + `a.badge` texts as tags) |
+| `Remote` | **`RemoteMVPRule`**: title, description, tags from `a.badge`, plus listing **`span.cities`** and detail **`span.place`** as extra string hints (variadic tail on the helper — same pattern as Himalayas **`excerpt`** + **`locationRestrictions`**) |
 | `CountryCode` | From listing `span.cities` / detail `div.sh-info span.place` + countries dictionary |
 | `SalaryRaw` | Detail `div.sh-info span.salary` when present |
 | `Tags` | Text from detail `a.badge` links (optional; empty if none) |
@@ -132,9 +134,32 @@ If a new `apply_option` value appears at runtime, **`Fetch` must error** (do not
 
 ---
 
+## Himalayas → `Job`
+
+Wire: **`../resources/himalayas.md`** (`GET` JSON only).
+
+
+| `Job` field | Source |
+| ----------- | ------ |
+| `Source` | `himalayas` |
+| `Title` | `title` |
+| `Company` | `companyName` |
+| `URL` | Canonical absolute URL from **`guid`**, else **`applicationLink`**; normalize (strip query/fragment) per shared URL helper |
+| `ApplyURL` | **`""`** when the only apply/listing link is the Himalayas job page (same host/path family as **`URL`**). If the API later exposes a distinct external apply URL, set **`ApplyURL`** to that and keep **`URL`** as the board listing page. |
+| `Description` | Plain text from **`description`** (HTML input) |
+| `PostedAt` | From **`pubDate`** (Unix seconds); soft-fail to zero + warn per **PostedAt** rules above |
+| `Remote` | **`collectors/utils.RemoteMVPRule`** with the same MVP substring rule as other sources: pass **`title`**, plain **`Description`**, **tag strings** (see **`Tags`** below), then **additional hints** like **DOU.ua** uses for `locationRaw`: include **`excerpt`** and a single comma-joined string of **`locationRestrictions`** (order preserved). Do not treat **`timezoneRestrictions`** as text hints unless stringified for debugging only — numeric offsets are not substring-matched for `remote`. |
+| `CountryCode` | First successful **`data/countries.json`** match when iterating **`locationRestrictions`** (name/slug-style strings); unknown → **`""`** |
+| `SalaryRaw` | If both **`minSalary`** and **`maxSalary`** are null/absent → **`""`**. Otherwise opaque string from min/max + **`currency`** (e.g. `90k-120k USD` or `min-max CURRENCY` per implementation consistency). |
+| `Tags` | Concatenate non-empty trimmed strings from **`categories`**, then **`seniority`**, then **`parentCategories`** (dedupe while preserving first-seen order if practical). |
+| `TimezoneOffsets` | Copy **`timezoneRestrictions`** floats when present; **`nil`** or empty slice when absent |
+| `Position` | Keyword inference only (`*string`) over **title + description + tags** |
+
+---
+
 ## Related
 
 - `collector.md`
 - [`specs/000-epic-overview/product-concept-draft.md`](../../000-epic-overview/product-concept-draft.md)
 - `jobs-table-extension.md`
-- `../resources/europe-remotely.md`, `../resources/working-nomads.md`, `../resources/dou.md`
+- `../resources/europe-remotely.md`, `../resources/working-nomads.md`, `../resources/dou.md`, `../resources/himalayas.md`

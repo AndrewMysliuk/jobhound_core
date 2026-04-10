@@ -114,10 +114,11 @@ func (s *Service) Create(ctx context.Context, p slotschema.CreateSlotParams) (sl
 		return slotschema.CreateSlotResult{}, err
 	}
 	in := manualschema.ManualSlotRunWorkflowInput{
-		SlotID:          id,
-		Kind:            manualschema.RunKindIngestSources,
-		SourceIDs:       append([]string(nil), s.SourceIDs...),
-		ExplicitRefresh: false,
+		SlotID:            id,
+		Kind:              manualschema.RunKindIngestSources,
+		SourceIDs:         append([]string(nil), s.SourceIDs...),
+		ExplicitRefresh:   false,
+		SlotSearchQuery:   name,
 	}
 	if err := in.Validate(); err != nil {
 		_ = s.Repo.Delete(ctx, id.String())

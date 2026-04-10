@@ -20,6 +20,12 @@ type IncrementalCollector interface {
 	FetchIncremental(ctx context.Context, cursor string) (jobs []schema.Job, nextCursor string, err error)
 }
 
+// SlotSearchFetcher scopes fetches to the user’s slot keyword (e.g. public API slot name).
+// When slotQuery is empty, implementations should behave like [Collector.Fetch].
+type SlotSearchFetcher interface {
+	FetchWithSlotSearch(ctx context.Context, slotQuery string) ([]schema.Job, error)
+}
+
 // SessionProvider supplies browser/session state for headless collectors.
 type SessionProvider interface {
 	CookieFilePath() string

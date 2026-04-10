@@ -3,7 +3,7 @@
 **Spec**: `005-job-collectors`  
 **Implementation**: `internal/collectors/handlers/debughttp`
 
-Local-only JSON body for **`POST /debug/collectors/europe_remotely`**, **`POST /debug/collectors/working_nomads`**, and **`POST /debug/collectors/dou_ua`**.  
+Local-only JSON body for **`POST /debug/collectors/europe_remotely`**, **`POST /debug/collectors/working_nomads`**, **`POST /debug/collectors/dou_ua`**, and **`POST /debug/collectors/himalayas`**.  
 **`Content-Type: application/json`**. No URL query parameters for these options.
 
 ---
@@ -54,12 +54,28 @@ type DebugCollectorsRequest = {
    * Ignored on other routes.
    */
   dou_inter_request_delay_ms?: number;
+
+  /** Himalayas only (when collector ships): free-text `q` for `/jobs/api/search`. */
+  q?: string;
+
+  /** Himalayas only: 1-based page for search mode. */
+  page?: number;
+
+  /**
+   * Himalayas only: when true, use `/jobs/api/search` with `q` / `page`;
+   * when false or omitted, use browse `/jobs/api` with offset/limit only (collector default).
+   */
+  use_search?: boolean;
+
+  /** Himalayas only: stop after N API pages in browse or search mode (implementation-defined default). */
+  max_pages?: number;
 };
 ```
 
-`query`, `sort`, `page_size`, and `_source` are **ignored** on `europe_remotely` and `dou_ua`.  
-`feed_form` and `search_keywords` are **ignored** on `working_nomads` and `dou_ua`.  
-`search` and `dou_inter_request_delay_ms` are **ignored** on `europe_remotely` and `working_nomads`.
+`query`, `sort`, `page_size`, and `_source` are **ignored** on `europe_remotely`, `dou_ua`, and `himalayas`.  
+`feed_form` and `search_keywords` are **ignored** on `working_nomads`, `dou_ua`, and `himalayas`.  
+`search` and `dou_inter_request_delay_ms` are **ignored** on `europe_remotely`, `working_nomads`, and `himalayas`.  
+`q`, `page`, `use_search`, and `max_pages` are **only** read for `himalayas`; `europe_remotely`, `working_nomads`, and `dou_ua` ignore them. See **`../tasks.md`** § J.
 
 **`limit`** on **`dou_ua`**: when a concrete `*dou.DOU` is wired, maps to **`MaxJobs`** for that request (early stop). Omitted default `200` still applies to the JSON response cap for stub collectors; see **`../spec.md`**.
 
@@ -137,9 +153,22 @@ Exact clause shapes depend on their index mapping; if something returns an error
 }
 ```
 
+### Himalayas — search sample (when route exists)
+
+```json
+{
+  "limit": 40,
+  "use_search": true,
+  "q": "vue",
+  "page": 1,
+  "max_pages": 2
+}
+```
+
 ---
 
 ## Related
 
 - `../spec.md` — Temporary debug HTTP
 - `../resources/working-nomads.md` — site `jobsapi/_search` wire notes
+- `../resources/himalayas.md` — public `jobs/api` wire
