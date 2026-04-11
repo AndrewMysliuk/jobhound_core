@@ -45,6 +45,7 @@ func jobListItemFromEntry(e jobschema.JobListEntry, includePipelineStatus bool) 
 		Title:           e.Job.Title,
 		Company:         e.Job.Company,
 		SourceID:        e.Job.Source,
+		URL:             e.Job.URL,
 		ApplyURL:        e.Job.ApplyURL,
 		FirstSeenAt:     e.FirstSeenAt.UTC(),
 		Stage3Rationale: e.Stage3Rationale,

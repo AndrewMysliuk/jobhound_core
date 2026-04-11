@@ -16,6 +16,7 @@ type JobListItem struct {
 	Title           string     `json:"title"`
 	Company         string     `json:"company"`
 	SourceID        string     `json:"source_id"`
+	URL             string     `json:"url"`
 	ApplyURL        string     `json:"apply_url"`
 	FirstSeenAt     time.Time  `json:"first_seen_at"`
 	PostedAt        *time.Time `json:"posted_at"`

@@ -166,7 +166,8 @@ Job row (minimum per [`spec.md`](../spec.md)):
 | `title` | string | |
 | `company` | string | |
 | `source_id` | string | |
-| `apply_url` | string | |
+| `url` | string | Listing / canonical job page (domain `Job.URL`). |
+| `apply_url` | string | External apply when known; may be empty. |
 | `first_seen_at` | string (RFC3339) | |
 | `posted_at` | string (RFC3339) | |
 | `stage_3_rationale` | string or null | Fill when LLM text exists; stages 1–2: **`null`** or omit — **one style** (**[`plan.md`](../plan.md)** D4). |

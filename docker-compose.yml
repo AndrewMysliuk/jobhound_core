@@ -167,7 +167,7 @@ services:
       JOBHOUND_TEMPORAL_ADDRESS: temporal:7233
       JOBHOUND_REDIS_URL: redis://redis:6379/0
       JOBHOUND_API_LISTEN: 0.0.0.0:3000
-      JOBHOUND_API_CORS_ORIGINS: ${JOBHOUND_API_CORS_ORIGINS:-http://localhost:5173,http://localhost:3000}
+      JOBHOUND_API_CORS_ORIGINS: ${JOBHOUND_API_CORS_ORIGINS:-http://localhost:5173,http://localhost:3002}
     ports:
       - "3000:3000"
     depends_on:

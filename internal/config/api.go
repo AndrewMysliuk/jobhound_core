@@ -15,7 +15,8 @@ const (
 	// DefaultAPIListen is the default TCP address for cmd/api when JOBHOUND_API_LISTEN is unset.
 	DefaultAPIListen = "127.0.0.1:3000"
 	// DefaultAPICORSOrigins is used when JOBHOUND_API_CORS_ORIGINS is unset (local dev).
-	DefaultAPICORSOrigins = "http://localhost:5173,http://localhost:3000"
+	// Values are browser page origins (dev servers), not JOBHOUND_API_LISTEN.
+	DefaultAPICORSOrigins = "http://localhost:5173,http://localhost:3002"
 )
 
 // API holds listen address and CORS allowlist for cmd/api.

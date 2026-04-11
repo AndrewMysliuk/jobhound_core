@@ -269,6 +269,7 @@ Query: **`page`** (from 1), **`limit`** (default and **max 100**).
       "title": "…",
       "company": "…",
       "source_id": "…",
+      "url": "https://…",
       "apply_url": "https://…",
       "first_seen_at": "2026-04-01T10:00:00Z",
       "posted_at": "2026-03-28T00:00:00Z",
