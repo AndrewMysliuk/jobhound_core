@@ -4,15 +4,11 @@ Collects and processes job listings (pipeline, PostgreSQL, Temporal, HTTP API). 
 
 Env vars and infra details: `specs/`; names and loaders: `internal/config`.
 
-## Run
+## Docker
 
 ```bash
-make build
-make run                 # agent
-make run-worker          # Temporal worker; set JOBHOUND_TEMPORAL_ADDRESS
-make run-debug           # agent + debug HTTP on 127.0.0.1:3001
-make test
-make test-integration    # -tags=integration; needs env from specs
+make docker-up    # build images and start all services
+make docker-down  # stop and remove containers, volumes, images
 ```
 
 Migrations: set `JOBHOUND_DATABASE_URL`, then `make migrate-up`.
