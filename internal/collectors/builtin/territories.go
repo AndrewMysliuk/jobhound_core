@@ -6,11 +6,11 @@ type territory struct {
 	Alpha2 string
 }
 
-// normativeTerritories is the fixed EU-27 + GB + UA set in listing order (resources/builtin.md).
+// normativeTerritories is the Built In listing filter order: large EU tech/remote markets + GB + UA.
+// Subset of the former EU-27+GB+UA scope for fewer round-trips and faster ingest (resources/builtin.md).
 var normativeTerritories = []territory{
-	{"AUT", "AT"}, {"BEL", "BE"}, {"BGR", "BG"}, {"HRV", "HR"}, {"CYP", "CY"}, {"CZE", "CZ"},
-	{"DEU", "DE"}, {"DNK", "DK"}, {"EST", "EE"}, {"ESP", "ES"}, {"FIN", "FI"}, {"FRA", "FR"},
-	{"GRC", "GR"}, {"HUN", "HU"}, {"IRL", "IE"}, {"ITA", "IT"}, {"LVA", "LV"}, {"LTU", "LT"},
-	{"LUX", "LU"}, {"MLT", "MT"}, {"NLD", "NL"}, {"POL", "PL"}, {"PRT", "PT"}, {"ROU", "RO"},
-	{"SVK", "SK"}, {"SVN", "SI"}, {"SWE", "SE"}, {"GBR", "GB"}, {"UKR", "UA"},
+	{"DEU", "DE"}, {"NLD", "NL"}, {"POL", "PL"}, {"FRA", "FR"}, {"ESP", "ES"}, {"ITA", "IT"},
+	{"IRL", "IE"}, {"SWE", "SE"}, {"BEL", "BE"}, {"AUT", "AT"}, {"CZE", "CZ"}, {"PRT", "PT"},
+	{"ROU", "RO"}, {"GRC", "GR"}, {"FIN", "FI"}, {"DNK", "DK"}, {"HUN", "HU"},
+	{"GBR", "GB"}, {"UKR", "UA"},
 }

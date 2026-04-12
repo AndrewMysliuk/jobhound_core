@@ -1,7 +1,7 @@
 # Sources inventory (job collectors)
 
 **Spec**: `005-job-collectors`  
-**Last Updated**: 2026-04-12  
+**Last Updated**: 2026-04-12 — Built In T3 note  
 **Status**: Draft
 
 ## Purpose
@@ -26,7 +26,7 @@ Row numbers in the inventory table match this priority for planned sources (7).
 | Tier   | Mechanism                                                         | When                                                         |
 | ------ | ----------------------------------------------------------------- | ------------------------------------------------------------ |
 | **T2** | `net/http` fetch + **goquery** HTML parse                         | Listing and detail HTML available without a headless browser |
-| **T3** | **go-rod** (+ optional **session/cookies** file per constitution) | Client-rendered content, or login-required flows             |
+| **T3** | **go-rod** via shared **`browserfetch`** (**URL → HTML**); per-source **session/cookies** (e.g. LinkedIn) beside the collector | Anti-bot / interstitial blocking **`net/http`**, client-rendered shell, or login-required flows |
 
 
 There is **no separate “public API tier”** in requirements: delivery is **HTML pages** unless a later spike proves otherwise for a given source (document fact in the Notes column).
@@ -41,8 +41,8 @@ There is **no separate “public API tier”** in requirements: delivery is **HT
 | 3   | [DOU.ua vacancies](https://jobs.dou.ua/vacancies/?descr=1) | **MVP** | **T2** (fact) | `specs/005-job-collectors/resources/dou.md` — `GET` listing (`search` + `descr=1`), `POST` `xhr-load` (CSRF + `count`) JSON `html` / `last` / `num`, detail `GET`; cookie jar + goquery |
 | 4   | [Himalayas](https://himalayas.app/jobs)          | **MVP** | **T2 (fact)**                        | Public JSON API only (no RSC/HTML crawl): `GET` `https://himalayas.app/jobs/api` + `.../jobs/api/search` — see `specs/005-job-collectors/resources/himalayas.md` and [Remote Jobs API](https://himalayas.app/api); max **20** jobs per request on browse; rate limit **429** |
 | 5   | [Djinni](https://djinni.co/jobs/)                | **MVP** | **T2 (fact)**                        | `specs/005-job-collectors/resources/djinni.md` — `GET` listing `?all_keywords=&search_type=full-text&page=` (~**15**/page); detail `GET`; **`application/ld+json`** (`JobPosting`, optional **`baseSalary`**); listing may embed **array** of job JSON-LD; **delay** between requests (env); no login required for read path observed |
-| 6   | [Built In](https://builtin.com/jobs/remote)    | **MVP** | **T2 (fact)**                        | `specs/005-job-collectors/resources/builtin.md` — `GET` remote listing (`country` **alpha-3**, `allLocations=true`, `search`, `page` ≤2); JSON-LD **`ItemList`** → URLs; **`GET` detail** → **`JobPosting`**; **no HTTP** when slot search empty; **delay** between requests (env) |
-| 7   | [LinkedIn Jobs](https://www.linkedin.com/jobs/)  | Planned | T3 + session                         | **Last** planned among this set — login/session, fragile selectors, highest operational risk |
+| 6   | [Built In](https://builtin.com/jobs/remote)    | **MVP** | **T2 (fact)**; optional **T3** for transport | `resources/builtin.md` — same listing/detail **URLs** as T2; **default** **`net/http`**; **`JOBHOUND_BROWSER_ENABLED`** + **`internal/collectors/browserfetch`** (rod) for Cloudflare / 403 mitigation; opt-out **`JOBHOUND_COLLECTOR_BUILTIN_USE_BROWSER=0`**; JSON-LD unchanged; **no fetch** when slot search empty; **delay** (env) |
+| 7   | [LinkedIn Jobs](https://www.linkedin.com/jobs/)  | Planned | **T3** + session                     | **Last** in set — reuse shared **`browserfetch`** for document load where applicable; **LinkedIn-specific** login/cookies/selectors stay in the LinkedIn collector package |
 
 
 After each **spike**, update **Tier (theory)** → **Tier (fact)** and **Notes** with concrete URLs, pagination, and stable vacancy identity (e.g. path segment vs query).
@@ -55,6 +55,8 @@ After each **spike**, update **Tier (theory)** → **Tier (fact)** and **Notes**
 - `specs/005-job-collectors/contracts/domain-mapping-mvp.md` — → `domain.Job` (MVP normalization + errors)
 - `specs/005-job-collectors/contracts/jobs-table-extension.md` — optional DB columns
 - `specs/005-job-collectors/contracts/test-fixtures.md` — fenced offline samples
+- `specs/005-job-collectors/contracts/browser-fetch.md` — Tier-3 shared URL → HTML (`browserfetch`)
+- `specs/005-job-collectors/tasks.md` — § **M** (implementation checklist)
 - `specs/005-job-collectors/resources/europe-remotely.md` — MVP source 1
 - `specs/005-job-collectors/resources/working-nomads.md` — MVP source 2 (`_search` JSON)
 - `specs/005-job-collectors/resources/dou.md` — MVP source 3 (HTML + xhr-load)

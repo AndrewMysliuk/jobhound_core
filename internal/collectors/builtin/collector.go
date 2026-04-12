@@ -4,12 +4,14 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/browserfetch"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/utils"
 	"github.com/andrewmysliuk/jobhound_core/internal/domain/schema"
 	domainutils "github.com/andrewmysliuk/jobhound_core/internal/domain/utils"
@@ -20,20 +22,27 @@ const SourceName = "builtin"
 
 const listingPageSizeHint = 20
 
+// debugBuiltinSingleListingScope limits listing to the first territory and page 1 only (set true for local browser-fetch experiments).
+const debugBuiltinSingleListingScope = false
+
 // BuiltIn fetches remote Built In listings (JSON-LD ItemList) then job details (JobPosting).
 type BuiltIn struct {
 	HTTPClient *http.Client
 	// ListingBase is the listing URL without query (default https://builtin.com/jobs/remote); tests may override.
 	ListingBase       *url.URL
 	InterRequestDelay time.Duration
-	// MaxListingPagesPerCountry is 1 or 2; zero means 2 (resources/builtin.md).
+	// MaxListingPagesPerCountry is 1 or 2; zero means 1 (resources/builtin.md).
 	MaxListingPagesPerCountry int
 	// MaxJobs stops after N successful jobs when > 0 (debug / response caps).
 	MaxJobs int
-	// TestAlpha3 limits countries when non-empty (unit tests only); production uses all normative territories.
+	// TestAlpha3 limits countries when non-empty (unit tests); production uses normativeTerritories order filtered by this set.
 	TestAlpha3 []string
 	// OnDatePostedWarn is called when datePosted is missing or unparseable (soft failure).
 	OnDatePostedWarn func(raw string)
+	// HTMLDocumentFetcher is optional Tier-3 transport (go-rod). When nil or UseBrowser is false, listing/detail use net/http.
+	HTMLDocumentFetcher browserfetch.HTMLDocumentFetcher
+	// UseBrowser selects HTMLDocumentFetcher for document bytes when true and HTMLDocumentFetcher is non-nil.
+	UseBrowser bool
 }
 
 // Name implements collectors.Collector.
@@ -53,6 +62,13 @@ func (c *BuiltIn) FetchWithSlotSearch(ctx context.Context, slotQuery string) ([]
 	return c.fetchRemote(ctx, q)
 }
 
+func (c *BuiltIn) collectSkip(ctx context.Context, op string, err error) {
+	if err == nil {
+		return
+	}
+	slog.WarnContext(ctx, "builtin: fetch skip", "source", SourceName, "op", op, "err", err)
+}
+
 func (c *BuiltIn) listingBaseResolved() (*url.URL, error) {
 	if c != nil && c.ListingBase != nil {
 		return c.ListingBase, nil
@@ -62,7 +78,7 @@ func (c *BuiltIn) listingBaseResolved() (*url.URL, error) {
 
 func (c *BuiltIn) maxPagesPerCountry() int {
 	if c == nil || c.MaxListingPagesPerCountry <= 0 {
-		return 2
+		return 1
 	}
 	if c.MaxListingPagesPerCountry > 2 {
 		return 2
@@ -99,7 +115,17 @@ func (c *BuiltIn) fetchRemote(ctx context.Context, search string) ([]schema.Job,
 	if client == nil {
 		client = utils.NewHTTPClient()
 	}
+	if c != nil && c.UseBrowser && c.HTMLDocumentFetcher == nil {
+		return nil, fmt.Errorf("built-in: UseBrowser set but HTMLDocumentFetcher is nil")
+	}
 	maxPages := c.maxPagesPerCountry()
+	terrs := c.territoriesOrdered()
+	if debugBuiltinSingleListingScope {
+		if len(terrs) > 0 {
+			terrs = terrs[:1]
+		}
+		maxPages = 1
+	}
 
 	seen := make(map[string]struct{})
 	var ordered []struct {
@@ -107,20 +133,22 @@ func (c *BuiltIn) fetchRemote(ctx context.Context, search string) ([]schema.Job,
 		alpha2 string
 	}
 
-	for _, terr := range c.territoriesOrdered() {
+	for _, terr := range terrs {
 		for page := 1; page <= maxPages; page++ {
 			c.sleep(ctx)
 			listURL, err := c.buildListingURL(base, search, terr.Alpha3, page)
 			if err != nil {
 				return nil, err
 			}
-			listHTML, err := httpGet(ctx, client, listURL)
+			listHTML, err := c.fetchDocument(ctx, client, listURL)
 			if err != nil {
-				return nil, fmt.Errorf("listing %s page %d: %w", terr.Alpha3, page, err)
+				c.collectSkip(ctx, fmt.Sprintf("listing %s page %d", terr.Alpha3, page), err)
+				break
 			}
 			urls, err := parseListingJobURLs(string(listHTML))
 			if err != nil {
-				return nil, fmt.Errorf("listing %s page %d: %w", terr.Alpha3, page, err)
+				c.collectSkip(ctx, fmt.Sprintf("listing parse %s page %d", terr.Alpha3, page), err)
+				break
 			}
 			if len(urls) == 0 {
 				break
@@ -128,7 +156,8 @@ func (c *BuiltIn) fetchRemote(ctx context.Context, search string) ([]schema.Job,
 			for _, rawU := range urls {
 				canon, err := utils.CanonicalListingURL(rawU)
 				if err != nil {
-					return nil, fmt.Errorf("listing URL: %w", err)
+					c.collectSkip(ctx, fmt.Sprintf("listing job URL %s", rawU), err)
+					continue
 				}
 				if _, ok := seen[canon]; ok {
 					continue
@@ -151,17 +180,20 @@ func (c *BuiltIn) fetchRemote(ctx context.Context, search string) ([]schema.Job,
 			break
 		}
 		c.sleep(ctx)
-		detailHTML, err := httpGet(ctx, client, uc.url)
+		detailHTML, err := c.fetchDocument(ctx, client, uc.url)
 		if err != nil {
-			return nil, fmt.Errorf("detail %s: %w", uc.url, err)
+			c.collectSkip(ctx, fmt.Sprintf("detail fetch %s", uc.url), err)
+			continue
 		}
 		jp, err := parseJobPostingFromDetailHTML(string(detailHTML))
 		if err != nil {
-			return nil, fmt.Errorf("detail %s: %w", uc.url, err)
+			c.collectSkip(ctx, fmt.Sprintf("detail parse %s", uc.url), err)
+			continue
 		}
 		title := strings.TrimSpace(jp.title)
 		if title == "" {
-			return nil, fmt.Errorf("detail %s: empty title", uc.url)
+			c.collectSkip(ctx, fmt.Sprintf("detail empty title %s", uc.url), fmt.Errorf("empty title"))
+			continue
 		}
 		tags := builtinTags(jp)
 		descPlain := plainFromJSONLDDescription(jp.description)
@@ -171,9 +203,10 @@ func (c *BuiltIn) fetchRemote(ctx context.Context, search string) ([]schema.Job,
 		}
 		canonURL, err := utils.CanonicalListingURL(urlForJob)
 		if err != nil {
-			return nil, fmt.Errorf("detail %s: job url: %w", uc.url, err)
+			c.collectSkip(ctx, fmt.Sprintf("detail job URL %s", uc.url), err)
+			continue
 		}
-		applyURL := applyURLFromHiringOrg(jp.hiringOrg)
+		applyURL := extractBuiltinApplyURLFromDetailHTML(string(detailHTML), uc.url)
 		if strings.TrimSpace(applyURL) != "" {
 			if au, err := utils.CanonicalListingURL(applyURL); err == nil {
 				applyURL = au
@@ -194,7 +227,8 @@ func (c *BuiltIn) fetchRemote(ctx context.Context, search string) ([]schema.Job,
 			Position:    utils.InferPosition(title, descPlain, tags),
 		}
 		if err := domainutils.AssignStableID(&j); err != nil {
-			return nil, fmt.Errorf("stable id: %w", err)
+			c.collectSkip(ctx, fmt.Sprintf("stable id %s", uc.url), err)
+			continue
 		}
 		jobs = append(jobs, j)
 	}
@@ -254,6 +288,16 @@ func parsePostedAt(raw string, warn func(string)) time.Time {
 		warn(raw)
 	}
 	return time.Time{}
+}
+
+func (c *BuiltIn) fetchDocument(ctx context.Context, client *http.Client, rawURL string) ([]byte, error) {
+	if c != nil && c.UseBrowser {
+		if c.HTMLDocumentFetcher == nil {
+			return nil, fmt.Errorf("built-in: UseBrowser set but HTMLDocumentFetcher is nil")
+		}
+		return c.HTMLDocumentFetcher.FetchHTMLDocument(ctx, rawURL)
+	}
+	return httpGet(ctx, client, rawURL)
 }
 
 func httpGet(ctx context.Context, client *http.Client, rawURL string) ([]byte, error) {

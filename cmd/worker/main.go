@@ -100,7 +100,7 @@ func main() {
 			ingestRedis = ingest.NewRedisCoordinatorWithTTL(rdb, appCfg.Ingest.LockTTLSeconds, appCfg.Ingest.CooldownTTLSeconds)
 			ingestWatermarks = ingest.NewGormWatermarkStore(getter)
 			bootCtx, bcancel := context.WithTimeout(context.Background(), 2*time.Minute)
-			er, wn, douColl, djinColl, builtinColl, himColl, err := bootstrap.MVPCollectors(bootCtx, nil, appCfg.DataDir, appCfg.DouCollector, appCfg.DjinniCollector, appCfg.BuiltinCollector, appCfg.HimalayasCollector)
+			er, wn, douColl, djinColl, builtinColl, himColl, err := bootstrap.MVPCollectors(bootCtx, nil, appCfg.DataDir, appCfg.DouCollector, appCfg.DjinniCollector, appCfg.BuiltinCollector, appCfg.HimalayasCollector, appCfg.Browser)
 			bcancel()
 			if err != nil {
 				log.Error().Err(err).Msg("collectors bootstrap")

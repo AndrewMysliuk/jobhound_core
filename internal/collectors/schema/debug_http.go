@@ -39,4 +39,6 @@ type CollectorsPOSTBody struct {
 	BuiltinInterRequestDelayMs *int `json:"builtin_inter_request_delay_ms,omitempty"`
 	// Built In: max listing pages per country (1 or 2; ignored on other routes).
 	BuiltinMaxListingPagesPerCountry *int `json:"builtin_max_listing_pages_per_country,omitempty"`
+	// Built In: when set, toggles rod-backed HTML fetch for this debug request (requires agent started with JOBHOUND_BROWSER_ENABLED).
+	BuiltinUseBrowser *bool `json:"builtin_use_browser,omitempty"`
 }

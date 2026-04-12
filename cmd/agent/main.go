@@ -76,7 +76,7 @@ func main() {
 		return
 	}
 
-	er, wn, douColl, djinColl, builtinColl, himColl, err := bootstrap.MVPCollectors(ctx, nil, appCfg.DataDir, appCfg.DouCollector, appCfg.DjinniCollector, appCfg.BuiltinCollector, appCfg.HimalayasCollector)
+	er, wn, douColl, djinColl, builtinColl, himColl, err := bootstrap.MVPCollectors(ctx, nil, appCfg.DataDir, appCfg.DouCollector, appCfg.DjinniCollector, appCfg.BuiltinCollector, appCfg.HimalayasCollector, appCfg.Browser)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)

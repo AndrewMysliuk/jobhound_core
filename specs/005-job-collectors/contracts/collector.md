@@ -7,6 +7,7 @@
 
 - **`internal/collectors/`** — one package (or subtree) per source. Site-specific HTTP bodies, selectors, and JSON shapes live **here**, not in `internal/pipeline`.
 - **`internal/collectors/utils`** — shared helpers: HTTP defaults (timeouts, user-agent), matching locations to **`data/countries.json`**, date parsing, URL normalization before `StableJobID`.
+- **`internal/collectors/browserfetch`** — optional **Tier-3** **URL → HTML** (go-rod); **not** a `Collector`; see **`contracts/browser-fetch.md`**. Collectors (**Built In**, later **LinkedIn**) inject it when needed.
 
 The type boundary is **`collectors.Collector`** in `internal/collectors/contract.go` (domain type: **`schema.Job`** from `internal/domain/schema`):
 

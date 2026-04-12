@@ -34,6 +34,101 @@ func TestBuiltIn_Fetch_noHTTP(t *testing.T) {
 	require.Empty(t, jobs)
 }
 
+type seqHTMLFetcher struct {
+	bodies [][]byte
+	i      int
+}
+
+func (s *seqHTMLFetcher) FetchHTMLDocument(ctx context.Context, rawURL string) ([]byte, error) {
+	if s.i >= len(s.bodies) {
+		return nil, fmt.Errorf("unexpected fetch %d for %q", s.i, rawURL)
+	}
+	b := s.bodies[s.i]
+	s.i++
+	return b, nil
+}
+
+func TestBuiltIn_UseBrowser_withoutFetcher_errors(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	c := &BuiltIn{
+		HTTPClient: &http.Client{Transport: errRoundTrip{}},
+		UseBrowser: true,
+	}
+	_, err := c.FetchWithSlotSearch(ctx, "go")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "HTMLDocumentFetcher")
+}
+
+func TestBuiltIn_FetchWithSlotSearch_browserFetcher(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	listingHTML := `<html><head><title>Remote</title></head><body>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "ItemList",
+      "name": "Top Remote Tech Jobs",
+      "numberOfItems": 1,
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "Senior Magento Frontend Developer",
+          "url": "https://example.test/job/senior-magento-frontend-developer/8989543",
+          "description": "Short snippet only."
+        }
+      ]
+    }
+  ]
+}
+</script>
+</body></html>`
+
+	detailHTML := `<html><body>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "JobPosting",
+      "title": "Senior Magento Frontend Developer",
+      "url": "https://example.test/job/senior-magento-frontend-developer/8989543",
+      "description": "<p>Responsible for developing frontend components.</p>",
+      "datePosted": "2026-04-08",
+      "hiringOrganization": { "@type": "Organization", "name": "Xebia" },
+      "jobLocationType": "TELECOMMUTE",
+      "skills": ["Magento 2", "React", "GraphQL"]
+    }
+  ]
+}
+</script>
+<a id="applyButton" href="https://example.test/apply/8989543">Apply</a>
+</body></html>`
+
+	listBase, err := url.Parse("https://example.test/jobs/remote")
+	require.NoError(t, err)
+
+	c := &BuiltIn{
+		HTTPClient:                &http.Client{Transport: errRoundTrip{}},
+		ListingBase:               listBase,
+		InterRequestDelay:         0,
+		TestAlpha3:                []string{"ROU"},
+		MaxListingPagesPerCountry: 1,
+		UseBrowser:                true,
+		HTMLDocumentFetcher:       &seqHTMLFetcher{bodies: [][]byte{[]byte(listingHTML), []byte(detailHTML)}},
+	}
+
+	jobs, err := c.FetchWithSlotSearch(ctx, "go")
+	require.NoError(t, err)
+	require.Len(t, jobs, 1)
+	require.Equal(t, "Senior Magento Frontend Developer", jobs[0].Title)
+	require.Equal(t, "https://example.test/apply/8989543", jobs[0].ApplyURL)
+}
+
 func TestBuiltIn_FetchWithSlotSearch_httptest(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -80,6 +175,7 @@ func TestBuiltIn_FetchWithSlotSearch_httptest(t *testing.T) {
   ]
 }
 </script>
+<a id="applyButton" href="%s/apply/8989543">Apply</a>
 </body></html>`
 
 	var ts *httptest.Server
@@ -93,7 +189,7 @@ func TestBuiltIn_FetchWithSlotSearch_httptest(t *testing.T) {
 			require.Equal(t, "1", r.URL.Query().Get("page"))
 			_, _ = w.Write([]byte(fmt.Sprintf(listingHTML, base)))
 		case strings.HasPrefix(r.URL.Path, "/job/"):
-			_, _ = w.Write([]byte(fmt.Sprintf(detailHTML, base)))
+			_, _ = w.Write([]byte(fmt.Sprintf(detailHTML, base, base)))
 		default:
 			http.NotFound(w, r)
 		}
@@ -130,4 +226,5 @@ func TestBuiltIn_FetchWithSlotSearch_httptest(t *testing.T) {
 	require.Contains(t, j.Description, "Responsible for developing frontend components")
 	require.Equal(t, []string{"Magento 2", "React", "GraphQL"}, j.Tags)
 	require.NotEmpty(t, j.ID)
+	require.Equal(t, ts.URL+"/apply/8989543", j.ApplyURL)
 }

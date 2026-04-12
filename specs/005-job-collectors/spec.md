@@ -27,13 +27,14 @@ Canonical **MVP normalization and error policy** (description text, `Remote`, `P
 
 - **`internal/collectors/`** — one package (or subtree) per source.
 - **`internal/collectors/utils`** — shared HTTP, `data/countries.json` matching, dates, URL normalization.
+- **`internal/collectors/browserfetch`** — optional **Tier-3** shared **URL → HTML** (go-rod); **no** per-source parsers (see **`contracts/browser-fetch.md`**).
 - **`internal/pipeline`** — stage logic only; **no** site-specific parsing there. **`internal/ingest`** wires **`005`** collectors.
 
 Details: **`contracts/collector.md`**.
 
 ## Pagination (MVP)
 
-Listing UIs use buttons such as **“Load more”** / **“Show more jobs”**; the collector **does not** drive a browser. It repeats the same **HTTP** calls the UI uses (**`admin-ajax.php`** + `has_more` for Europe Remotely; **`jobsapi/_search`** with `from` / `size` for Working Nomads; **`xhr-load`** + `last` for DOU.ua; **public JSON** `jobs/api` + `jobs/api/search` for Himalayas — no RSC; **Djinni:** `GET` `/jobs/?all_keywords=…&search_type=full-text&page=` — ~**15** rows per page; **Built In:** `GET` `/jobs/remote` with `country` / `search` / `page` — up to **20** rows per page, **two** pages max per country — see **`resources/builtin.md`**). See **`resources/europe-remotely.md`**, **`resources/working-nomads.md`**, **`resources/dou.md`**, **`resources/himalayas.md`**, **`resources/djinni.md`**, and **`resources/builtin.md`**.
+Listing UIs use buttons such as **“Load more”** / **“Show more jobs”**; MVP collectors **repeat the same logical requests the UI uses** — usually plain **`net/http`** (no headless). **Exception (Tier 3):** when a source is mitigated via **`internal/collectors/browserfetch`** (go-rod), the collector still issues the **same URLs** as the human listing/detail pages; only the **transport** is a headless browser document load, not ad-hoc UI automation in the collector. **T2 examples:** **`admin-ajax.php`** + `has_more` (Europe Remotely); **`jobsapi/_search`** with `from` / `size` (Working Nomads); **`xhr-load`** + `last` (DOU.ua); **public JSON** `jobs/api` + `jobs/api/search` (Himalayas — no RSC); **Djinni:** `GET` `/jobs/?all_keywords=…&search_type=full-text&page=` (~**15**/page); **Built In:** `GET` `/jobs/remote` with `country` / `search` / `page` (up to **20**/page; default **one** listing page per country — see **`resources/builtin.md`**). See per-source **`resources/*.md`** and **`contracts/browser-fetch.md`**.
 
 ## Sources
 
@@ -51,12 +52,12 @@ Canonical list in **`contracts/sources-inventory.md`**.
 - **DOU.ua:** `GET` listing + `POST` `xhr-load` JSON (`html` / `last` / `num`) + detail **`GET`** — **T2**; cookie jar for CSRF.
 - **Himalayas:** `GET` **`/jobs/api`** and **`/jobs/api/search`** — **T2**; JSON only (see **`resources/himalayas.md`**; `internal/collectors/himalayas`).
 - **Djinni:** `GET` listing + `GET` each job detail — **T2**; **`application/ld+json`** **`JobPosting`** on listing (optional **array**) and detail; **inter-request delay** per **`resources/djinni.md`** / **`contracts/environment.md`** (`internal/collectors/djinni`).
-- **Built In:** `GET` remote listing + `GET` each detail — **T2**; JSON-LD **`ItemList`** + **`JobPosting`**; **search-required** (no HTTP when slot empty); **inter-request delay** per **`resources/builtin.md`** / **`contracts/environment.md`**.
-- **Rod:** only when a source cannot be served without JS/session.
+- **Built In:** normative wire is **`GET`** remote listing + **`GET`** each detail; JSON-LD **`ItemList`** + **`JobPosting`**; **search-required** (no fetch when slot empty); **inter-request delay** per **`resources/builtin.md`** / **`contracts/environment.md`**. **Transport:** **T2 (fact)** = **`net/http`**; optional **T3** = same URLs via shared **`browserfetch`** (go-rod) when anti-bot blocks plain HTTP — see **`contracts/browser-fetch.md`**, **`tasks.md`** § **M**.
+- **Rod / `browserfetch`:** shared **document fetch** only (**URL → HTML**); used when **`net/http`** is insufficient. **LinkedIn** (planned) reuses **`browserfetch`**; login, cookies file, and site-specific navigation remain in the LinkedIn collector package, not in **`browserfetch`**.
 
 ## Follow-ups (operational)
 
-- **Built In — Cloudflare / anti-bot:** Live `GET` to **`builtin.com`** from worker or datacenter egress can return **HTTP 403** with an HTML interstitial (**`Just a moment...`**, Cloudflare challenge) instead of listing/detail content — plain **`net/http`** is often blocked. **Follow-up:** choose mitigation (e.g. browser-tier **T3** fetch, egress/proxy strategy, partnership or official feed if any, per-territory graceful handling, or product decision to pause Built In ingest until resolved) and update **`resources/builtin.md`** + **`contracts/environment.md`** when a path is locked.
+- **Built In — Cloudflare / anti-bot:** Live requests to **`builtin.com`** can return **HTTP 403** + challenge HTML instead of JSON-LD-bearing pages. **Chosen engineering path:** implement shared **`browserfetch`** (§ **`tasks.md`** **M**, **`contracts/browser-fetch.md`**) and optional Built In browser mode; **LinkedIn** will reuse **`browserfetch`**. Alternative mitigations (egress-only, pause source) remain product/ops decisions — document outcome in **`resources/builtin.md`** when locked.
 
 ## Normalized fields
 
@@ -130,7 +131,7 @@ Offline: **`httptest`** + bodies from **`contracts/test-fixtures.md`** (or copie
 ## Local / Docker
 
 - T2: no extra services.
-- T3: rod + cookie path env documented in **`contracts/environment.md`** when first T3 collector ships (and `internal/config`).
+- T3: Chromium/Chrome available to the process; **go-rod** + env documented in **`contracts/environment.md`**; shared **`browserfetch`** package (**`tasks.md`** § **M**). Per-source session files (e.g. LinkedIn) are **not** part of **`browserfetch`** unless a future contract extends it.
 
 ## Planning artifacts
 
@@ -155,7 +156,8 @@ Offline: **`httptest`** + bodies from **`contracts/test-fixtures.md`** (or copie
 - `contracts/jobs-table-extension.md` — optional SQL columns
 - `contracts/test-fixtures.md` — fenced sample bodies
 - `contracts/sources-inventory.md`
-- `contracts/environment.md` — T3 env placeholder
+- `contracts/environment.md` — T3 / browser env
+- `contracts/browser-fetch.md` — shared Tier-3 document fetch (Built In, future LinkedIn)
 - `contracts/debug-http-collectors.md` — debug POST JSON types + date `query` examples
 - `resources/europe-remotely.md`, `resources/working-nomads.md`, `resources/dou.md`, `resources/himalayas.md`, `resources/djinni.md`, `resources/builtin.md`
 - `plan.md`, `tasks.md`, `research.md`, `checklists/requirements.md`

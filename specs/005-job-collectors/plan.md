@@ -50,7 +50,7 @@ Implement **two MVP collectors** (Europe Remotely, Working Nomads) under **`inte
 | D2 | **Retries** | None on collector HTTP — **`contracts/collector.md`** |
 | D3 | **Partial batch** | Missing required fields on a card/hit → **abort whole `Fetch`** for that source (except Europe date soft-fail) — **`contracts/collector.md`** |
 | D4 | **Fixtures** | Samples live in **`contracts/test-fixtures.md`**; code may copy to `testdata/` |
-| D5 | **Rod / T3** | Out of scope for MVP two sources; **`contracts/environment.md`** when first T3 collector appears |
+| D5 | **Rod / T3** | Shared **`contracts/browser-fetch.md`** + **`internal/collectors/browserfetch`**; **`contracts/environment.md`** + config loaders; **`tasks.md`** § **M**; Built In optional browser transport; LinkedIn reuses **`browserfetch`** when specced |
 
 ## Engineering follow-ups (non-blocking)
 
@@ -79,5 +79,6 @@ specs/005-job-collectors/
 internal/collectors/
 ├── europe_remotely/   # or euremote/ — one package per source
 ├── working_nomads/
+├── browserfetch/      # optional Tier-3 URL → HTML (go-rod); see contracts/browser-fetch.md
 └── utils/
 ```

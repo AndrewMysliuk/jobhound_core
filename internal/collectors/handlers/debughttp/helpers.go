@@ -95,6 +95,9 @@ func applyDjinniOverrides(req *schema.CollectorsPOSTBody, c *djinni.Djinni) {
 }
 
 func applyBuiltinOverrides(req *schema.CollectorsPOSTBody, c *builtin.BuiltIn) {
+	if req.BuiltinUseBrowser != nil {
+		c.UseBrowser = *req.BuiltinUseBrowser
+	}
 	if req.BuiltinInterRequestDelayMs != nil {
 		c.InterRequestDelay = time.Duration(*req.BuiltinInterRequestDelayMs) * time.Millisecond
 	}

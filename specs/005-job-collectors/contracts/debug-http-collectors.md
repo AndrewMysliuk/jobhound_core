@@ -88,8 +88,14 @@ type DebugCollectorsRequest = {
   /** Built In only: inter-request delay override in milliseconds (default from `JOBHOUND_COLLECTOR_BUILTIN_INTER_REQUEST_DELAY_MS`). Ignored on other routes. */
   builtin_inter_request_delay_ms?: number;
 
-  /** Built In only: max listing pages **per country** (1 or 2 per `resources/builtin.md`). Omitted → `2`. */
+  /** Built In only: max listing pages **per country** (1 or 2 per `resources/builtin.md`). Omitted → production default (`1`). */
   builtin_max_listing_pages_per_country?: number;
+
+  /**
+   * Built In only: when true/false, overrides **`UseBrowser`** for this debug request (rod vs `net/http`).
+   * Requires the agent to have been started with a rod fetcher (**`JOBHOUND_BROWSER_ENABLED`**) when set to `true`; otherwise the collector returns an error.
+   */
+  builtin_use_browser?: boolean;
 };
 ```
 
@@ -98,7 +104,7 @@ type DebugCollectorsRequest = {
 `search` and `dou_inter_request_delay_ms` are **ignored** on `europe_remotely`, `working_nomads`, `himalayas`, and `djinni`.  
 `q`, `use_search`, and `max_pages` are **only** read for `himalayas` (and `page` for Himalayas search mode).  
 `all_keywords`, `djinni_inter_request_delay_ms`, and **`djinni_page`** are **only** read for `djinni` when wired.  
-`builtin_search`, `builtin_inter_request_delay_ms`, and **`builtin_max_listing_pages_per_country`** are **only** read for **`builtin`**.  
+`builtin_search`, `builtin_inter_request_delay_ms`, **`builtin_max_listing_pages_per_country`**, and **`builtin_use_browser`** are **only** read for **`builtin`**.  
 `europe_remotely`, `working_nomads`, and `dou_ua` ignore Himalayas, Djinni-only, and Built In–only keys. See **`../tasks.md`** § J, § K, and § L.
 
 **`limit`** on **`dou_ua`**: when a concrete `*dou.DOU` is wired, maps to **`MaxJobs`** for that request (early stop). Omitted default `200` still applies to the JSON response cap for stub collectors; see **`../spec.md`**.

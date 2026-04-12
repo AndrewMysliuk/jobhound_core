@@ -9,7 +9,11 @@ RUN CGO_ENABLED=0 go build -o /out/agent ./cmd/agent && \
 	CGO_ENABLED=0 go build -o /out/api ./cmd/api
 
 FROM debian:bookworm-slim
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates \
+# Chromium + libs for go-rod (Built In T3 / future LinkedIn). Binary: /usr/bin/chromium
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+	ca-certificates \
+	chromium \
+	fonts-liberation \
 	&& rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=build /out/agent /usr/local/bin/agent

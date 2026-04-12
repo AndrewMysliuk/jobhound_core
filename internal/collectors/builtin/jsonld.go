@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -297,41 +299,66 @@ func hiringOrgName(raw json.RawMessage) string {
 	return ""
 }
 
-func applyURLFromHiringOrg(raw json.RawMessage) string {
-	if len(bytes.TrimSpace(raw)) == 0 {
-		return ""
-	}
-	var m struct {
-		SameAs json.RawMessage `json:"sameAs"`
-	}
-	if json.Unmarshal(raw, &m) != nil {
-		return ""
-	}
-	return firstHTTPURLFromRaw(m.SameAs)
-}
+// builtinHowToApplyRE matches howToApply inside Builtin.jobPostInit({...}) script JSON.
+var builtinHowToApplyRE = regexp.MustCompile(`"howToApply"\s*:\s*"((?:[^"\\]|\\.)*)"`)
 
-func firstHTTPURLFromRaw(raw json.RawMessage) string {
-	if len(bytes.TrimSpace(raw)) == 0 {
+// extractBuiltinApplyURLFromDetailHTML returns the external ATS apply link.
+// Built In puts it on a#applyButton and in job.howToApply in jobPostInit JSON — not in JobPosting JSON-LD
+// (hiringOrganization.sameAs is the company profile on builtin.com, not the apply URL).
+func extractBuiltinApplyURLFromDetailHTML(html, jobDetailPageURL string) string {
+	doc, err := goquery.NewDocumentFromReader(strings.NewReader(html))
+	if err != nil {
 		return ""
 	}
-	var s string
-	if json.Unmarshal(raw, &s) == nil {
-		s = strings.TrimSpace(s)
-		if strings.HasPrefix(strings.ToLower(s), "http://") || strings.HasPrefix(strings.ToLower(s), "https://") {
-			return s
+	var href string
+	if btn := doc.Find(`a#applyButton[href]`).First(); btn.Length() > 0 {
+		if h, ok := btn.Attr("href"); ok {
+			href = strings.TrimSpace(h)
 		}
-		return ""
 	}
-	var ss []string
-	if json.Unmarshal(raw, &ss) == nil {
-		for _, x := range ss {
-			x = strings.TrimSpace(x)
-			if strings.HasPrefix(strings.ToLower(x), "http://") || strings.HasPrefix(strings.ToLower(x), "https://") {
-				return x
+	href = resolveBuiltinApplyHref(href, jobDetailPageURL)
+	if isHTTPSOrHTTPURL(href) {
+		return href
+	}
+
+	if m := builtinHowToApplyRE.FindStringSubmatch(html); len(m) > 1 {
+		var decoded string
+		if err := json.Unmarshal([]byte(`"`+m[1]+`"`), &decoded); err == nil {
+			decoded = strings.TrimSpace(decoded)
+			decoded = resolveBuiltinApplyHref(decoded, jobDetailPageURL)
+			if isHTTPSOrHTTPURL(decoded) {
+				return decoded
 			}
 		}
 	}
 	return ""
+}
+
+func isHTTPSOrHTTPURL(s string) bool {
+	s = strings.TrimSpace(s)
+	ls := strings.ToLower(s)
+	return strings.HasPrefix(ls, "https://") || strings.HasPrefix(ls, "http://")
+}
+
+func resolveBuiltinApplyHref(href, pageURL string) string {
+	href = strings.TrimSpace(href)
+	if href == "" {
+		return ""
+	}
+	if isHTTPSOrHTTPURL(href) {
+		return href
+	}
+	if strings.HasPrefix(href, "//") {
+		return "https:" + href
+	}
+	if strings.HasPrefix(href, "/") && strings.TrimSpace(pageURL) != "" {
+		if base, err := url.Parse(pageURL); err == nil {
+			if ref, err := base.Parse(href); err == nil {
+				return ref.String()
+			}
+		}
+	}
+	return href
 }
 
 func builtinTags(p *jobPostingParsed) []string {

@@ -5,6 +5,8 @@
 #   5432  app Postgres   | 6379 Redis | 7233 Temporal gRPC | 8088 Temporal UI
 #   3000  public API  |  3001  agent debug HTTP (collectors) — two processes, two ports
 #
+# Built In T3: image includes chromium; agent/worker set JOBHOUND_BROWSER_* so rod can run (no-sandbox required as root in container).
+#
 # In-container URLs (not localhost): postgres, redis, temporal — see service env below.
 # Compose loads .env for variable substitution only; ${JOBHOUND_ANTHROPIC_API_KEY:-} passes the key into worker.
 
@@ -128,6 +130,9 @@ services:
       JOBHOUND_TEMPORAL_ADDRESS: temporal:7233
       JOBHOUND_REDIS_URL: redis://redis:6379/0
       JOBHOUND_DEBUG_HTTP_ADDR: 0.0.0.0:3001
+      JOBHOUND_BROWSER_ENABLED: "1"
+      JOBHOUND_BROWSER_BIN: /usr/bin/chromium
+      JOBHOUND_BROWSER_NO_SANDBOX: "1"
     ports:
       - "3001:3001"
     depends_on:
@@ -144,6 +149,9 @@ services:
       JOBHOUND_DATABASE_URL: postgres://jobhound:jobhound@postgres:5432/jobhound?sslmode=disable
       JOBHOUND_TEMPORAL_ADDRESS: temporal:7233
       JOBHOUND_REDIS_URL: redis://redis:6379/0
+      JOBHOUND_BROWSER_ENABLED: "1"
+      JOBHOUND_BROWSER_BIN: /usr/bin/chromium
+      JOBHOUND_BROWSER_NO_SANDBOX: "1"
       JOBHOUND_ANTHROPIC_API_KEY: ${JOBHOUND_ANTHROPIC_API_KEY:-}
       JOBHOUND_ANTHROPIC_MODEL: ${JOBHOUND_ANTHROPIC_MODEL:-}
     depends_on:

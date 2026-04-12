@@ -24,6 +24,8 @@ type Config struct {
 	DjinniCollector DjinniCollectorConfig
 	// BuiltinCollector configures the Built In remote listing collector (005-job-collectors).
 	BuiltinCollector BuiltinCollectorConfig
+	// Browser configures optional Tier-3 headless document fetch (005-job-collectors / browserfetch).
+	Browser BrowserConfig
 
 	AnthropicAPIKey     string
 	AnthropicModel      string
@@ -54,6 +56,7 @@ func Load() Config {
 		HimalayasCollector: LoadHimalayasCollectorFromEnv(),
 		DjinniCollector:    LoadDjinniCollectorFromEnv(),
 		BuiltinCollector:   LoadBuiltinCollectorFromEnv(),
+		Browser:            LoadBrowserFromEnv(),
 		AnthropicAPIKey:    LoadAnthropicAPIKeyFromEnv(),
 		AnthropicModel:     model,
 	}

@@ -1,14 +1,24 @@
-# Contract: collector environment (T3 placeholder)
+# Contract: collector environment (T2 + Tier 3 browser)
 
 **Spec**: `005-job-collectors`  
+**Last Updated**: 2026-04-12  
 **Status**: Draft
 
-Headless collectors (**Tier 3**) use **go-rod** and optional **session/cookies** per `.specify/memory/constitution.md`.
+**Tier 3 — shared document fetch:** **`internal/collectors/browserfetch`** (go-rod) loads **URL → HTML** for collectors that opt in (**Built In** first; **LinkedIn** reuses the same module — see **`browser-fetch.md`**). **Per-source** session/cookies (e.g. LinkedIn) are **not** defined in this section until that collector ships; they live beside the source collector + `internal/config`.
 
-When the first T3 collector ships, document here:
+### Shared browser / Rod (`browser-fetch.md`, `internal/config/collectors_browser.go`)
 
-- `JOBHOUND_*` env names for rod, cookie file path, and related flags.
-- Pointers to `internal/config` loaders (single source of truth for parsing).
+| Variable | Default (when unset) | Meaning |
+| -------- | --------------------- | ------- |
+| `JOBHOUND_BROWSER_ENABLED` | (unset / off) | When set to `1`, `true`, `yes`, or `on`, **`internal/collectors/bootstrap`** launches a shared Chromium (go-rod) and may wire **`browserfetch.HTMLDocumentFetcher`** into Built In per **`JOBHOUND_COLLECTOR_BUILTIN_USE_BROWSER`** (see **Built In** table below). |
+| `JOBHOUND_BROWSER_BIN` | (unset) | Optional path to Chromium/Chrome; empty uses go-rod launcher defaults (may download a revision). |
+| `JOBHOUND_BROWSER_USER_DATA_DIR` | (unset) | Optional persistent Chromium user-data directory; empty uses launcher temp profile. |
+| `JOBHOUND_BROWSER_NAV_TIMEOUT_MS` | `120000` | Per-URL navigation + load + HTML extraction timeout for **`browserfetch.RodFetcher.FetchHTMLDocument`**. |
+| `JOBHOUND_BROWSER_NO_SANDBOX` | (unset / off) | When `1`/`true`/`yes`/`on`, launches Chromium with **`--no-sandbox`** and **`--disable-dev-shm-usage`** (via go-rod). **Required** for Chromium running **as root in Docker** (see repo **`Dockerfile`** / **`docker-compose.yml`**). Avoid on untrusted multi-tenant hosts. |
+
+Built In uses **`net/http`** by default; with **`JOBHOUND_BROWSER_ENABLED`** and **`JOBHOUND_COLLECTOR_BUILTIN_USE_BROWSER`** (default on), it uses rod for listing and detail — see **Built In** table below.
+
+Existing Built In delay: **`JOBHOUND_COLLECTOR_BUILTIN_INTER_REQUEST_DELAY_MS`** (below) still applies between sequential fetches in both T2 and T3.
 
 **MVP HTML collectors (Europe Remotely, Working Nomads, DOU.ua)** are **T2** — shared HTTP timeouts and User-Agent live in `internal/collectors/utils`; DOU-specific politeness and caps are below.
 
@@ -39,7 +49,8 @@ When the first T3 collector ships, document here:
 
 | Variable | Default (when unset) | Meaning |
 | -------- | --------------------- | ------- |
-| `JOBHOUND_COLLECTOR_BUILTIN_INTER_REQUEST_DELAY_MS` | `300` | Pause between **every** consecutive HTTP call (listing pages per country, each detail `GET`). Set `0` to disable (tests / local only). Runs can be **large** (many countries × listing pages + deduped details) — delay avoids hammering the origin. |
+| `JOBHOUND_COLLECTOR_BUILTIN_INTER_REQUEST_DELAY_MS` | `500` | Pause between **every** consecutive document fetch (listing pages per country, each detail) — **T2** or **T3**. Set `0` to disable (tests / local only). Runs can be **large** (many countries × listing pages + deduped details) — delay avoids hammering the origin. |
+| `JOBHOUND_COLLECTOR_BUILTIN_USE_BROWSER` | on | When **`JOBHOUND_BROWSER_ENABLED`** is on, Built In uses rod for HTML unless this is `0` / `false` / `no` / `off` (force **`net/http`** for Built In only). |
 
 ## Local debug HTTP (agent, optional)
 
@@ -48,5 +59,6 @@ When the first T3 collector ships, document here:
 ## Related
 
 - `../spec.md`
+- `browser-fetch.md` — Tier-3 shared fetch contract
 - `debug-http-collectors.md`
 - `.specify/memory/constitution.md`

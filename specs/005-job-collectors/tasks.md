@@ -118,7 +118,7 @@
 
 ## L. Built In (sixth collector; remote + JSON-LD)
 
-**Wire**: **`resources/builtin.md`** — **`GET`** `https://builtin.com/jobs/remote` with **`country`** (ISO **alpha-3**), **`allLocations=true`**, **`search`** (from non-empty slot), **`page`** **1** and **2** per country (stop early when **&lt; 20** on page 1); parse **`application/ld+json`** **`ItemList`** → job URLs; **`GET`** each detail → **`JobPosting`**. **`Fetch`** / empty **`FetchWithSlotSearch`**: **no HTTP**, **`[]Job`**. **EU-27 + GB + UA** only (29 alpha-3 codes). **Dedup** URLs across countries/pages before details. **Inter-request delay** (default **300 ms**, env — **`contracts/environment.md`**).
+**Wire**: **`resources/builtin.md`** — **`GET`** `https://builtin.com/jobs/remote` with **`country`** (ISO **alpha-3**), **`allLocations=true`**, **`search`** (from non-empty slot), **`page=1`** per country by default (optional **`page=2`** via debug **`builtin_max_listing_pages_per_country`** only; when enabled, stop early when **&lt; 20** on page 1); parse **`application/ld+json`** **`ItemList`** → job URLs; **`GET`** each detail → **`JobPosting`**. **`Fetch`** / empty **`FetchWithSlotSearch`**: **no HTTP**, **`[]Job`**. **18** territories (EU subset + **GB** + **UA**) per **`resources/builtin.md`**. **Dedup** URLs across countries/pages before details. **Per-request** listing/detail failures: **warn + skip**, return partial **`[]Job`**; **misconfiguration** (e.g. browser mode without fetcher) still **errors** the run. **Inter-request delay** (default **500 ms**, env — **`contracts/environment.md`**).
 
 1. [x] **Spec + contracts** — Definition of done: **`resources/builtin.md`** matches product decisions; **`contracts/collector.md`** lists **`builtin`** `Job.Source`, slot/`Fetch` exception, and **`search`** mapping; **`contracts/domain-mapping-mvp.md`** Built In table + **`PostedAt`** rule; **`contracts/sources-inventory.md`** row 6 **T2 (fact)** + Notes; **`contracts/environment.md`** delay variable; **`contracts/debug-http-collectors.md`** Built In keys; **`spec.md`** / **`research.md`** reference **`resources/builtin.md`** where appropriate.
 
@@ -126,7 +126,7 @@
 
 3. [x] **Config** — Definition of done: `internal/config/collectors_builtin.go` (or agreed name) loads **`JOBHOUND_COLLECTOR_BUILTIN_INTER_REQUEST_DELAY_MS`** per **`contracts/environment.md`**; optional debug-only overrides wired through handler when implemented.
 
-4. [x] **Implement collector** — Definition of done: `internal/collectors/builtin/` implements **`collectors.Collector`** + **`SlotSearchFetcher`**; country list + alpha-3→alpha-2 table from spec; listing pagination rules (max 2 pages, early stop); URL dedup; delay between all requests; map detail JSON-LD → **`domain.Job`** per **`domain-mapping-mvp.md`** (**`CountryCode`** from request **`country`** param); **`utils.CanonicalListingURL`** + **`AssignStableID`**; errors per **`collector.md`**.
+4. [x] **Implement collector** — Definition of done: `internal/collectors/builtin/` implements **`collectors.Collector`** + **`SlotSearchFetcher`**; country list + alpha-3→alpha-2 table from spec; listing pagination rules (default 1 page per country, optional 2 via debug, early stop when **&lt; 20** on page 1); URL dedup; delay between all requests; map detail JSON-LD → **`domain.Job`** per **`domain-mapping-mvp.md`** (**`CountryCode`** from request **`country`** param); **`utils.CanonicalListingURL`** + **`AssignStableID`**; errors per **`collector.md`**.
 
 5. [x] **Unit tests — Built In** — Definition of done: **`httptest`** listing + detail chain **without live network** using fixtures; assert at least one **`domain.Job`** with expected **title, company, URL, `CountryCode`** from simulated **`country=`**; empty slot / empty **`builtin_search`** returns zero jobs without outbound calls (handler or collector unit test).
 
@@ -134,4 +134,28 @@
 
 7. [x] **Inventory + status** — Definition of done: after ship, set Built In row **Status** to **MVP** or keep **Planned** per product phasing; **`tasks.md`** checkboxes updated.
 
-8. [ ] **Built In — Cloudflare / 403 on live ingest** — Definition of done: reproduce and document failure mode (403 + challenge HTML vs real listing); decide mitigation (**T3**, proxy/egress, pause source, or other) per **`spec.md`** § Follow-ups; implement or explicitly defer with owner/date in **`resources/builtin.md`**.
+8. [x] **Built In — Cloudflare / 403 (T3 path)** — Definition of done: failure mode documented (**403** + challenge HTML vs real listing); mitigation implemented via **§ M** (**generic `browserfetch`**) + Built In wiring (optional browser mode, default **`net/http`**); **`resources/builtin.md`**, **`contracts/environment.md`**, **`contracts/sources-inventory.md`** row 6 Notes updated; or explicit defer with owner/date in **`resources/builtin.md`** if product pauses Built In ingest.
+
+---
+
+## M. Tier-3 shared browser document fetcher (go-rod; Built In + future LinkedIn)
+
+**Goal:** one **source-agnostic** mechanism: **`ctx` + URL → HTML bytes** after headless Chromium navigation (see **`contracts/browser-fetch.md`**). **Built In** is the first consumer; **LinkedIn** (planned) **must reuse** the same package/interface — no second copy of Rod bootstrap for each site.
+
+**Non-goals in `browserfetch`:** JSON-LD / goquery / `domain.Job`; per-board pagination; login flows (LinkedIn session stays in **`internal/collectors/linkedin/`** or equivalent when specced, calling into **`browserfetch`** for document load only where appropriate).
+
+1. [x] **Contracts** — Definition of done: **`contracts/browser-fetch.md`** reviewed; **`contracts/collector.md`** (layout: `browserfetch` is shared infra under **`internal/collectors/`**, not a `Collector`); **`spec.md`**, **`research.md`**, **`contracts/sources-inventory.md`** reference **`browser-fetch.md`** / § **M** where relevant.
+
+2. [x] **Environment** — Definition of done: **`contracts/environment.md`** lists shared **`JOBHOUND_BROWSER_*`** (or agreed prefix): e.g. master enable, Chromium executable path, navigation/page timeout, optional user-data dir; plus Built In override if needed (**`JOBHOUND_COLLECTOR_BUILTIN_USE_BROWSER`** or “follow global only” — pick one and document); **`internal/config`** loaders named in same doc when code lands.
+
+3. [x] **Package `internal/collectors/browserfetch`** — Definition of done: exported **fetch interface** + **Rod** implementation; **no** site-specific URLs or selectors inside; lifecycle documented (long-lived browser vs per-request — choose and note ops impact).
+
+4. [x] **Unit tests (default `go test`)** — Definition of done: **fake/mock** fetcher implements the interface; **no** mandatory Chrome in CI; optional Rod smoke: **`integration`** tag and/or manual steps in **`browser-fetch.md`** or **`resources/builtin.md`**.
+
+5. [x] **Built In integration** — Definition of done: **`builtin`** accepts injected **`HTMLDocumentFetcher`** (name as in code); **default** listing + detail loads use existing **`net/http`**; when browser mode enabled, **same URLs** go through **`browserfetch`**; JSON-LD parsing unchanged.
+
+6. [x] **Bootstrap** — Definition of done: **`internal/collectors/bootstrap`** constructs optional rod-backed fetcher from config and passes into **`builtin.BuiltIn`**; T2 collectors unchanged.
+
+7. [x] **Debug HTTP** — Definition of done: if overrides are useful, document **`builtin_use_browser`** (bool) in **`contracts/debug-http-collectors.md`** and **`internal/collectors/schema/debug_http.go`** when implemented.
+
+8. [x] **Close § L.8** — Definition of done: checklist **L.8** marked complete when **§ M** items **1–7** (or agreed subset + explicit defer) and Built In doc/status are updated.

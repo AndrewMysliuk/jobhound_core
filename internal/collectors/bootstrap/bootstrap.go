@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/browserfetch"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/builtin"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/djinni"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/dou"
@@ -32,7 +33,8 @@ import (
 // djinniCfg from config.Load().DjinniCollector (JOBHOUND_COLLECTOR_DJINNI_*).
 // himCfg: when Disabled, himalayas is nil.
 // builtinCfg from config.Load().BuiltinCollector (JOBHOUND_COLLECTOR_BUILTIN_*).
-func MVPCollectors(ctx context.Context, httpClient *http.Client, dataDir string, douCfg config.DouCollectorConfig, djinniCfg config.DjinniCollectorConfig, builtinCfg config.BuiltinCollectorConfig, himCfg config.HimalayasCollectorConfig) (europeRemotely, workingNomads, douUa, djin, builtIn collectors.Collector, himal collectors.Collector, err error) {
+// browserCfg from config.Load().Browser (JOBHOUND_BROWSER_*); when Enabled and builtinCfg.UseBrowserForHTML, a rod-backed fetcher is constructed for Built In.
+func MVPCollectors(ctx context.Context, httpClient *http.Client, dataDir string, douCfg config.DouCollectorConfig, djinniCfg config.DjinniCollectorConfig, builtinCfg config.BuiltinCollectorConfig, himCfg config.HimalayasCollectorConfig, browserCfg config.BrowserConfig) (europeRemotely, workingNomads, douUa, djin, builtIn collectors.Collector, himal collectors.Collector, err error) {
 	if httpClient == nil {
 		httpClient = utils.NewHTTPClient()
 	}
@@ -76,9 +78,26 @@ func MVPCollectors(ctx context.Context, httpClient *http.Client, dataDir string,
 		InterRequestDelay: djinniCfg.InterRequestDelay,
 		Countries:         cr,
 	}
+	var htmlFetch browserfetch.HTMLDocumentFetcher
+	useBuiltinBrowser := false
+	if browserCfg.Enabled && builtinCfg.UseBrowserForHTML {
+		f, ferr := browserfetch.NewRodFetcher(browserfetch.RodOptions{
+			Bin:         browserCfg.Bin,
+			UserDataDir: browserCfg.UserDataDir,
+			NavTimeout:  browserCfg.NavTimeout,
+			NoSandbox:   browserCfg.NoSandbox,
+		})
+		if ferr != nil {
+			return nil, nil, nil, nil, nil, nil, fmt.Errorf("collectors bootstrap: browser fetcher: %w", ferr)
+		}
+		htmlFetch = f
+		useBuiltinBrowser = true
+	}
 	builtinColl := &builtin.BuiltIn{
-		HTTPClient:        httpClient,
-		InterRequestDelay: builtinCfg.InterRequestDelay,
+		HTTPClient:          httpClient,
+		InterRequestDelay:   builtinCfg.InterRequestDelay,
+		HTMLDocumentFetcher: htmlFetch,
+		UseBrowser:          useBuiltinBrowser,
 	}
 	var him *himalayas.Himalayas
 	if !himCfg.Disabled {
@@ -107,8 +126,8 @@ func MVPMulti(europeRemotely, workingNomads, douUa, djinni, builtIn, himalayas c
 }
 
 // MVPCollector returns a single collectors.Collector that runs all MVP sources.
-func MVPCollector(ctx context.Context, httpClient *http.Client, dataDir string, douCfg config.DouCollectorConfig, djinniCfg config.DjinniCollectorConfig, builtinCfg config.BuiltinCollectorConfig, himCfg config.HimalayasCollectorConfig, log *zerolog.Logger) (collectors.Collector, error) {
-	er, wn, d, dj, bi, h, err := MVPCollectors(ctx, httpClient, dataDir, douCfg, djinniCfg, builtinCfg, himCfg)
+func MVPCollector(ctx context.Context, httpClient *http.Client, dataDir string, douCfg config.DouCollectorConfig, djinniCfg config.DjinniCollectorConfig, builtinCfg config.BuiltinCollectorConfig, himCfg config.HimalayasCollectorConfig, browserCfg config.BrowserConfig, log *zerolog.Logger) (collectors.Collector, error) {
+	er, wn, d, dj, bi, h, err := MVPCollectors(ctx, httpClient, dataDir, douCfg, djinniCfg, builtinCfg, himCfg, browserCfg)
 	if err != nil {
 		return nil, err
 	}
