@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/builtin"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/djinni"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/dou"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/europeremotely"
@@ -18,7 +20,7 @@ import (
 	"github.com/rs/zerolog"
 )
 
-func runCollectorDebug(w http.ResponseWriter, r *http.Request, logH zerolog.Logger, coll collectors.Collector, wnConcrete *workingnomads.WorkingNomads, erConcrete *europeremotely.EuropeRemotely, douConcrete *dou.DOU, himConcrete *himalayas.Himalayas, djinConcrete *djinni.Djinni) {
+func runCollectorDebug(w http.ResponseWriter, r *http.Request, logH zerolog.Logger, coll collectors.Collector, wnConcrete *workingnomads.WorkingNomads, erConcrete *europeremotely.EuropeRemotely, douConcrete *dou.DOU, himConcrete *himalayas.Himalayas, djinConcrete *djinni.Djinni, builtinConcrete *builtin.BuiltIn) {
 	if coll == nil {
 		logH.Error().Msg("collector not configured")
 		http.Error(w, "collector not configured", http.StatusInternalServerError)
@@ -60,6 +62,7 @@ func runCollectorDebug(w http.ResponseWriter, r *http.Request, logH zerolog.Logg
 	isDOU := coll.Name() == dou.SourceName && douConcrete != nil
 	isHim := coll.Name() == himalayas.SourceName && himConcrete != nil
 	isDjin := coll.Name() == djinni.SourceName && djinConcrete != nil
+	isBuiltin := coll.Name() == builtin.SourceName && builtinConcrete != nil
 	switch {
 	case isWN:
 		c := *wnConcrete
@@ -104,6 +107,22 @@ func runCollectorDebug(w http.ResponseWriter, r *http.Request, logH zerolog.Logg
 		}
 		jobs, fetchErr = c.Fetch(ctx)
 		upstreamFetched = len(jobs)
+	case isBuiltin:
+		c := *builtinConcrete
+		applyBuiltinOverrides(&req, &c)
+		if limit > 0 {
+			c.MaxJobs = limit
+		}
+		slotQ := ""
+		if req.BuiltinSearch != nil {
+			slotQ = strings.TrimSpace(*req.BuiltinSearch)
+		}
+		if slotQ == "" {
+			jobs, fetchErr = c.Fetch(ctx)
+		} else {
+			jobs, fetchErr = c.FetchWithSlotSearch(ctx, slotQ)
+		}
+		upstreamFetched = len(jobs)
 	default:
 		jobs, fetchErr = coll.Fetch(ctx)
 		upstreamFetched = len(jobs)
@@ -128,7 +147,7 @@ func runCollectorDebug(w http.ResponseWriter, r *http.Request, logH zerolog.Logg
 		Collector: coll.Name(),
 		Count:     len(jobs),
 	}
-	if !isWN && !isER && !isDOU && !isHim && !isDjin && upstreamFetched > len(jobs) {
+	if !isWN && !isER && !isDOU && !isHim && !isDjin && !isBuiltin && upstreamFetched > len(jobs) {
 		resp.UpstreamFetched = upstreamFetched
 	}
 

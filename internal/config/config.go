@@ -22,6 +22,8 @@ type Config struct {
 	HimalayasCollector HimalayasCollectorConfig
 	// DjinniCollector configures the Djinni HTML + JSON-LD collector (005-job-collectors).
 	DjinniCollector DjinniCollectorConfig
+	// BuiltinCollector configures the Built In remote listing collector (005-job-collectors).
+	BuiltinCollector BuiltinCollectorConfig
 
 	AnthropicAPIKey     string
 	AnthropicModel      string
@@ -51,6 +53,7 @@ func Load() Config {
 		DouCollector:       LoadDouCollectorFromEnv(),
 		HimalayasCollector: LoadHimalayasCollectorFromEnv(),
 		DjinniCollector:    LoadDjinniCollectorFromEnv(),
+		BuiltinCollector:   LoadBuiltinCollectorFromEnv(),
 		AnthropicAPIKey:    LoadAnthropicAPIKeyFromEnv(),
 		AnthropicModel:     model,
 	}

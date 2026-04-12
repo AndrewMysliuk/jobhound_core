@@ -3,9 +3,9 @@
 **Branch**: `005-job-collectors`  
 **Spec**: `specs/005-job-collectors/spec.md`  
 **Date**: 2026-03-30  
-**Last Updated**: 2026-04-11
+**Last Updated**: 2026-04-12
 
-Short inventory and pointers. **Wire/DOM/JSON detail** is normative in **`resources/europe-remotely.md`**, **`resources/working-nomads.md`**, **`resources/dou.md`**, **`resources/himalayas.md`**, and **`resources/djinni.md`**, not duplicated here.
+Short inventory and pointers. **Wire/DOM/JSON detail** is normative in **`resources/europe-remotely.md`**, **`resources/working-nomads.md`**, **`resources/dou.md`**, **`resources/himalayas.md`**, **`resources/djinni.md`**, and **`resources/builtin.md`**, not duplicated here.
 
 ---
 
@@ -17,7 +17,8 @@ Short inventory and pointers. **Wire/DOM/JSON detail** is normative in **`resour
 | Working Nomads | `POST` `jobsapi/_search` → Elasticsearch-shaped JSON | **`encoding/json`** only for core fields |
 | DOU.ua | `GET` listing + `POST` `xhr-load` → JSON + HTML fragment; `GET` detail | `encoding/json` + **goquery**; **`http.Client` with cookie jar** for CSRF cookie |
 | Himalayas | `GET` `/jobs/api` and `/jobs/api/search` → JSON | **`encoding/json`** only; **no** RSC/HTML parse (`internal/collectors/himalayas`) |
-| Djinni (planned) | `GET` listing + `GET` detail → HTML + **`application/ld+json`** | **goquery** for listing links / hints; **`encoding/json`** for `JobPosting`; inter-request delay |
+| Djinni | `GET` listing + `GET` detail → HTML + **`application/ld+json`** | **goquery** for listing links / hints; **`encoding/json`** for `JobPosting`; inter-request delay |
+| Built In (MVP) | `GET` `/jobs/remote` listing + `GET` detail → HTML + **`application/ld+json`** (`ItemList` + `JobPosting`) | **`encoding/json`** for JSON-LD; **search-required**; **inter-request delay**; EU+UK+UA **alpha-3** filters |
 
 ## 2. Test strategy (aligned with `004`)
 
@@ -37,3 +38,4 @@ Short inventory and pointers. **Wire/DOM/JSON detail** is normative in **`resour
 ## 4. Risks (summary)
 
 - Undocumented `admin-ajax.php` / `_search` body shapes — mitigate with fixtures and occasional manual capture in **`resources/*.md`**.
+- **Built In (`builtin.com`)** — **Cloudflare** may return **403** + interstitial HTML for automated / non-residential clients; stage-1 **`RunIngestSourceActivity`** can fail after retries. Tracked as follow-up in **`spec.md`** § Follow-ups and **`tasks.md`** § L.8.

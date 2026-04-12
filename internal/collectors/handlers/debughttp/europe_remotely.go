@@ -8,5 +8,5 @@ import (
 
 func (h *HTTPHandler) postEuropeRemotely(w http.ResponseWriter, r *http.Request) {
 	logH := logging.EnrichWithContext(r.Context(), h.log.With().Str(logging.FieldHandler, "postEuropeRemotely").Logger())
-	runCollectorDebug(w, r, logH, h.europeRemotely, nil, h.europeRemotelyConcrete, nil, h.himalayasConcrete, nil)
+	runCollectorDebug(w, r, logH, h.europeRemotely, nil, h.europeRemotelyConcrete, nil, h.himalayasConcrete, nil, nil)
 }

@@ -8,5 +8,5 @@ import (
 
 func (h *HTTPHandler) postDjinni(w http.ResponseWriter, r *http.Request) {
 	logH := logging.EnrichWithContext(r.Context(), h.log.With().Str(logging.FieldHandler, "postDjinni").Logger())
-	runCollectorDebug(w, r, logH, h.djinni, h.workingNomadsConcrete, h.europeRemotelyConcrete, h.douUaConcrete, h.himalayasConcrete, h.djinniConcrete)
+	runCollectorDebug(w, r, logH, h.djinni, h.workingNomadsConcrete, h.europeRemotelyConcrete, h.douUaConcrete, h.himalayasConcrete, h.djinniConcrete, h.builtinConcrete)
 }

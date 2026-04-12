@@ -174,9 +174,15 @@ func (s *Service) card(ctx context.Context, row slotstorage.Slot) (*schema.SlotC
 	if err != nil {
 		return nil, err
 	}
-	st1 := slotworkflows.Stage1FromDescribe(s.Temporal.DescribeWorkflow(ctx, ingestWorkflowID(uid), ""))
-	st2 := slotworkflows.Stage2FromDescribe(s.Temporal.DescribeWorkflow(ctx, stage2WorkflowID(uid), ""))
-	st3 := slotworkflows.Stage3FromDescribe(s.Temporal.DescribeWorkflow(ctx, stage3WorkflowID(uid), ""))
+	desc1, err1 := s.Temporal.DescribeWorkflow(ctx, ingestWorkflowID(uid), "")
+	desc2, err2 := s.Temporal.DescribeWorkflow(ctx, stage2WorkflowID(uid), "")
+	desc3, err3 := s.Temporal.DescribeWorkflow(ctx, stage3WorkflowID(uid), "")
+	st1 := slotworkflows.Stage1FromDescribe(desc1, err1)
+	st2 := slotworkflows.Stage2FromDescribe(desc2, err2)
+	st3 := slotworkflows.Stage3FromDescribe(desc3, err3)
+	st1.Payload = slotworkflows.StagePayloadFromTemporal(ctx, s.Temporal, ingestWorkflowID(uid), desc1, err1, 1)
+	st2.Payload = slotworkflows.StagePayloadFromTemporal(ctx, s.Temporal, stage2WorkflowID(uid), desc2, err2, 2)
+	st3.Payload = slotworkflows.StagePayloadFromTemporal(ctx, s.Temporal, stage3WorkflowID(uid), desc3, err3, 3)
 	return &schema.SlotCard{
 		ID:        row.ID,
 		Name:      row.Name,

@@ -1,6 +1,6 @@
 # Tasks: Job collectors (MVP sources)
 
-**Last Updated**: 2026-04-11  
+**Last Updated**: 2026-04-12  
 **Input**: `spec.md`, `plan.md`, `research.md`, `contracts/*`, `resources/*`  
 **Tests**: REQUIRED — `**go test ./...`** without live network; `**httptest**` + bodies aligned with `**contracts/test-fixtures.md**`. Wire shapes and selectors: `**resources/europe-remotely.md**`, `**resources/working-nomads.md**`, `**resources/dou.md**` (DOU.ua).
 
@@ -113,3 +113,25 @@
 6. [x] **Wire-up + debug HTTP** — Definition of done: `internal/collectors/bootstrap` registers Djinni when configured; `handlers/debughttp` adds **`POST /debug/collectors/djinni`** + `handler.go` registration; optional JSON keys **`all_keywords`**, **`djinni_page`**, **`djinni_inter_request_delay_ms`** documented in **`contracts/debug-http-collectors.md`** and `internal/collectors/schema/debug_http.go` if used; **`limit`** maps to **`MaxJobs`** when wired.
 
 7. [x] **Inventory status** — Definition of done: after ship, set Djinni row **Status** to **MVP** or keep **Planned** per product phasing; **`spec.md`** acceptance criteria updated if Djinni becomes MVP.
+
+---
+
+## L. Built In (sixth collector; remote + JSON-LD)
+
+**Wire**: **`resources/builtin.md`** — **`GET`** `https://builtin.com/jobs/remote` with **`country`** (ISO **alpha-3**), **`allLocations=true`**, **`search`** (from non-empty slot), **`page`** **1** and **2** per country (stop early when **&lt; 20** on page 1); parse **`application/ld+json`** **`ItemList`** → job URLs; **`GET`** each detail → **`JobPosting`**. **`Fetch`** / empty **`FetchWithSlotSearch`**: **no HTTP**, **`[]Job`**. **EU-27 + GB + UA** only (29 alpha-3 codes). **Dedup** URLs across countries/pages before details. **Inter-request delay** (default **300 ms**, env — **`contracts/environment.md`**).
+
+1. [x] **Spec + contracts** — Definition of done: **`resources/builtin.md`** matches product decisions; **`contracts/collector.md`** lists **`builtin`** `Job.Source`, slot/`Fetch` exception, and **`search`** mapping; **`contracts/domain-mapping-mvp.md`** Built In table + **`PostedAt`** rule; **`contracts/sources-inventory.md`** row 6 **T2 (fact)** + Notes; **`contracts/environment.md`** delay variable; **`contracts/debug-http-collectors.md`** Built In keys; **`spec.md`** / **`research.md`** reference **`resources/builtin.md`** where appropriate.
+
+2. [x] **Fixtures** — Definition of done: **`contracts/test-fixtures.md`** fenced samples — minimal listing HTML with **`ItemList`** `@graph` and minimal detail HTML with **`JobPosting`** `@graph` (aligned with **`resources/builtin.md`**).
+
+3. [x] **Config** — Definition of done: `internal/config/collectors_builtin.go` (or agreed name) loads **`JOBHOUND_COLLECTOR_BUILTIN_INTER_REQUEST_DELAY_MS`** per **`contracts/environment.md`**; optional debug-only overrides wired through handler when implemented.
+
+4. [x] **Implement collector** — Definition of done: `internal/collectors/builtin/` implements **`collectors.Collector`** + **`SlotSearchFetcher`**; country list + alpha-3→alpha-2 table from spec; listing pagination rules (max 2 pages, early stop); URL dedup; delay between all requests; map detail JSON-LD → **`domain.Job`** per **`domain-mapping-mvp.md`** (**`CountryCode`** from request **`country`** param); **`utils.CanonicalListingURL`** + **`AssignStableID`**; errors per **`collector.md`**.
+
+5. [x] **Unit tests — Built In** — Definition of done: **`httptest`** listing + detail chain **without live network** using fixtures; assert at least one **`domain.Job`** with expected **title, company, URL, `CountryCode`** from simulated **`country=`**; empty slot / empty **`builtin_search`** returns zero jobs without outbound calls (handler or collector unit test).
+
+6. [x] **Wire-up + debug HTTP** — Definition of done: `internal/collectors/bootstrap` registers Built In when configured; `handlers/debughttp` adds **`POST /debug/collectors/builtin`** + `handler.go` registration; update **`internal/collectors/schema/debug_http.go`** for **`builtin_search`**, **`builtin_inter_request_delay_ms`**, **`builtin_max_listing_pages_per_country`** if used.
+
+7. [x] **Inventory + status** — Definition of done: after ship, set Built In row **Status** to **MVP** or keep **Planned** per product phasing; **`tasks.md`** checkboxes updated.
+
+8. [ ] **Built In — Cloudflare / 403 on live ingest** — Definition of done: reproduce and document failure mode (403 + challenge HTML vs real listing); decide mitigation (**T3**, proxy/egress, pause source, or other) per **`spec.md`** § Follow-ups; implement or explicitly defer with owner/date in **`resources/builtin.md`**.

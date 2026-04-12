@@ -3,7 +3,7 @@
 **Spec**: `005-job-collectors`  
 **Implementation**: `internal/collectors/handlers/debughttp`
 
-Local-only JSON body for **`POST /debug/collectors/europe_remotely`**, **`POST /debug/collectors/working_nomads`**, **`POST /debug/collectors/dou_ua`**, **`POST /debug/collectors/himalayas`**, and (when wired) **`POST /debug/collectors/djinni`**.  
+Local-only JSON body for **`POST /debug/collectors/europe_remotely`**, **`POST /debug/collectors/working_nomads`**, **`POST /debug/collectors/dou_ua`**, **`POST /debug/collectors/himalayas`**, **`POST /debug/collectors/djinni`**, and **`POST /debug/collectors/builtin`**.  
 **`Content-Type: application/json`**. No URL query parameters for these options.
 
 ---
@@ -81,6 +81,15 @@ type DebugCollectorsRequest = {
    * Ignored on other routes.
    */
   djinni_inter_request_delay_ms?: number;
+
+  /** Built In only: maps to remote listing query param `search` (slot keyword). Empty or omitted → collector returns no jobs (same as production empty slot). */
+  builtin_search?: string;
+
+  /** Built In only: inter-request delay override in milliseconds (default from `JOBHOUND_COLLECTOR_BUILTIN_INTER_REQUEST_DELAY_MS`). Ignored on other routes. */
+  builtin_inter_request_delay_ms?: number;
+
+  /** Built In only: max listing pages **per country** (1 or 2 per `resources/builtin.md`). Omitted → `2`. */
+  builtin_max_listing_pages_per_country?: number;
 };
 ```
 
@@ -89,7 +98,8 @@ type DebugCollectorsRequest = {
 `search` and `dou_inter_request_delay_ms` are **ignored** on `europe_remotely`, `working_nomads`, `himalayas`, and `djinni`.  
 `q`, `use_search`, and `max_pages` are **only** read for `himalayas` (and `page` for Himalayas search mode).  
 `all_keywords`, `djinni_inter_request_delay_ms`, and **`djinni_page`** are **only** read for `djinni` when wired.  
-`europe_remotely`, `working_nomads`, and `dou_ua` ignore Himalayas and Djinni-only keys. See **`../tasks.md`** § J and § K.
+`builtin_search`, `builtin_inter_request_delay_ms`, and **`builtin_max_listing_pages_per_country`** are **only** read for **`builtin`**.  
+`europe_remotely`, `working_nomads`, and `dou_ua` ignore Himalayas, Djinni-only, and Built In–only keys. See **`../tasks.md`** § J, § K, and § L.
 
 **`limit`** on **`dou_ua`**: when a concrete `*dou.DOU` is wired, maps to **`MaxJobs`** for that request (early stop). Omitted default `200` still applies to the JSON response cap for stub collectors; see **`../spec.md`**.
 
@@ -190,6 +200,17 @@ Exact clause shapes depend on their index mapping; if something returns an error
 }
 ```
 
+### Built In — slot search + delay
+
+```json
+{
+  "limit": 50,
+  "builtin_search": "frontend",
+  "builtin_inter_request_delay_ms": 500,
+  "builtin_max_listing_pages_per_country": 2
+}
+```
+
 ---
 
 ## Related
@@ -197,3 +218,4 @@ Exact clause shapes depend on their index mapping; if something returns an error
 - `../spec.md` — Temporary debug HTTP
 - `../resources/working-nomads.md` — site `jobsapi/_search` wire notes
 - `../resources/himalayas.md` — public `jobs/api` wire
+- `../resources/builtin.md` — remote listing + JSON-LD

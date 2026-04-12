@@ -234,7 +234,74 @@ Selectors per `../resources/djinni.md`. Optional array note: a listing page may 
 
 ---
 
+## Built In — remote listing HTML (`ItemList` in `@graph`)
+
+Shape per `../resources/builtin.md`. Synthetic minimal **`@graph`** with **`ItemList`** and two **`ListItem`** entries (URLs under **`builtin.com/job/`**).
+
+```html
+<html><head><title>Remote</title></head><body>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "ItemList",
+      "name": "Top Remote Tech Jobs",
+      "numberOfItems": 2,
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "Senior Magento Frontend Developer",
+          "url": "https://builtin.com/job/senior-magento-frontend-developer/8989543",
+          "description": "Short snippet only."
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "Staff Engineer",
+          "url": "https://builtin.com/job/staff-engineer-go/424242",
+          "description": "Another snippet."
+        }
+      ]
+    }
+  ]
+}
+</script>
+</body></html>
+```
+
+---
+
+## Built In — job detail HTML (`JobPosting` in `@graph`)
+
+Detail page JSON-LD (trimmed; real pages may include more **`@graph`** nodes — tests should locate **`JobPosting`**).
+
+```html
+<html><body>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "JobPosting",
+      "title": "Senior Magento Frontend Developer",
+      "url": "https://builtin.com/job/senior-magento-frontend-developer/8989543",
+      "description": "<p>Responsible for developing frontend components.</p>",
+      "datePosted": "2026-04-08",
+      "hiringOrganization": { "@type": "Organization", "name": "Xebia" },
+      "jobLocationType": "TELECOMMUTE",
+      "skills": ["Magento 2", "React", "GraphQL"]
+    }
+  ]
+}
+</script>
+</body></html>
+```
+
+---
+
 ## Related
 
-- `../resources/europe-remotely.md`, `../resources/working-nomads.md`, `../resources/dou.md`, `../resources/himalayas.md`, `../resources/djinni.md`
+- `../resources/europe-remotely.md`, `../resources/working-nomads.md`, `../resources/dou.md`, `../resources/himalayas.md`, `../resources/djinni.md`, `../resources/builtin.md`
 - `collector.md`

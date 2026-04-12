@@ -8,5 +8,5 @@ import (
 
 func (h *HTTPHandler) postDouUA(w http.ResponseWriter, r *http.Request) {
 	logH := logging.EnrichWithContext(r.Context(), h.log.With().Str(logging.FieldHandler, "postDouUA").Logger())
-	runCollectorDebug(w, r, logH, h.douUa, nil, nil, h.douUaConcrete, h.himalayasConcrete, nil)
+	runCollectorDebug(w, r, logH, h.douUa, nil, nil, h.douUaConcrete, h.himalayasConcrete, nil, nil)
 }

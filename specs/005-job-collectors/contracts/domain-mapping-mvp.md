@@ -43,6 +43,7 @@ When these land, **`jobs`** storage needs matching columns — see **`jobs-table
 - **DOU.ua:** parse Ukrainian calendar phrases from listing/detail **`div.date`** (e.g. `9 квітня`, `8 квітня 2026`) with month-name table + optional year; anchor **`time.Now().UTC()`** when year is omitted (if parsed date is implausibly in the future vs anchor, treat as previous calendar year). **Soft failure** matches Europe: unparseable display → **`PostedAt` zero** + warning, continue (**`collector.md`**).
 - **Himalayas:** parse **`pubDate`** as **Unix epoch seconds** (integer) → **`time.Unix(sec, 0).UTC()`**. Missing, zero, or non-numeric → **`PostedAt` zero** + warning, continue (**soft failure**, same spirit as Europe/DOU).
 - **Djinni:** parse **`datePosted`** from detail **`JobPosting`** JSON-LD (ISO-8601 datetime string). Missing, empty, or parse error → **`PostedAt` zero** + warning, continue (**soft failure**, same spirit as Himalayas).
+- **Built In:** parse **`datePosted`** from detail **`JobPosting`** JSON-LD when present (ISO-8601 datetime or date string). Missing, empty, or parse error → **`PostedAt` zero** + warning, continue (**soft failure**, same spirit as Djinni).
 
 ### `Position` (`*string`)
 
@@ -179,9 +180,30 @@ Wire: **`../resources/djinni.md`** — listing **`GET`** + detail **`GET`**; pri
 
 ---
 
+## Built In → `Job`
+
+Wire: **`../resources/builtin.md`** — listing **`GET`** (JSON-LD **`ItemList`**, URLs only) + detail **`GET`** (JSON-LD **`JobPosting`**). **No fetch** when slot search is empty.
+
+| `Job` field | Source |
+| ----------- | ------ |
+| `Source` | `builtin` |
+| `Title` | JSON-LD **`JobPosting.title`** |
+| `Company` | JSON-LD **`hiringOrganization.name`** when present; else **`""`** |
+| `URL` | Absolute canonical URL from **`JobPosting.url`** when present; else the listing **`ListItem.url`** used for the detail **`GET`**, normalized (strip query/fragment) per shared URL helper |
+| `ApplyURL` | Distinct external apply URL from JSON-LD when the payload exposes one (**`sameAs`**, application URL fields, or documented extension); else **`""`** (Easy Apply is often login-gated — revisit only if a stable external URL is documented) |
+| `Description` | Plain text from JSON-LD **`description`** (HTML in payload → strip per cross-cutting rules) |
+| `PostedAt` | JSON-LD **`datePosted`** per **PostedAt** rules above |
+| `Remote` | **`collectors/utils.RemoteMVPRule`** over **title**, plain **description**, and **tag** strings (see **`Tags`**); include **extra hints** from JSON-LD location / employment type text when stringified fragments are available (same helper pattern as DOU/Himalayas) |
+| `CountryCode` | **Normative:** ISO **alpha-2** from the **listing request’s `country` query** (alpha-3 → alpha-2 per **`resources/builtin.md`** table) for the run that produced this job’s URL — do **not** override from free-text location in JSON-LD for this source |
+| `SalaryRaw` | Opaque string from JSON-LD **`baseSalary`** / **`salaryCurrency`** / textual compensation fields when present; else **`""`** |
+| `Tags` | Non-empty strings from JSON-LD **`skills`**, **`qualifications`**, **`occupationalCategory`**, or similar array/string fields when present (implementation normalizes to `[]string`); else **`nil`** / empty |
+| `Position` | Keyword inference only (`*string`) over **title + description + tags** |
+
+---
+
 ## Related
 
 - `collector.md`
 - [`specs/000-epic-overview/product-concept-draft.md`](../../000-epic-overview/product-concept-draft.md)
 - `jobs-table-extension.md`
-- `../resources/europe-remotely.md`, `../resources/working-nomads.md`, `../resources/dou.md`, `../resources/himalayas.md`, `../resources/djinni.md`
+- `../resources/europe-remotely.md`, `../resources/working-nomads.md`, `../resources/dou.md`, `../resources/himalayas.md`, `../resources/djinni.md`, `../resources/builtin.md`

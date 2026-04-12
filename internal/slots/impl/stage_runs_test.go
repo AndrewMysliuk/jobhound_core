@@ -16,6 +16,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	enumspb "go.temporal.io/api/enums/v1"
+	historypb "go.temporal.io/api/history/v1"
 	"go.temporal.io/sdk/client"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -28,6 +29,16 @@ type fakeTemporal struct {
 	gotWorkflow interface{}
 	gotArgs     []interface{}
 	execErr     error
+}
+
+type emptyHistoryIter struct{}
+
+func (emptyHistoryIter) HasNext() bool { return false }
+
+func (emptyHistoryIter) Next() (*historypb.HistoryEvent, error) { return nil, nil }
+
+func (f *fakeTemporal) GetWorkflowHistory(context.Context, string, string, bool, enumspb.HistoryEventFilterType) client.HistoryEventIterator {
+	return emptyHistoryIter{}
 }
 
 func (f *fakeTemporal) DescribeWorkflow(context.Context, string, string) (*client.WorkflowExecutionDescription, error) {

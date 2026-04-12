@@ -35,9 +35,15 @@ When the first T3 collector ships, document here:
 | `JOBHOUND_COLLECTOR_DJINNI_INTER_REQUEST_DELAY_MS` | `400` | Pause between consecutive HTTP calls (each listing page, each detail `GET`). Set `0` to disable (tests / local only). |
 | `JOBHOUND_COLLECTOR_DJINNI_MAX_JOBS_PER_FETCH` | `100` | Upper bound on jobs returned per `Fetch` (implementation may hard-cap higher ceiling). |
 
+## Built In (`internal/config/collectors_builtin.go`)
+
+| Variable | Default (when unset) | Meaning |
+| -------- | --------------------- | ------- |
+| `JOBHOUND_COLLECTOR_BUILTIN_INTER_REQUEST_DELAY_MS` | `300` | Pause between **every** consecutive HTTP call (listing pages per country, each detail `GET`). Set `0` to disable (tests / local only). Runs can be **large** (many countries × listing pages + deduped details) — delay avoids hammering the origin. |
+
 ## Local debug HTTP (agent, optional)
 
-- `JOBHOUND_DEBUG_HTTP_ADDR` — if non-empty, `cmd/agent` listens on this address for **local** debug routes (`GET /health`, `POST /debug/collectors/europe_remotely`, `POST /debug/collectors/working_nomads`, `POST /debug/collectors/dou_ua`, `POST /debug/collectors/himalayas`, `POST /debug/collectors/djinni` when wired) instead of running the one-shot pipeline. The `-debug-http-addr` flag overrides this when set. Prefer a loopback bind (e.g. `127.0.0.1:3001`). Not a public API — see `../spec.md` and `debug-http-collectors.md` for the JSON request contract (`limit`, per-source optional fields).
+- `JOBHOUND_DEBUG_HTTP_ADDR` — if non-empty, `cmd/agent` listens on this address for **local** debug routes (`GET /health`, `POST /debug/collectors/europe_remotely`, `POST /debug/collectors/working_nomads`, `POST /debug/collectors/dou_ua`, `POST /debug/collectors/himalayas`, `POST /debug/collectors/djinni`, `POST /debug/collectors/builtin`) instead of running the one-shot pipeline. The `-debug-http-addr` flag overrides this when set. Prefer a loopback bind (e.g. `127.0.0.1:3001`). Not a public API — see `../spec.md` and `debug-http-collectors.md` for the JSON request contract (`limit`, per-source optional fields).
 
 ## Related
 

@@ -32,7 +32,12 @@ type SlotSearchFetcher interface {
 
 - **`006`** **`RunIngestSource`**: when **`IngestSourceInput.SlotSearchQuery`** is **non-empty** (trimmed), the activity calls **`FetchWithSlotSearch`** if the collector implements it; otherwise **`Fetch`**. When the query is **empty**, behavior is unchanged (**`Fetch`** / incremental per **`006`**).
 - Implementations **must not** mutate shared collector fields in a racy way: use a **shallow copy** of the struct inside **`FetchWithSlotSearch`** then call **`Fetch`**, or equivalent.
-- **`slotQuery` empty**: behave like **`Fetch`** (same listings as an unscoped run).
+- **`slotQuery` empty**: behave like **`Fetch`** (same listings as an unscoped run), **except** **`builtin`** — see below.
+
+**Built In (`builtin`) — search-only source**
+
+- **`Fetch`** MUST return **`([]Job, nil)`** without issuing HTTP (no unscoped ingest for this board).
+- **`FetchWithSlotSearch`**: when **`slotQuery`** is empty after **trim**, return **`([]Job, nil)`** without HTTP. When non-empty, map to listing query param **`search`** (see **`resources/builtin.md`**).
 
 **MVP sources — how `slotQuery` maps to wire**:
 
@@ -43,6 +48,7 @@ type SlotSearchFetcher interface {
 | `dou_ua` | Vacancies **`search`** query param (**overrides** static config search for that run). |
 | `himalayas` | Search API **`q`** (`UseSearch` + search endpoint). |
 | `djinni` | Listing query **`all_keywords`** with **`search_type=full-text`** (see `resources/djinni.md`). |
+| `builtin` | Remote jobs listing query param **`search`**; **no HTTP** when **`slotQuery`** empty (see **`resources/builtin.md`**). |
 
 ## Relationship to orchestration (MVP)
 
@@ -59,6 +65,7 @@ Use a **fixed lowercase string** per board for `Job.Source` and for `StableJobID
 | DOU.ua            | `dou_ua`             |
 | Himalayas         | `himalayas`          |
 | Djinni            | `djinni`             |
+| Built In          | `builtin`            |
 
 Implementation may wrap these in a Go typed const block; the **string value** above is what matters for identity.
 
@@ -91,5 +98,5 @@ Offline tests use **`httptest`** and bodies documented in **`contracts/test-fixt
 - `spec.md`
 - [`specs/000-epic-overview/product-concept-draft.md`](../../000-epic-overview/product-concept-draft.md) — slots and stage-1 vs `006`
 - `domain-mapping-mvp.md`
-- `sources-inventory.md`, `../resources/europe-remotely.md`, `../resources/working-nomads.md`, `../resources/dou.md`, `../resources/himalayas.md`, `../resources/djinni.md`
+- `sources-inventory.md`, `../resources/europe-remotely.md`, `../resources/working-nomads.md`, `../resources/dou.md`, `../resources/himalayas.md`, `../resources/djinni.md`, `../resources/builtin.md`
 - `test-fixtures.md`

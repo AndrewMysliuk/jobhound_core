@@ -14,6 +14,7 @@ import (
 
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/bootstrap"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/builtin"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/djinni"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/dou"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/europeremotely"
@@ -75,7 +76,7 @@ func main() {
 		return
 	}
 
-	er, wn, douColl, djinColl, himColl, err := bootstrap.MVPCollectors(ctx, nil, appCfg.DataDir, appCfg.DouCollector, appCfg.DjinniCollector, appCfg.HimalayasCollector)
+	er, wn, douColl, djinColl, builtinColl, himColl, err := bootstrap.MVPCollectors(ctx, nil, appCfg.DataDir, appCfg.DouCollector, appCfg.DjinniCollector, appCfg.BuiltinCollector, appCfg.HimalayasCollector)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
@@ -102,14 +103,18 @@ func main() {
 		if x, ok := djinColl.(*djinni.Djinni); ok {
 			djinConcrete = x
 		}
-		if err := runDebugHTTPServer(log, addr, er, wn, douColl, djinColl, himColl, wnConcrete, erConcrete, douConcrete, himConcrete, djinConcrete); err != nil {
+		var builtinConcrete *builtin.BuiltIn
+		if x, ok := builtinColl.(*builtin.BuiltIn); ok {
+			builtinConcrete = x
+		}
+		if err := runDebugHTTPServer(log, addr, er, wn, douColl, djinColl, himColl, builtinColl, wnConcrete, erConcrete, douConcrete, himConcrete, djinConcrete, builtinConcrete); err != nil {
 			log.Error().Err(err).Msg("debug http")
 			os.Exit(1)
 		}
 		return
 	}
 
-	coll := bootstrap.MVPMulti(er, wn, douColl, djinColl, himColl, &log)
+	coll := bootstrap.MVPMulti(er, wn, douColl, djinColl, builtinColl, himColl, &log)
 	p := &impl.Pipeline{
 		Collector: coll,
 		Scorer:    llmmock.Scorer{},
@@ -124,10 +129,10 @@ func main() {
 	fmt.Fprintln(os.Stderr, "jobhound_core: noop pipeline run ok")
 }
 
-func runDebugHTTPServer(log zerolog.Logger, addr string, europeRemotely, workingNomads, douUa, djinniColl, himColl collectors.Collector, workingNomadsConcrete *workingnomads.WorkingNomads, europeRemotelyConcrete *europeremotely.EuropeRemotely, douUaConcrete *dou.DOU, himalayasConcrete *himalayas.Himalayas, djinniConcrete *djinni.Djinni) error {
+func runDebugHTTPServer(log zerolog.Logger, addr string, europeRemotely, workingNomads, douUa, djinniColl, himColl, builtinColl collectors.Collector, workingNomadsConcrete *workingnomads.WorkingNomads, europeRemotelyConcrete *europeremotely.EuropeRemotely, douUaConcrete *dou.DOU, himalayasConcrete *himalayas.Himalayas, djinniConcrete *djinni.Djinni, builtinConcrete *builtin.BuiltIn) error {
 	srv := &http.Server{
 		Addr:    addr,
-		Handler: debughttp.NewHTTPHandler(europeRemotely, workingNomads, douUa, himColl, djinniColl, workingNomadsConcrete, europeRemotelyConcrete, douUaConcrete, himalayasConcrete, djinniConcrete, log),
+		Handler: debughttp.NewHTTPHandler(europeRemotely, workingNomads, douUa, himColl, djinniColl, builtinColl, workingNomadsConcrete, europeRemotelyConcrete, douUaConcrete, himalayasConcrete, djinniConcrete, builtinConcrete, log),
 	}
 
 	errCh := make(chan error, 1)
@@ -145,6 +150,7 @@ func runDebugHTTPServer(log zerolog.Logger, addr string, europeRemotely, working
 		Str("route_dou_ua", debughttp.PathDouUA).
 		Str("route_himalayas", debughttp.PathHimalayas).
 		Str("route_djinni", debughttp.PathDjinni).
+		Str("route_builtin", debughttp.PathBuiltin).
 		Msg("debug http listening")
 
 	quit := make(chan os.Signal, 1)

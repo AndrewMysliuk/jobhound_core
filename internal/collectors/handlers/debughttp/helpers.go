@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/builtin"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/djinni"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/dou"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/europeremotely"
@@ -90,6 +91,18 @@ func applyDjinniOverrides(req *schema.CollectorsPOSTBody, c *djinni.Djinni) {
 	}
 	if req.DjinniInterRequestDelayMs != nil {
 		c.InterRequestDelay = time.Duration(*req.DjinniInterRequestDelayMs) * time.Millisecond
+	}
+}
+
+func applyBuiltinOverrides(req *schema.CollectorsPOSTBody, c *builtin.BuiltIn) {
+	if req.BuiltinInterRequestDelayMs != nil {
+		c.InterRequestDelay = time.Duration(*req.BuiltinInterRequestDelayMs) * time.Millisecond
+	}
+	if req.BuiltinMaxListingPagesPerCountry != nil {
+		n := *req.BuiltinMaxListingPagesPerCountry
+		if n >= 1 && n <= 2 {
+			c.MaxListingPagesPerCountry = n
+		}
 	}
 }
 

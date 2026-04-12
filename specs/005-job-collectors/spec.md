@@ -2,7 +2,7 @@
 
 **Feature Branch**: `005-job-collectors`  
 **Created**: 2026-03-29  
-**Last Updated**: 2026-04-11  
+**Last Updated**: 2026-04-12  
 **Status**: Implemented
 
 ## Goal
@@ -33,14 +33,14 @@ Details: **`contracts/collector.md`**.
 
 ## Pagination (MVP)
 
-Listing UIs use buttons such as **“Load more”** / **“Show more jobs”**; the collector **does not** drive a browser. It repeats the same **HTTP** calls the UI uses (**`admin-ajax.php`** + `has_more` for Europe Remotely; **`jobsapi/_search`** with `from` / `size` for Working Nomads; **`xhr-load`** + `last` for DOU.ua; **public JSON** `jobs/api` + `jobs/api/search` for Himalayas — no RSC; **Djinni:** `GET` `/jobs/?all_keywords=…&search_type=full-text&page=` — ~**15** rows per page). See **`resources/europe-remotely.md`**, **`resources/working-nomads.md`**, **`resources/dou.md`**, **`resources/himalayas.md`**, and **`resources/djinni.md`**.
+Listing UIs use buttons such as **“Load more”** / **“Show more jobs”**; the collector **does not** drive a browser. It repeats the same **HTTP** calls the UI uses (**`admin-ajax.php`** + `has_more` for Europe Remotely; **`jobsapi/_search`** with `from` / `size` for Working Nomads; **`xhr-load`** + `last` for DOU.ua; **public JSON** `jobs/api` + `jobs/api/search` for Himalayas — no RSC; **Djinni:** `GET` `/jobs/?all_keywords=…&search_type=full-text&page=` — ~**15** rows per page; **Built In:** `GET` `/jobs/remote` with `country` / `search` / `page` — up to **20** rows per page, **two** pages max per country — see **`resources/builtin.md`**). See **`resources/europe-remotely.md`**, **`resources/working-nomads.md`**, **`resources/dou.md`**, **`resources/himalayas.md`**, **`resources/djinni.md`**, and **`resources/builtin.md`**.
 
 ## Sources
 
 Canonical list in **`contracts/sources-inventory.md`**.
 
-- **MVP:** Europe Remotely, Working Nomads, DOU.ua, Himalayas (**`resources/himalayas.md`**), Djinni (**`resources/djinni.md`**).
-- **Planned:** further rows in the inventory (Built In, LinkedIn, …); **rollout order** is in **`contracts/sources-inventory.md`** § Planned implementation order.
+- **MVP:** Europe Remotely, Working Nomads, DOU.ua, Himalayas (**`resources/himalayas.md`**), Djinni (**`resources/djinni.md`**), Built In (**`resources/builtin.md`**).
+- **Planned:** LinkedIn, …; **rollout order** is in **`contracts/sources-inventory.md`** § Planned implementation order.
 
 **Remote OK** is out of scope (inventory).
 
@@ -51,7 +51,12 @@ Canonical list in **`contracts/sources-inventory.md`**.
 - **DOU.ua:** `GET` listing + `POST` `xhr-load` JSON (`html` / `last` / `num`) + detail **`GET`** — **T2**; cookie jar for CSRF.
 - **Himalayas:** `GET` **`/jobs/api`** and **`/jobs/api/search`** — **T2**; JSON only (see **`resources/himalayas.md`**; `internal/collectors/himalayas`).
 - **Djinni:** `GET` listing + `GET` each job detail — **T2**; **`application/ld+json`** **`JobPosting`** on listing (optional **array**) and detail; **inter-request delay** per **`resources/djinni.md`** / **`contracts/environment.md`** (`internal/collectors/djinni`).
+- **Built In:** `GET` remote listing + `GET` each detail — **T2**; JSON-LD **`ItemList`** + **`JobPosting`**; **search-required** (no HTTP when slot empty); **inter-request delay** per **`resources/builtin.md`** / **`contracts/environment.md`**.
 - **Rod:** only when a source cannot be served without JS/session.
+
+## Follow-ups (operational)
+
+- **Built In — Cloudflare / anti-bot:** Live `GET` to **`builtin.com`** from worker or datacenter egress can return **HTTP 403** with an HTML interstitial (**`Just a moment...`**, Cloudflare challenge) instead of listing/detail content — plain **`net/http`** is often blocked. **Follow-up:** choose mitigation (e.g. browser-tier **T3** fetch, egress/proxy strategy, partnership or official feed if any, per-territory graceful handling, or product decision to pause Built In ingest until resolved) and update **`resources/builtin.md`** + **`contracts/environment.md`** when a path is locked.
 
 ## Normalized fields
 
@@ -60,7 +65,7 @@ Persistence extension for **`jobs`**: **`contracts/jobs-table-extension.md`**.
 
 ## Temporary debug HTTP (before `009`)
 
-To manually verify collectors without the public API spec, a **local-only** debug server lives under **`cmd/agent`**: flag **`-debug-http-addr`** or env **`JOBHOUND_DEBUG_HTTP_ADDR`** (see **`contracts/environment.md`**). It serves **`GET /health`** and **one POST route per wired source** — `POST /debug/collectors/europe_remotely`, `POST /debug/collectors/working_nomads`, `POST /debug/collectors/dou_ua`, **`POST /debug/collectors/himalayas`**, **`POST /debug/collectors/djinni`** — so each site can be exercised in isolation (e.g. Postman, curl). It is **not** the product HTTP API; **`specs/009-http-public-api`** remains the contract for public endpoints. Do not expose debug routes in production builds.
+To manually verify collectors without the public API spec, a **local-only** debug server lives under **`cmd/agent`**: flag **`-debug-http-addr`** or env **`JOBHOUND_DEBUG_HTTP_ADDR`** (see **`contracts/environment.md`**). It serves **`GET /health`** and **one POST route per wired source** — `POST /debug/collectors/europe_remotely`, `POST /debug/collectors/working_nomads`, `POST /debug/collectors/dou_ua`, **`POST /debug/collectors/himalayas`**, **`POST /debug/collectors/djinni`**, **`POST /debug/collectors/builtin`** — so each site can be exercised in isolation (e.g. Postman, curl). It is **not** the product HTTP API; **`specs/009-http-public-api`** remains the contract for public endpoints. Do not expose debug routes in production builds.
 
 **Implementation**: `internal/collectors/handlers/debughttp`.
 
@@ -146,13 +151,13 @@ Offline: **`httptest`** + bodies from **`contracts/test-fixtures.md`** (or copie
 
 - [`specs/000-epic-overview/product-concept-draft.md`](../000-epic-overview/product-concept-draft.md) — global MVP behavior (slots, stage 1–3, resets)
 - `contracts/collector.md` — boundary + errors + `Job.Source` strings
-- `contracts/domain-mapping-mvp.md` — Europe Remotely + Working Nomads + DOU.ua + Himalayas + Djinni (planned) → `Job`
+- `contracts/domain-mapping-mvp.md` — Europe Remotely + Working Nomads + DOU.ua + Himalayas + Djinni + Built In → `Job`
 - `contracts/jobs-table-extension.md` — optional SQL columns
 - `contracts/test-fixtures.md` — fenced sample bodies
 - `contracts/sources-inventory.md`
 - `contracts/environment.md` — T3 env placeholder
 - `contracts/debug-http-collectors.md` — debug POST JSON types + date `query` examples
-- `resources/europe-remotely.md`, `resources/working-nomads.md`, `resources/dou.md`, `resources/himalayas.md`, `resources/djinni.md`
+- `resources/europe-remotely.md`, `resources/working-nomads.md`, `resources/dou.md`, `resources/himalayas.md`, `resources/djinni.md`, `resources/builtin.md`
 - `plan.md`, `tasks.md`, `research.md`, `checklists/requirements.md`
 - `specs/000-epic-overview/spec.md`, `.specify/memory/constitution.md`
 - `specs/004-pipeline-stages/spec.md` — consumes normalized `Job`

@@ -33,4 +33,10 @@ type CollectorsPOSTBody struct {
 	DjinniPage *int `json:"djinni_page,omitempty"`
 	// Djinni: inter-request delay override in milliseconds (ignored on other routes).
 	DjinniInterRequestDelayMs *int `json:"djinni_inter_request_delay_ms,omitempty"`
+	// Built In: listing search query param (ignored on other routes).
+	BuiltinSearch *string `json:"builtin_search,omitempty"`
+	// Built In: inter-request delay override in milliseconds (ignored on other routes).
+	BuiltinInterRequestDelayMs *int `json:"builtin_inter_request_delay_ms,omitempty"`
+	// Built In: max listing pages per country (1 or 2; ignored on other routes).
+	BuiltinMaxListingPagesPerCountry *int `json:"builtin_max_listing_pages_per_country,omitempty"`
 }

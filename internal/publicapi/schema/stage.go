@@ -1,6 +1,9 @@
 package schema
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 // StageState is the last finished or current run state for a stage (spec.md).
 type StageState string
@@ -29,4 +32,6 @@ type StageFull struct {
 	StartedAt  *time.Time  `json:"started_at"`
 	FinishedAt *time.Time  `json:"finished_at"`
 	Error      *StageError `json:"error"`
+	// Payload is the public HTTP-shaped JSON body used for the last run of this stage (null when idle / unknown).
+	Payload *json.RawMessage `json:"payload"`
 }

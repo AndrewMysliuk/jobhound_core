@@ -1,7 +1,7 @@
 # Sources inventory (job collectors)
 
 **Spec**: `005-job-collectors`  
-**Last Updated**: 2026-04-11  
+**Last Updated**: 2026-04-12  
 **Status**: Draft
 
 ## Purpose
@@ -10,11 +10,10 @@ Single place for **which sites** we ingest from, **MVP vs later**, and **expecte
 
 ## Planned implementation order
 
-1. **MVP (shipped):** Europe Remotely, Working Nomads, DOU.ua, Himalayas, Djinni — rows 1–5 below.
-2. **Built In** — **before LinkedIn**: still usually browsable without login, but often heavy client-side rendering; confirm tier and wire in a spike.
-3. **LinkedIn Jobs** — **last**: session/cookies, fragile selectors, and the strictest operational constraints — treat as the final integration.
+1. **MVP (shipped):** Europe Remotely, Working Nomads, DOU.ua, Himalayas, Djinni, Built In — rows 1–6 below.
+2. **LinkedIn Jobs** — **last**: session/cookies, fragile selectors, and the strictest operational constraints — treat as the final integration.
 
-Row numbers in the inventory table match this priority for planned sources (6–7).
+Row numbers in the inventory table match this priority for planned sources (7).
 
 ## Exclusions
 
@@ -42,7 +41,7 @@ There is **no separate “public API tier”** in requirements: delivery is **HT
 | 3   | [DOU.ua vacancies](https://jobs.dou.ua/vacancies/?descr=1) | **MVP** | **T2** (fact) | `specs/005-job-collectors/resources/dou.md` — `GET` listing (`search` + `descr=1`), `POST` `xhr-load` (CSRF + `count`) JSON `html` / `last` / `num`, detail `GET`; cookie jar + goquery |
 | 4   | [Himalayas](https://himalayas.app/jobs)          | **MVP** | **T2 (fact)**                        | Public JSON API only (no RSC/HTML crawl): `GET` `https://himalayas.app/jobs/api` + `.../jobs/api/search` — see `specs/005-job-collectors/resources/himalayas.md` and [Remote Jobs API](https://himalayas.app/api); max **20** jobs per request on browse; rate limit **429** |
 | 5   | [Djinni](https://djinni.co/jobs/)                | **MVP** | **T2 (fact)**                        | `specs/005-job-collectors/resources/djinni.md` — `GET` listing `?all_keywords=&search_type=full-text&page=` (~**15**/page); detail `GET`; **`application/ld+json`** (`JobPosting`, optional **`baseSalary`**); listing may embed **array** of job JSON-LD; **delay** between requests (env); no login required for read path observed |
-| 6   | [Built In](https://builtin.com/jobs)           | Planned | T2 / T3 (regional subsites)          | **Before LinkedIn** in rollout order; often heavy front-end |
+| 6   | [Built In](https://builtin.com/jobs/remote)    | **MVP** | **T2 (fact)**                        | `specs/005-job-collectors/resources/builtin.md` — `GET` remote listing (`country` **alpha-3**, `allLocations=true`, `search`, `page` ≤2); JSON-LD **`ItemList`** → URLs; **`GET` detail** → **`JobPosting`**; **no HTTP** when slot search empty; **delay** between requests (env) |
 | 7   | [LinkedIn Jobs](https://www.linkedin.com/jobs/)  | Planned | T3 + session                         | **Last** planned among this set — login/session, fragile selectors, highest operational risk |
 
 
@@ -60,6 +59,7 @@ After each **spike**, update **Tier (theory)** → **Tier (fact)** and **Notes**
 - `specs/005-job-collectors/resources/working-nomads.md` — MVP source 2 (`_search` JSON)
 - `specs/005-job-collectors/resources/dou.md` — MVP source 3 (HTML + xhr-load)
 - `specs/005-job-collectors/resources/himalayas.md` — MVP source 4 (public JSON API)
-- `specs/005-job-collectors/resources/djinni.md` — planned source 5 (HTML + JSON-LD)
+- `specs/005-job-collectors/resources/djinni.md` — MVP source 5 (HTML + JSON-LD)
+- `specs/005-job-collectors/resources/builtin.md` — MVP source 6 (remote listing + JSON-LD)
 - `.specify/memory/constitution.md` — `Collector` contract, `session.Provider` for headless
 
