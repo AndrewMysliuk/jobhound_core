@@ -11,7 +11,7 @@ import (
 const (
 	EnvCollectorBuiltinInterRequestDelayMS   = "JOBHOUND_COLLECTOR_BUILTIN_INTER_REQUEST_DELAY_MS"
 	EnvCollectorBuiltinUseBrowser            = "JOBHOUND_COLLECTOR_BUILTIN_USE_BROWSER"
-	defaultCollectorBuiltinInterRequestDelay = 500 * time.Millisecond
+	defaultCollectorBuiltinInterRequestDelay = 1000 * time.Millisecond
 )
 
 // BuiltinCollectorConfig holds defaults for the Built In collector (internal/collectors/builtin).

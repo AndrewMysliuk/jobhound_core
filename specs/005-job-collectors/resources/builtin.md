@@ -48,7 +48,7 @@ Normative mapping to **`domain.Job`**: **`../contracts/domain-mapping-mvp.md`** 
 
 ## Politeness
 
-- Apply an **inter-request delay** between **every** consecutive **document fetch** (listing page per country, each job detail) — whether **T2** or **T3**. Default and env name: **`contracts/environment.md`** (`JOBHOUND_COLLECTOR_BUILTIN_INTER_REQUEST_DELAY_MS`, default **`500`** ms; **`0`** disables — tests / local only).
+- Apply an **inter-request delay** between **every** consecutive **document fetch** (listing page per country, each job detail) — whether **T2** or **T3**. Default and env name: **`contracts/environment.md`** (`JOBHOUND_COLLECTOR_BUILTIN_INTER_REQUEST_DELAY_MS`, default **`1000`** ms; **`0`** disables — tests / local only).
 - A full run can require **many** requests (see **Volume** below); operators should size timeouts and schedules accordingly.
 
 ---

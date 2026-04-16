@@ -212,7 +212,7 @@ Exact clause shapes depend on their index mapping; if something returns an error
 {
   "limit": 50,
   "builtin_search": "frontend",
-  "builtin_inter_request_delay_ms": 500,
+  "builtin_inter_request_delay_ms": 1000,
   "builtin_max_listing_pages_per_country": 2
 }
 ```

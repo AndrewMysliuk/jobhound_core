@@ -49,7 +49,7 @@ Existing Built In delay: **`JOBHOUND_COLLECTOR_BUILTIN_INTER_REQUEST_DELAY_MS`**
 
 | Variable | Default (when unset) | Meaning |
 | -------- | --------------------- | ------- |
-| `JOBHOUND_COLLECTOR_BUILTIN_INTER_REQUEST_DELAY_MS` | `500` | Pause between **every** consecutive document fetch (listing pages per country, each detail) — **T2** or **T3**. Set `0` to disable (tests / local only). Runs can be **large** (many countries × listing pages + deduped details) — delay avoids hammering the origin. |
+| `JOBHOUND_COLLECTOR_BUILTIN_INTER_REQUEST_DELAY_MS` | `1000` | Pause between **every** consecutive document fetch (listing pages per country, each detail) — **T2** or **T3**. Set `0` to disable (tests / local only). Runs can be **large** (many countries × listing pages + deduped details) — delay avoids hammering the origin. |
 | `JOBHOUND_COLLECTOR_BUILTIN_USE_BROWSER` | on | When **`JOBHOUND_BROWSER_ENABLED`** is on, Built In uses rod for HTML unless this is `0` / `false` / `no` / `off` (force **`net/http`** for Built In only). |
 
 ## Local debug HTTP (agent, optional)
