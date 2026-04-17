@@ -33,7 +33,8 @@ import (
 // djinniCfg from config.Load().DjinniCollector (JOBHOUND_COLLECTOR_DJINNI_*).
 // himCfg: when Disabled, himalayas is nil.
 // builtinCfg from config.Load().BuiltinCollector (JOBHOUND_COLLECTOR_BUILTIN_*).
-// browserCfg from config.Load().Browser (JOBHOUND_BROWSER_*); when Enabled and builtinCfg.UseBrowserForHTML, a rod-backed fetcher is constructed for Built In.
+// browserCfg from config.Load().Browser (JOBHOUND_BROWSER_*); Enabled defaults true unless JOBHOUND_BROWSER_ENABLED=0.
+// When Enabled and builtinCfg.UseBrowserForHTML, a rod-backed fetcher is constructed for Built In.
 func MVPCollectors(ctx context.Context, httpClient *http.Client, dataDir string, douCfg config.DouCollectorConfig, djinniCfg config.DjinniCollectorConfig, builtinCfg config.BuiltinCollectorConfig, himCfg config.HimalayasCollectorConfig, browserCfg config.BrowserConfig) (europeRemotely, workingNomads, douUa, djin, builtIn collectors.Collector, himal collectors.Collector, err error) {
 	if httpClient == nil {
 		httpClient = utils.NewHTTPClient()

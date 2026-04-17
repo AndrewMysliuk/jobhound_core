@@ -26,9 +26,19 @@ Normative mapping to **`domain.Job`**: **`../contracts/domain-mapping-mvp.md`** 
 
 - **`net/http`** may receive **403 Forbidden**, or **200** with an **anti-bot / “Just a moment…”** interstitial instead of pages that contain **`application/ld+json`** with **`ItemList`** / **`JobPosting`**.
 - **Challenge HTML is not a listing:** body often references Cloudflare / **`cf-browser-verification`**, **`challenge-platform`**, or similar; JSON-LD job blocks are missing, so parsing fails or yields zero jobs — distinct from a real listing with an empty result set.
-- **Mitigation:** enable T3 — **`JOBHOUND_BROWSER_ENABLED=1`** (see **`../contracts/environment.md`**) so **`bootstrap`** injects **`browserfetch.RodFetcher`** into **`builtin.BuiltIn`**; **same URLs** as T2. Use **`JOBHOUND_COLLECTOR_BUILTIN_USE_BROWSER=0`** only if you must force **`net/http`** for Built In while testing.
+- **Mitigation:** T3 is **on by default** in **`bootstrap`** (see **`../contracts/environment.md`**) — **`browserfetch.RodFetcher`** is wired into **`builtin.BuiltIn`** unless **`JOBHOUND_BROWSER_ENABLED=0`**; **same URLs** as T2. Use **`JOBHOUND_COLLECTOR_BUILTIN_USE_BROWSER=0`** if you must force **`net/http`** for Built In only while the browser stays available for other collectors.
 
 **Tracking:** Shipped — **`../tasks.md`** § **L.8**, § **M**.
+
+### Same-transport challenge refetch (T2 and T3)
+
+**Symptom:** **`HTTP 200`** with a Cloudflare-shaped HTML body (see **`../tasks.md`** § **N**) so JSON-LD parsing still fails.
+
+**Collector behavior (best-effort):** for each **listing** and **detail** URL, after a successful transport response whose bytes match the builtin **challenge heuristic**, the collector sleeps **`5 s`**, then refetches the **same URL** once on the **same path** (**`net/http`** or Rod **`browserfetch`** per current wiring). That yields at most **two** bodies per URL; the **last** body is passed to the JSON-LD parser. This is **not** “wait on the interstitial until Cloudflare JS finishes”: there is no long poll of the same tab for a redirect or DOM change — **`net/http`** cannot run the challenge script; Rod does **one** navigate + **load** + short settle per **`FetchHTMLDocument`** (see **`../contracts/browser-fetch.md`**), then we optionally sleep and open a **second** full load for the same URL. If there is still no **`ItemList`** / **`JobPosting`**, the existing **warn-and-skip** behavior applies. Sleeps and the refetch honor **`context`** cancellation.
+
+**Relation to T3:** the extra **`5 s`** + second load add wall time; they do **not** replace a real browser session when the origin hard-blocks plain HTTP. Prefer **T3** when **`net/http`** consistently fails; T3 uses the **same** one-refetch policy between Rod loads.
+
+**Tracking:** **`../tasks.md`** § **N**; **`../contracts/browser-fetch.md`** (Rod remains one navigation + settle per **`FetchHTMLDocument`** call).
 
 ---
 

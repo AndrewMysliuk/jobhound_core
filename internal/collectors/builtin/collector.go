@@ -43,6 +43,9 @@ type BuiltIn struct {
 	HTMLDocumentFetcher browserfetch.HTMLDocumentFetcher
 	// UseBrowser selects HTMLDocumentFetcher for document bytes when true and HTMLDocumentFetcher is non-nil.
 	UseBrowser bool
+	// challengeRetryDelays overrides sleeps between Cloudflare interstitial refetches (default 5s once).
+	// Non-empty slice is for tests only; production leaves nil.
+	challengeRetryDelays []time.Duration
 }
 
 // Name implements collectors.Collector.
@@ -140,7 +143,7 @@ func (c *BuiltIn) fetchRemote(ctx context.Context, search string) ([]schema.Job,
 			if err != nil {
 				return nil, err
 			}
-			listHTML, err := c.fetchDocument(ctx, client, listURL)
+			listHTML, err := c.fetchDocumentWithChallengeRetries(ctx, client, listURL)
 			if err != nil {
 				c.collectSkip(ctx, fmt.Sprintf("listing %s page %d", terr.Alpha3, page), err)
 				break
@@ -180,7 +183,7 @@ func (c *BuiltIn) fetchRemote(ctx context.Context, search string) ([]schema.Job,
 			break
 		}
 		c.sleep(ctx)
-		detailHTML, err := c.fetchDocument(ctx, client, uc.url)
+		detailHTML, err := c.fetchDocumentWithChallengeRetries(ctx, client, uc.url)
 		if err != nil {
 			c.collectSkip(ctx, fmt.Sprintf("detail fetch %s", uc.url), err)
 			continue

@@ -24,7 +24,7 @@ type Config struct {
 	DjinniCollector DjinniCollectorConfig
 	// BuiltinCollector configures the Built In remote listing collector (005-job-collectors).
 	BuiltinCollector BuiltinCollectorConfig
-	// Browser configures optional Tier-3 headless document fetch (005-job-collectors / browserfetch).
+	// Browser configures Tier-3 headless document fetch (005-job-collectors / browserfetch); Enabled defaults true (JOBHOUND_BROWSER_ENABLED=0 to opt out).
 	Browser BrowserConfig
 
 	AnthropicAPIKey     string

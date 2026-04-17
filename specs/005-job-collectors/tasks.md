@@ -1,6 +1,6 @@
 # Tasks: Job collectors (MVP sources)
 
-**Last Updated**: 2026-04-12  
+**Last Updated**: 2026-04-17  
 **Input**: `spec.md`, `plan.md`, `research.md`, `contracts/*`, `resources/*`  
 **Tests**: REQUIRED — `**go test ./...`** without live network; `**httptest**` + bodies aligned with `**contracts/test-fixtures.md**`. Wire shapes and selectors: `**resources/europe-remotely.md**`, `**resources/working-nomads.md**`, `**resources/dou.md**` (DOU.ua).
 
@@ -159,3 +159,21 @@
 7. [x] **Debug HTTP** — Definition of done: if overrides are useful, document **`builtin_use_browser`** (bool) in **`contracts/debug-http-collectors.md`** and **`internal/collectors/schema/debug_http.go`** when implemented.
 
 8. [x] **Close § L.8** — Definition of done: checklist **L.8** marked complete when **§ M** items **1–7** (or agreed subset + explicit defer) and Built In doc/status are updated.
+
+---
+
+## N. Built In — Cloudflare challenge resilience (follow-up iteration)
+
+**Problem:** Detail (and sometimes listing) responses can be **HTTP 200** with a **Cloudflare interstitial** (e.g. **`Just a moment…`**, **`cdn-cgi/challenge-platform`**) instead of JSON-LD **`JobPosting`**, so parsing fails even when transport returns success.
+
+**Goal:** Best-effort recovery without changing JSON-LD parsing contracts — bounded retries and/or **`browserfetch`** settle improvements.
+
+1. [x] **Detect challenge HTML** — Definition of done: small **`builtin`**-local heuristic (agreed markers only); unit-tested on fixture snippets (**no** live network).
+
+2. [x] **Retry document fetch after challenge** — Definition of done: for **listing** and **detail** loads, if bytes match the challenge heuristic, **`context`‑aware sleep** then **refetch the same URL** on the **same** transport path (HTTP vs Rod per existing wiring); **one** fixed wait **`5 s`** before the **second** fetch attempt (**two** bodies per URL max); return the **last** body to the parser (existing warn-skip if still no **`JobPosting`**). **`context`** cancellation must abort sleeps and subsequent fetches.
+
+3. [x] **`browserfetch` / Rod (optional)** — Definition of done: evaluate waiting beyond **load** + short settle for Built In origins (e.g. until challenge markers clear or **`JobPosting`** appears) **without** duplicating site-specific logic in shared **`browserfetch`** where avoidable; document the chosen approach in **`contracts/browser-fetch.md`** and/or **`resources/builtin.md`**.
+
+4. [x] **Docs** — Definition of done: **`resources/builtin.md`** subsection: symptom, retry policy (**5 s**, one refetch), relation to T3; **`contracts/environment.md`** updated **only** if new **`JOBHOUND_*`** knobs are introduced.
+
+5. [x] **Tests** — Definition of done: **`go test ./...`** policy unchanged; table tests for the detector + **`httptest`** or fake **`HTMLDocumentFetcher`** proving the retry sequence when early bodies are interstitial and a later body is valid HTML (tests may use **sub‑second** overrides if production waits are constants or injectable for tests only).

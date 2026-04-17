@@ -1,7 +1,7 @@
 # Contract: collector environment (T2 + Tier 3 browser)
 
 **Spec**: `005-job-collectors`  
-**Last Updated**: 2026-04-12  
+**Last Updated**: 2026-04-17  
 **Status**: Draft
 
 **Tier 3 — shared document fetch:** **`internal/collectors/browserfetch`** (go-rod) loads **URL → HTML** for collectors that opt in (**Built In** first; **LinkedIn** reuses the same module — see **`browser-fetch.md`**). **Per-source** session/cookies (e.g. LinkedIn) are **not** defined in this section until that collector ships; they live beside the source collector + `internal/config`.
@@ -10,13 +10,13 @@
 
 | Variable | Default (when unset) | Meaning |
 | -------- | --------------------- | ------- |
-| `JOBHOUND_BROWSER_ENABLED` | (unset / off) | When set to `1`, `true`, `yes`, or `on`, **`internal/collectors/bootstrap`** launches a shared Chromium (go-rod) and may wire **`browserfetch.HTMLDocumentFetcher`** into Built In per **`JOBHOUND_COLLECTOR_BUILTIN_USE_BROWSER`** (see **Built In** table below). |
+| `JOBHOUND_BROWSER_ENABLED` | **on** (unset) | **Default:** Tier-3 is **enabled** — **`internal/collectors/bootstrap`** launches a shared Chromium (go-rod) and wires **`browserfetch.HTMLDocumentFetcher`** into Built In when **`JOBHOUND_COLLECTOR_BUILTIN_USE_BROWSER`** is on (see **Built In** table below). Set to `0`, `false`, `no`, or `off` to **disable** the browser (e.g. no local Chrome, CI, or forcing HTTP-only). Explicit `1` / `true` / `yes` / `on` keeps it enabled. |
 | `JOBHOUND_BROWSER_BIN` | (unset) | Optional path to Chromium/Chrome; empty uses go-rod launcher defaults (may download a revision). |
 | `JOBHOUND_BROWSER_USER_DATA_DIR` | (unset) | Optional persistent Chromium user-data directory; empty uses launcher temp profile. |
 | `JOBHOUND_BROWSER_NAV_TIMEOUT_MS` | `120000` | Per-URL navigation + load + HTML extraction timeout for **`browserfetch.RodFetcher.FetchHTMLDocument`**. |
 | `JOBHOUND_BROWSER_NO_SANDBOX` | (unset / off) | When `1`/`true`/`yes`/`on`, launches Chromium with **`--no-sandbox`** and **`--disable-dev-shm-usage`** (via go-rod). **Required** for Chromium running **as root in Docker** (see repo **`Dockerfile`** / **`docker-compose.yml`**). Avoid on untrusted multi-tenant hosts. |
 
-Built In uses **`net/http`** by default; with **`JOBHOUND_BROWSER_ENABLED`** and **`JOBHOUND_COLLECTOR_BUILTIN_USE_BROWSER`** (default on), it uses rod for listing and detail — see **Built In** table below.
+Built In uses **Rod** for listing and detail HTML when **`JOBHOUND_BROWSER_ENABLED`** is on (default) and **`JOBHOUND_COLLECTOR_BUILTIN_USE_BROWSER`** is on (default). Set **`JOBHOUND_BROWSER_ENABLED=0`** to skip Chromium entirely (Built In falls back to **`net/http`**), or **`JOBHOUND_COLLECTOR_BUILTIN_USE_BROWSER=0`** to keep the browser for future sources but force **`net/http`** for Built In only — see **Built In** table below.
 
 Existing Built In delay: **`JOBHOUND_COLLECTOR_BUILTIN_INTER_REQUEST_DELAY_MS`** (below) still applies between sequential fetches in both T2 and T3.
 

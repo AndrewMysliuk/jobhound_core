@@ -17,7 +17,7 @@ const (
 	defaultBrowserNavTimeout = 2 * time.Minute
 )
 
-// BrowserConfig controls optional headless Chromium for internal/collectors/browserfetch.
+// BrowserConfig controls headless Chromium for internal/collectors/browserfetch (Enabled defaults true).
 type BrowserConfig struct {
 	Enabled bool
 	Bin     string
@@ -29,14 +29,21 @@ type BrowserConfig struct {
 }
 
 // LoadBrowserFromEnv reads JOBHOUND_BROWSER_* variables.
+// Tier-3 (Rod) is on by default so Built In can use browserfetch without extra env;
+// set JOBHOUND_BROWSER_ENABLED=0 (or false/no/off) to skip launching Chromium when it is unavailable.
 func LoadBrowserFromEnv() BrowserConfig {
 	cfg := BrowserConfig{
 		NavTimeout: defaultBrowserNavTimeout,
+		Enabled:    true,
 	}
 	if v := strings.TrimSpace(os.Getenv(EnvBrowserEnabled)); v != "" {
 		switch strings.ToLower(v) {
 		case "1", "true", "yes", "on":
 			cfg.Enabled = true
+		case "0", "false", "no", "off":
+			cfg.Enabled = false
+		default:
+			cfg.Enabled = false
 		}
 	}
 	cfg.Bin = strings.TrimSpace(os.Getenv(EnvBrowserBin))

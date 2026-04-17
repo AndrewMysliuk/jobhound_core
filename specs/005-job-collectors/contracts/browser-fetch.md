@@ -1,7 +1,7 @@
 # Contract: Tier-3 browser document fetch (shared)
 
 **Spec**: `005-job-collectors`  
-**Last Updated**: 2026-04-12  
+**Last Updated**: 2026-04-17  
 **Status**: Normative (implemented)
 
 ## Purpose
@@ -26,6 +26,8 @@ Implementations expose **`browserfetch.HTMLDocumentFetcher`**:
 
 **No HTTP retries** at this layer (aligns with **`spec.md`** collector stance); one attempt per call unless a future spec explicitly adds policy.
 
+**Built In follow-up (challenge HTML):** when a response is **`HTTP 200`** but the HTML matches the **builtin-local** Cloudflare interstitial heuristic, **`builtin`** sleeps **`5 s`** (**`context`‑aware**), then performs **one** same-URL refetch on the **same** transport (**T2** or **T3**), and feeds the **last** body to JSON-LD parsing (see **`resources/builtin.md`** — *Same-transport challenge refetch*). That is **not** waiting inside one browser tab until the interstitial clears (no Built In logic in **`browserfetch`** for that); each **`FetchHTMLDocument`** remains **one** navigate + **load** + short settle + read HTML, and the **`5 s`** gap is only between those invocations when **`builtin`** decides to retry.
+
 ## Implementation home
 
 - Package: **`internal/collectors/browserfetch`**.
@@ -35,7 +37,7 @@ Implementations expose **`browserfetch.HTMLDocumentFetcher`**:
 
 ### Lifecycle / ops
 
-- **One long-lived Chromium process** per agent/worker process when **`JOBHOUND_BROWSER_ENABLED`** is on (**`bootstrap.MVPCollectors`** calls **`NewRodFetcher`** once).
+- **One long-lived Chromium process** per agent/worker process by default (**`JOBHOUND_BROWSER_ENABLED`** defaults on; **`bootstrap.MVPCollectors`** calls **`NewRodFetcher`** once). Set **`JOBHOUND_BROWSER_ENABLED=0`** to skip the browser.
 - **One new browser tab (page) per `FetchHTMLDocument` call**, closed after HTML is read — isolates failures and avoids navigation state leaks; startup cost is amortized across many calls on the shared browser.
 
 ## Testing

@@ -93,7 +93,7 @@ type DebugCollectorsRequest = {
 
   /**
    * Built In only: when true/false, overrides **`UseBrowser`** for this debug request (rod vs `net/http`).
-   * Requires the agent to have been started with a rod fetcher (**`JOBHOUND_BROWSER_ENABLED`**) when set to `true`; otherwise the collector returns an error.
+   * When `true`, requires a rod fetcher (default: browser on; **`JOBHOUND_BROWSER_ENABLED=0`** disables it). Otherwise the collector returns an error.
    */
   builtin_use_browser?: boolean;
 };
