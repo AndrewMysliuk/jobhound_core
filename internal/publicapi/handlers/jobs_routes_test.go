@@ -53,7 +53,7 @@ func TestGetStageJobs_queryAnd404(t *testing.T) {
 		listResp: schema.JobListResponse{
 			Items: []schema.JobListItem{
 				{
-					JobID: "j1", Title: "t", Company: "c", SourceID: "src", URL: "https://list", ApplyURL: "u",
+					JobID: "j1", Title: "t", Company: "c", Description: "desc", SourceID: "src", URL: "https://list", ApplyURL: "u",
 					FirstSeenAt: t0, PostedAt: &t0, Stage3Rationale: nil,
 				},
 			},

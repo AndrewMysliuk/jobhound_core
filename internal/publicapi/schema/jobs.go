@@ -15,6 +15,7 @@ type JobListItem struct {
 	JobID           string     `json:"job_id"`
 	Title           string     `json:"title"`
 	Company         string     `json:"company"`
+	Description     string     `json:"description"`
 	SourceID        string     `json:"source_id"`
 	URL             string     `json:"url"`
 	ApplyURL        string     `json:"apply_url"`
