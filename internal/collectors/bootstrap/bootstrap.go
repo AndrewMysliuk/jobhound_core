@@ -13,43 +13,44 @@ import (
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/browserfetch"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/builtin"
-	"github.com/andrewmysliuk/jobhound_core/internal/collectors/djinni"
-	"github.com/andrewmysliuk/jobhound_core/internal/collectors/dou"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/europeremotely"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/golangcafe"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/himalayas"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/multi"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/remotifyeurope"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/utils"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/vuejobs"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/wellfound"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/weworkremotely"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/workingnomads"
 	"github.com/andrewmysliuk/jobhound_core/internal/config"
 	"github.com/rs/zerolog"
 )
 
-// MVPCollectors returns Europe Remotely, Working Nomads, DOU.ua, Djinni, Built In, and optionally Himalayas as separate collectors.
-// (shared HTTP client without jar for ER/WN/Himalayas/Djinni; DOU uses its own jar-backed client).
+// MVPCollectors returns Europe Remotely, Working Nomads, Built In, and optionally Himalayas as separate collectors.
+// (shared HTTP client without jar).
 // Use for debug HTTP per-source routes or tests.
 // httpClient may be nil (defaults from collectors/utils). dataDir is JOBHOUND_DATA_DIR semantics:
 // empty uses subdirectory "data" under the current working directory for countries.json.
-// douCfg comes from config.Load().DouCollector (JOBHOUND_COLLECTOR_DOU_*).
-// djinniCfg from config.Load().DjinniCollector (JOBHOUND_COLLECTOR_DJINNI_*).
 // himCfg: when Disabled, himalayas is nil.
 // builtinCfg from config.Load().BuiltinCollector (JOBHOUND_COLLECTOR_BUILTIN_*).
 // browserCfg from config.Load().Browser (JOBHOUND_BROWSER_*); Enabled defaults true unless JOBHOUND_BROWSER_ENABLED=0.
-// When Enabled and builtinCfg.UseBrowserForHTML, a rod-backed fetcher is constructed for Built In.
-func MVPCollectors(ctx context.Context, httpClient *http.Client, dataDir string, douCfg config.DouCollectorConfig, djinniCfg config.DjinniCollectorConfig, builtinCfg config.BuiltinCollectorConfig, himCfg config.HimalayasCollectorConfig, browserCfg config.BrowserConfig) (europeRemotely, workingNomads, douUa, djin, builtIn collectors.Collector, himal collectors.Collector, err error) {
+// When Enabled and builtinCfg.UseBrowserForHTML, a rod-backed fetcher is shared by Built In and Golang Cafe.
+func MVPCollectors(ctx context.Context, httpClient *http.Client, dataDir string, builtinCfg config.BuiltinCollectorConfig, himCfg config.HimalayasCollectorConfig, browserCfg config.BrowserConfig) (europeRemotely, workingNomads, builtIn, himal, remotifyEurope, weWorkRemotely, wellfoundColl, vueJobs, golangCafe collectors.Collector, err error) {
 	if httpClient == nil {
 		httpClient = utils.NewHTTPClient()
 	}
 	cr, err := loadCountryResolver(dataDir)
 	if err != nil {
-		return nil, nil, nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, nil, nil, nil, nil, err
 	}
 	nonce, err := europeremotely.DiscoverNonce(ctx, httpClient)
 	if err != nil {
-		return nil, nil, nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, nil, nil, nil, nil, err
 	}
 	siteBase, err := europeremotely.DefaultSiteBase()
 	if err != nil {
-		return nil, nil, nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, nil, nil, nil, nil, err
 	}
 	er := &europeremotely.EuropeRemotely{
 		HTTPClient: httpClient,
@@ -66,19 +67,6 @@ func MVPCollectors(ctx context.Context, httpClient *http.Client, dataDir string,
 		HTTPClient: httpClient,
 		Countries:  cr,
 	}
-	douColl := &dou.DOU{
-		HTTPClient:        utils.NewHTTPClientWithJar(),
-		Search:            douCfg.Search,
-		MaxJobs:           douCfg.MaxJobsPerFetch,
-		InterRequestDelay: douCfg.InterRequestDelay,
-		Countries:         cr,
-	}
-	djinColl := &djinni.Djinni{
-		HTTPClient:        httpClient,
-		MaxJobs:           djinniCfg.MaxJobsPerFetch,
-		InterRequestDelay: djinniCfg.InterRequestDelay,
-		Countries:         cr,
-	}
 	var htmlFetch browserfetch.HTMLDocumentFetcher
 	useBuiltinBrowser := false
 	if browserCfg.Enabled && builtinCfg.UseBrowserForHTML {
@@ -89,7 +77,7 @@ func MVPCollectors(ctx context.Context, httpClient *http.Client, dataDir string,
 			NoSandbox:   browserCfg.NoSandbox,
 		})
 		if ferr != nil {
-			return nil, nil, nil, nil, nil, nil, fmt.Errorf("collectors bootstrap: browser fetcher: %w", ferr)
+			return nil, nil, nil, nil, nil, nil, nil, nil, nil, fmt.Errorf("collectors bootstrap: browser fetcher: %w", ferr)
 		}
 		htmlFetch = f
 		useBuiltinBrowser = true
@@ -113,26 +101,43 @@ func MVPCollectors(ctx context.Context, httpClient *http.Client, dataDir string,
 			him.SearchStartPage = 1
 		}
 	}
-	return er, wn, douColl, djinColl, builtinColl, him, nil
+	re := &remotifyeurope.RemotifyEurope{HTTPClient: httpClient}
+	wwr := &weworkremotely.WeWorkRemotely{HTTPClient: httpClient, Countries: cr}
+	wf := &wellfound.Wellfound{HTTPClient: httpClient}
+	vj := &vuejobs.VueJobs{HTTPClient: httpClient}
+	var gc collectors.Collector
+	if htmlFetch != nil {
+		gc = &golangcafe.GolangCafe{HTMLDocumentFetcher: htmlFetch}
+	}
+	return er, wn, builtinColl, him, re, wwr, wf, vj, gc, nil
 }
 
-// MVPMulti wraps MVP collectors in one collectors.Collector (order: Europe Remotely, Working Nomads, DOU.ua, Djinni, Built In, Himalayas when non-nil).
+// MVPMulti wraps MVP collectors in one collectors.Collector (DefaultIngestSourceIDs order; Himalayas when non-nil).
 // Optional log: per-source Fetch failures log at Warn on multi.All when OnSourceError is unset.
-func MVPMulti(europeRemotely, workingNomads, douUa, djinni, builtIn, himalayas collectors.Collector, log *zerolog.Logger) collectors.Collector {
-	list := []collectors.Collector{europeRemotely, workingNomads, douUa, djinni, builtIn}
+func MVPMulti(
+	europeRemotely, workingNomads, builtIn, himalayas,
+	remotifyEurope, weWorkRemotely, wellfoundColl, vueJobs, golangCafe collectors.Collector,
+	log *zerolog.Logger,
+) collectors.Collector {
+	list := []collectors.Collector{europeRemotely, workingNomads, builtIn}
 	if himalayas != nil {
 		list = append(list, himalayas)
+	}
+	for _, c := range []collectors.Collector{remotifyEurope, weWorkRemotely, wellfoundColl, vueJobs, golangCafe} {
+		if c != nil {
+			list = append(list, c)
+		}
 	}
 	return &multi.All{Collectors: list, Log: log}
 }
 
 // MVPCollector returns a single collectors.Collector that runs all MVP sources.
-func MVPCollector(ctx context.Context, httpClient *http.Client, dataDir string, douCfg config.DouCollectorConfig, djinniCfg config.DjinniCollectorConfig, builtinCfg config.BuiltinCollectorConfig, himCfg config.HimalayasCollectorConfig, browserCfg config.BrowserConfig, log *zerolog.Logger) (collectors.Collector, error) {
-	er, wn, d, dj, bi, h, err := MVPCollectors(ctx, httpClient, dataDir, douCfg, djinniCfg, builtinCfg, himCfg, browserCfg)
+func MVPCollector(ctx context.Context, httpClient *http.Client, dataDir string, builtinCfg config.BuiltinCollectorConfig, himCfg config.HimalayasCollectorConfig, browserCfg config.BrowserConfig, log *zerolog.Logger) (collectors.Collector, error) {
+	er, wn, bi, h, re, wwr, wf, vj, gc, err := MVPCollectors(ctx, httpClient, dataDir, builtinCfg, himCfg, browserCfg)
 	if err != nil {
 		return nil, err
 	}
-	return MVPMulti(er, wn, d, dj, bi, h, log), nil
+	return MVPMulti(er, wn, bi, h, re, wwr, wf, vj, gc, log), nil
 }
 
 func loadCountryResolver(dataDir string) (*utils.CountryResolver, error) {

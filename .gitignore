@@ -17,9 +17,8 @@ vendor/
 *.sqlite3
 .data/
 
-# LinkedIn / session material (paths may be overridden in .env)
+# Session material (paths may be overridden in .env)
 cookies.txt
-linkedin.cookies
 
 # IDE / OS
 .idea/

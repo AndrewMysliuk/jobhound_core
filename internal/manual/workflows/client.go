@@ -8,8 +8,8 @@ import (
 	"go.temporal.io/sdk/client"
 )
 
-// DefaultManualSlotRunWorkflowTimeout bounds the parent workflow wait; must cover parallel ingest children (25m) plus stage 2/3.
-const DefaultManualSlotRunWorkflowTimeout = 45 * time.Minute
+// DefaultManualSlotRunWorkflowTimeout bounds the parent workflow wait; must cover HTTP ingest plus sequential builtin children (25m each, typically much less) plus stage 2/3.
+const DefaultManualSlotRunWorkflowTimeout = 60 * time.Minute
 
 // StartManualSlotRunWorkflow runs [ManualSlotRunWorkflow] to completion and returns the aggregate.
 // Pass taskQueue from [github.com/andrewmysliuk/jobhound_core/internal/config.Temporal.TaskQueue] (default "jobhound");

@@ -35,18 +35,28 @@ func NewRedisCoordinatorWithTTL(rdb *redis.Client, lockTTLSec, cooldownTTLSec in
 	return &RedisCoordinator{rdb: rdb, lockTTL: lock, cooldownTTL: cd}
 }
 
-func lockKey(slotID uuid.UUID, normalizedSourceID string) string {
-	return "ingest:lock:" + slotID.String() + ":" + normalizedSourceID
+const catalogQuerySegment = "catalog"
+
+func querySegment(query string) string {
+	q := NormalizeSourceID(query)
+	if q == "" {
+		return catalogQuerySegment
+	}
+	return q
 }
 
-func cooldownKey(slotID uuid.UUID, normalizedSourceID string) string {
-	return "ingest:cooldown:" + slotID.String() + ":" + normalizedSourceID
+func lockKey(slotID uuid.UUID, normalizedSourceID, segment string) string {
+	return "ingest:lock:" + slotID.String() + ":" + normalizedSourceID + ":" + segment
+}
+
+func cooldownKey(slotID uuid.UUID, normalizedSourceID, segment string) string {
+	return "ingest:cooldown:" + slotID.String() + ":" + normalizedSourceID + ":" + segment
 }
 
 // Begin acquires the ingest lock for (slotID, sourceID). When explicitRefresh is false, an existing
 // cooldown key blocks starting (fail closed). When explicitRefresh is true, cooldown is
 // ignored but the lock is still taken. Any Redis error is returned and ingest must not proceed.
-func (c *RedisCoordinator) Begin(ctx context.Context, slotID uuid.UUID, sourceID string, explicitRefresh bool) (release func(context.Context) error, err error) {
+func (c *RedisCoordinator) Begin(ctx context.Context, slotID uuid.UUID, sourceID, query string, explicitRefresh bool) (release func(context.Context) error, err error) {
 	if c == nil || c.rdb == nil {
 		return nil, ErrNilRedisClient
 	}
@@ -57,9 +67,10 @@ func (c *RedisCoordinator) Begin(ctx context.Context, slotID uuid.UUID, sourceID
 	if id == "" {
 		return nil, ErrEmptySourceID
 	}
+	seg := querySegment(query)
 
 	if !explicitRefresh {
-		n, err := c.rdb.Exists(ctx, cooldownKey(slotID, id)).Result()
+		n, err := c.rdb.Exists(ctx, cooldownKey(slotID, id, seg)).Result()
 		if err != nil {
 			return nil, err
 		}
@@ -68,7 +79,7 @@ func (c *RedisCoordinator) Begin(ctx context.Context, slotID uuid.UUID, sourceID
 		}
 	}
 
-	err = c.rdb.SetArgs(ctx, lockKey(slotID, id), "1", redis.SetArgs{
+	err = c.rdb.SetArgs(ctx, lockKey(slotID, id, seg), "1", redis.SetArgs{
 		Mode: "nx",
 		TTL:  c.lockTTL,
 	}).Err()
@@ -80,13 +91,13 @@ func (c *RedisCoordinator) Begin(ctx context.Context, slotID uuid.UUID, sourceID
 	}
 
 	release = func(ctx context.Context) error {
-		return c.rdb.Del(ctx, lockKey(slotID, id)).Err()
+		return c.rdb.Del(ctx, lockKey(slotID, id, seg)).Err()
 	}
 	return release, nil
 }
 
 // RecordSuccessfulIngest sets the cooldown key after a successful ingest (e.g. after Postgres commit).
-func (c *RedisCoordinator) RecordSuccessfulIngest(ctx context.Context, slotID uuid.UUID, sourceID string) error {
+func (c *RedisCoordinator) RecordSuccessfulIngest(ctx context.Context, slotID uuid.UUID, sourceID, query string) error {
 	if c == nil || c.rdb == nil {
 		return ErrNilRedisClient
 	}
@@ -97,5 +108,5 @@ func (c *RedisCoordinator) RecordSuccessfulIngest(ctx context.Context, slotID uu
 	if id == "" {
 		return ErrEmptySourceID
 	}
-	return c.rdb.Set(ctx, cooldownKey(slotID, id), "1", c.cooldownTTL).Err()
+	return c.rdb.Set(ctx, cooldownKey(slotID, id, querySegment(query)), "1", c.cooldownTTL).Err()
 }

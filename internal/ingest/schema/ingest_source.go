@@ -9,8 +9,8 @@ type IngestSourceInput struct {
 	SlotID          uuid.UUID
 	SourceID        string
 	ExplicitRefresh bool
-	// SlotSearchQuery is the slot display name used as the per-source search keyword (public API POST /slots).
-	// Empty means full default listing for sources that support unscoped fetch.
+	// SlotSearchQuery is the matrix query or Wellfound role slug for this ingest child (not the slot display name).
+	// Empty means catalog fetch (Fetch, not FetchWithSlotSearch).
 	SlotSearchQuery string
 }
 

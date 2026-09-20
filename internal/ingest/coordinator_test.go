@@ -25,16 +25,16 @@ func TestBegin_lockAndRelease(t *testing.T) {
 	c := NewRedisCoordinator(rdb)
 	ctx := context.Background()
 
-	rel, err := c.Begin(ctx, coordTestSlot, "greenhouse", false)
+	rel, err := c.Begin(ctx, coordTestSlot, "greenhouse", "", false)
 	require.NoError(t, err)
 	require.NotNil(t, rel)
 
-	_, err = c.Begin(ctx, coordTestSlot, "greenhouse", false)
+	_, err = c.Begin(ctx, coordTestSlot, "greenhouse", "", false)
 	require.ErrorIs(t, err, ErrLockHeld)
 
 	require.NoError(t, rel(ctx))
 
-	rel2, err := c.Begin(ctx, coordTestSlot, "greenhouse", false)
+	rel2, err := c.Begin(ctx, coordTestSlot, "greenhouse", "", false)
 	require.NoError(t, err)
 	require.NoError(t, rel2(ctx))
 }
@@ -47,12 +47,12 @@ func TestBegin_cooldownBlocksUnlessExplicitRefresh(t *testing.T) {
 	c := NewRedisCoordinator(rdb)
 	ctx := context.Background()
 
-	require.NoError(t, c.RecordSuccessfulIngest(ctx, coordTestSlot, "src-a"))
+	require.NoError(t, c.RecordSuccessfulIngest(ctx, coordTestSlot, "src-a", ""))
 
-	_, err := c.Begin(ctx, coordTestSlot, "src-a", false)
+	_, err := c.Begin(ctx, coordTestSlot, "src-a", "", false)
 	require.ErrorIs(t, err, ErrCooldownActive)
 
-	rel, err := c.Begin(ctx, coordTestSlot, "src-a", true)
+	rel, err := c.Begin(ctx, coordTestSlot, "src-a", "", true)
 	require.NoError(t, err)
 	require.NoError(t, rel(ctx))
 }
@@ -70,7 +70,7 @@ func TestBegin_failClosedRedisUnavailable(t *testing.T) {
 	t.Cleanup(func() { _ = rdb.Close() })
 	c := NewRedisCoordinator(rdb)
 
-	_, err := c.Begin(context.Background(), coordTestSlot, "x", false)
+	_, err := c.Begin(context.Background(), coordTestSlot, "x", "", false)
 	require.Error(t, err)
 	require.False(t, errors.Is(err, ErrLockHeld))
 	require.False(t, errors.Is(err, ErrCooldownActive))
@@ -84,9 +84,9 @@ func TestRecordSuccessfulIngest_TTL(t *testing.T) {
 	c := NewRedisCoordinator(rdb)
 	ctx := context.Background()
 
-	require.NoError(t, c.RecordSuccessfulIngest(ctx, coordTestSlot, "k"))
+	require.NoError(t, c.RecordSuccessfulIngest(ctx, coordTestSlot, "k", ""))
 
-	ttl := mr.TTL(cooldownKey(coordTestSlot, NormalizeSourceID("k")))
+	ttl := mr.TTL(cooldownKey(coordTestSlot, NormalizeSourceID("k"), catalogQuerySegment))
 	require.GreaterOrEqual(t, ttl, time.Duration(IngestCooldownTTLSeconds)*time.Second-time.Second)
 	require.LessOrEqual(t, ttl, time.Duration(IngestCooldownTTLSeconds)*time.Second)
 }
@@ -99,11 +99,11 @@ func TestBegin_lockTTL(t *testing.T) {
 	c := NewRedisCoordinator(rdb)
 	ctx := context.Background()
 
-	rel, err := c.Begin(ctx, coordTestSlot, "job", false)
+	rel, err := c.Begin(ctx, coordTestSlot, "job", "", false)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = rel(ctx) })
 
-	ttl := mr.TTL(lockKey(coordTestSlot, NormalizeSourceID("job")))
+	ttl := mr.TTL(lockKey(coordTestSlot, NormalizeSourceID("job"), catalogQuerySegment))
 	require.GreaterOrEqual(t, ttl, time.Duration(IngestLockTTLSeconds)*time.Second-time.Second)
 	require.LessOrEqual(t, ttl, time.Duration(IngestLockTTLSeconds)*time.Second)
 }
@@ -116,17 +116,17 @@ func TestBegin_lockTTL_custom(t *testing.T) {
 	c := NewRedisCoordinatorWithTTL(rdb, 42, 99)
 	ctx := context.Background()
 
-	rel, err := c.Begin(ctx, coordTestSlot, "custom-ttl", false)
+	rel, err := c.Begin(ctx, coordTestSlot, "custom-ttl", "", false)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = rel(ctx) })
 
-	ttl := mr.TTL(lockKey(coordTestSlot, NormalizeSourceID("custom-ttl")))
+	ttl := mr.TTL(lockKey(coordTestSlot, NormalizeSourceID("custom-ttl"), catalogQuerySegment))
 	require.GreaterOrEqual(t, ttl, 41*time.Second)
 	require.LessOrEqual(t, ttl, 42*time.Second)
 
 	require.NoError(t, rel(ctx))
-	require.NoError(t, c.RecordSuccessfulIngest(ctx, coordTestSlot, "custom-ttl"))
-	cttl := mr.TTL(cooldownKey(coordTestSlot, NormalizeSourceID("custom-ttl")))
+	require.NoError(t, c.RecordSuccessfulIngest(ctx, coordTestSlot, "custom-ttl", ""))
+	cttl := mr.TTL(cooldownKey(coordTestSlot, NormalizeSourceID("custom-ttl"), catalogQuerySegment))
 	require.GreaterOrEqual(t, cttl, 98*time.Second)
 	require.LessOrEqual(t, cttl, 99*time.Second)
 }
@@ -136,7 +136,7 @@ func TestBegin_emptySourceID(t *testing.T) {
 	t.Cleanup(func() { mr.Close() })
 	c := NewRedisCoordinator(redis.NewClient(&redis.Options{Addr: mr.Addr()}))
 
-	_, err := c.Begin(context.Background(), coordTestSlot, "   ", false)
+	_, err := c.Begin(context.Background(), coordTestSlot, "   ", "", false)
 	require.ErrorIs(t, err, ErrEmptySourceID)
 }
 
@@ -148,9 +148,9 @@ func TestBegin_differentSlotsSameSourceDoNotBlock(t *testing.T) {
 	c := NewRedisCoordinator(rdb)
 	ctx := context.Background()
 
-	relA, err := c.Begin(ctx, coordTestSlot, "shared-src", false)
+	relA, err := c.Begin(ctx, coordTestSlot, "shared-src", "", false)
 	require.NoError(t, err)
-	relB, err := c.Begin(ctx, coordTestSlotB, "shared-src", false)
+	relB, err := c.Begin(ctx, coordTestSlotB, "shared-src", "", false)
 	require.NoError(t, err)
 	require.NoError(t, relA(ctx))
 	require.NoError(t, relB(ctx))
@@ -161,6 +161,6 @@ func TestBegin_nilSlotID(t *testing.T) {
 	t.Cleanup(func() { mr.Close() })
 	c := NewRedisCoordinator(redis.NewClient(&redis.Options{Addr: mr.Addr()}))
 
-	_, err := c.Begin(context.Background(), uuid.Nil, "x", false)
+	_, err := c.Begin(context.Background(), uuid.Nil, "x", "", false)
 	require.ErrorIs(t, err, ErrNilSlotID)
 }

@@ -14,6 +14,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/europeremotely"
 	"github.com/andrewmysliuk/jobhound_core/internal/domain/schema"
 )
@@ -38,9 +39,13 @@ func (s stubCollector) Fetch(context.Context) ([]schema.Job, error) {
 	return s.jobs, nil
 }
 
+func newTestHandler(er, wn, him, bi collectors.Collector, erConcrete *europeremotely.EuropeRemotely) *HTTPHandler {
+	return NewHTTPHandler(er, wn, him, bi, nil, nil, nil, nil, nil, nil, erConcrete, nil, nil, nil, nil, nil, nil, zerolog.Nop())
+}
+
 func TestHealth(t *testing.T) {
 	t.Parallel()
-	srv := httptest.NewServer(NewHTTPHandler(stubCollector{name: "europe_remotely"}, stubCollector{name: "working_nomads"}, stubCollector{name: "dou_ua"}, stubCollector{name: "himalayas"}, stubCollector{name: "djinni"}, stubCollector{name: "builtin"}, nil, nil, nil, nil, nil, nil, zerolog.Nop()))
+	srv := httptest.NewServer(newTestHandler(stubCollector{name: "europe_remotely"}, stubCollector{name: "working_nomads"}, stubCollector{name: "himalayas"}, stubCollector{name: "builtin"}, nil))
 	t.Cleanup(srv.Close)
 	res, err := http.Get(srv.URL + "/health")
 	if err != nil {
@@ -68,7 +73,7 @@ func TestEuropeRemotely_ok(t *testing.T) {
 		},
 	}
 	wn := stubCollector{name: "working_nomads"}
-	srv := httptest.NewServer(NewHTTPHandler(er, wn, stubCollector{name: "dou_ua"}, stubCollector{name: "himalayas"}, stubCollector{name: "djinni"}, stubCollector{name: "builtin"}, nil, nil, nil, nil, nil, nil, zerolog.Nop()))
+	srv := httptest.NewServer(newTestHandler(er, wn, stubCollector{name: "himalayas"}, stubCollector{name: "builtin"}, nil))
 	t.Cleanup(srv.Close)
 	res, err := http.Post(srv.URL+"/debug/collectors/europe_remotely", "application/json", strings.NewReader(`{"limit":0}`))
 	if err != nil {
@@ -100,7 +105,7 @@ func TestWorkingNomads_ok(t *testing.T) {
 			{ID: "c", Title: "T3", Source: "working_nomads"},
 		},
 	}
-	srv := httptest.NewServer(NewHTTPHandler(er, wn, stubCollector{name: "dou_ua"}, stubCollector{name: "himalayas"}, stubCollector{name: "djinni"}, stubCollector{name: "builtin"}, nil, nil, nil, nil, nil, nil, zerolog.Nop()))
+	srv := httptest.NewServer(newTestHandler(er, wn, stubCollector{name: "himalayas"}, stubCollector{name: "builtin"}, nil))
 	t.Cleanup(srv.Close)
 	res, err := http.Post(srv.URL+"/debug/collectors/working_nomads", "application/json", strings.NewReader(`{"limit":0}`))
 	if err != nil {
@@ -119,19 +124,19 @@ func TestWorkingNomads_ok(t *testing.T) {
 	}
 }
 
-func TestDouUA_ok(t *testing.T) {
+func TestHimalayas_ok(t *testing.T) {
 	t.Parallel()
 	er := stubCollector{name: "europe_remotely"}
 	wn := stubCollector{name: "working_nomads"}
-	du := stubCollector{
-		name: "dou_ua",
+	him := stubCollector{
+		name: "himalayas",
 		jobs: []schema.Job{
-			{ID: "d1", Title: "DOU T", Source: "dou_ua"},
+			{ID: "h1", Title: "Him T", Source: "himalayas"},
 		},
 	}
-	srv := httptest.NewServer(NewHTTPHandler(er, wn, du, stubCollector{name: "himalayas"}, stubCollector{name: "djinni"}, stubCollector{name: "builtin"}, nil, nil, nil, nil, nil, nil, zerolog.Nop()))
+	srv := httptest.NewServer(newTestHandler(er, wn, him, stubCollector{name: "builtin"}, nil))
 	t.Cleanup(srv.Close)
-	res, err := http.Post(srv.URL+"/debug/collectors/dou_ua", "application/json", strings.NewReader(`{"limit":0}`))
+	res, err := http.Post(srv.URL+"/debug/collectors/himalayas", "application/json", strings.NewReader(`{"limit":0}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -143,24 +148,24 @@ func TestDouUA_ok(t *testing.T) {
 	if err := json.NewDecoder(res.Body).Decode(&out); err != nil {
 		t.Fatal(err)
 	}
-	if !out.OK || out.Collector != "dou_ua" || out.Count != 1 || len(out.Jobs) != 1 {
+	if !out.OK || out.Collector != "himalayas" || out.Count != 1 || len(out.Jobs) != 1 {
 		t.Fatalf("%+v", out)
 	}
 }
 
-func TestDjinni_ok(t *testing.T) {
+func TestBuiltin_ok(t *testing.T) {
 	t.Parallel()
 	er := stubCollector{name: "europe_remotely"}
 	wn := stubCollector{name: "working_nomads"}
-	dj := stubCollector{
-		name: "djinni",
+	bi := stubCollector{
+		name: "builtin",
 		jobs: []schema.Job{
-			{ID: "j1", Title: "Djinni T", Source: "djinni"},
+			{ID: "b1", Title: "BuiltIn T", Source: "builtin"},
 		},
 	}
-	srv := httptest.NewServer(NewHTTPHandler(er, wn, stubCollector{name: "dou_ua"}, stubCollector{name: "himalayas"}, dj, stubCollector{name: "builtin"}, nil, nil, nil, nil, nil, nil, zerolog.Nop()))
+	srv := httptest.NewServer(newTestHandler(er, wn, stubCollector{name: "himalayas"}, bi, nil))
 	t.Cleanup(srv.Close)
-	res, err := http.Post(srv.URL+"/debug/collectors/djinni", "application/json", strings.NewReader(`{"limit":0}`))
+	res, err := http.Post(srv.URL+"/debug/collectors/builtin", "application/json", strings.NewReader(`{"limit":0}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -172,8 +177,26 @@ func TestDjinni_ok(t *testing.T) {
 	if err := json.NewDecoder(res.Body).Decode(&out); err != nil {
 		t.Fatal(err)
 	}
-	if !out.OK || out.Collector != "djinni" || out.Count != 1 || len(out.Jobs) != 1 {
+	if !out.OK || out.Collector != "builtin" || out.Count != 1 || len(out.Jobs) != 1 {
 		t.Fatalf("%+v", out)
+	}
+}
+
+func TestDroppedCollectorRoutes_notFound(t *testing.T) {
+	t.Parallel()
+	er := stubCollector{name: "europe_remotely"}
+	wn := stubCollector{name: "working_nomads"}
+	srv := httptest.NewServer(newTestHandler(er, wn, stubCollector{name: "himalayas"}, stubCollector{name: "builtin"}, nil))
+	t.Cleanup(srv.Close)
+	for _, path := range []string{"/debug/collectors/djinni", "/debug/collectors/dou_ua"} {
+		res, err := http.Post(srv.URL+path, "application/json", strings.NewReader(`{"limit":0}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		res.Body.Close()
+		if res.StatusCode != http.StatusNotFound {
+			t.Fatalf("%s: status %d", path, res.StatusCode)
+		}
 	}
 }
 
@@ -181,7 +204,7 @@ func TestEuropeRemotely_fetchError(t *testing.T) {
 	t.Parallel()
 	er := stubCollector{name: "europe_remotely", err: errors.New("boom")}
 	wn := stubCollector{name: "working_nomads"}
-	srv := httptest.NewServer(NewHTTPHandler(er, wn, stubCollector{name: "dou_ua"}, stubCollector{name: "himalayas"}, stubCollector{name: "djinni"}, stubCollector{name: "builtin"}, nil, nil, nil, nil, nil, nil, zerolog.Nop()))
+	srv := httptest.NewServer(newTestHandler(er, wn, stubCollector{name: "himalayas"}, stubCollector{name: "builtin"}, nil))
 	t.Cleanup(srv.Close)
 	res, err := http.Post(srv.URL+"/debug/collectors/europe_remotely", "application/json", strings.NewReader(`{"limit":0}`))
 	if err != nil {
@@ -208,7 +231,7 @@ func TestEuropeRemotely_defaultLimitTruncates(t *testing.T) {
 	}
 	er := stubCollector{name: "europe_remotely", jobs: jobs}
 	wn := stubCollector{name: "working_nomads"}
-	srv := httptest.NewServer(NewHTTPHandler(er, wn, stubCollector{name: "dou_ua"}, stubCollector{name: "himalayas"}, stubCollector{name: "djinni"}, stubCollector{name: "builtin"}, nil, nil, nil, nil, nil, nil, zerolog.Nop()))
+	srv := httptest.NewServer(newTestHandler(er, wn, stubCollector{name: "himalayas"}, stubCollector{name: "builtin"}, nil))
 	t.Cleanup(srv.Close)
 	res, err := http.Post(srv.URL+"/debug/collectors/europe_remotely", "application/json", nil)
 	if err != nil {
@@ -231,7 +254,7 @@ func TestInvalidLimitBody(t *testing.T) {
 	t.Parallel()
 	er := stubCollector{name: "europe_remotely"}
 	wn := stubCollector{name: "working_nomads"}
-	srv := httptest.NewServer(NewHTTPHandler(er, wn, stubCollector{name: "dou_ua"}, stubCollector{name: "himalayas"}, stubCollector{name: "djinni"}, stubCollector{name: "builtin"}, nil, nil, nil, nil, nil, nil, zerolog.Nop()))
+	srv := httptest.NewServer(newTestHandler(er, wn, stubCollector{name: "himalayas"}, stubCollector{name: "builtin"}, nil))
 	t.Cleanup(srv.Close)
 	res, err := http.Post(srv.URL+"/debug/collectors/europe_remotely", "application/json", strings.NewReader(`{"limit":-1}`))
 	if err != nil {
@@ -277,7 +300,7 @@ func TestEuropeRemotely_debugPassesSearchKeywordsToFeed(t *testing.T) {
 		SiteBase:   siteBase,
 	}
 	wn := stubCollector{name: "working_nomads"}
-	dbg := httptest.NewServer(NewHTTPHandler(er, wn, stubCollector{name: "dou_ua"}, stubCollector{name: "himalayas"}, stubCollector{name: "djinni"}, stubCollector{name: "builtin"}, nil, er, nil, nil, nil, nil, zerolog.Nop()))
+	dbg := httptest.NewServer(newTestHandler(er, wn, stubCollector{name: "himalayas"}, stubCollector{name: "builtin"}, er))
 	t.Cleanup(dbg.Close)
 
 	res, err := http.Post(dbg.URL+"/debug/collectors/europe_remotely", "application/json", strings.NewReader(`{"limit":1,"search_keywords":"vue"}`))

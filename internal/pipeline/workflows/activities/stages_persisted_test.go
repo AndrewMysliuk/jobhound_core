@@ -102,7 +102,7 @@ func TestRunPersistPipelineStage2_and_3_persistsAndScoresCappedBatch(t *testing.
 		RoleSynonyms:     []string{"go"},
 		RemoteOnly:       true,
 		CountryAllowlist: []string{"de"},
-	}, []string{"djinni"}, slotID, nil)
+	}, []string{"himalayas"}, slotID, nil)
 	require.NoError(t, err)
 
 	scorer := stubScorer(func(_ context.Context, _ string, j schema.Job) (schema.ScoredJob, error) {

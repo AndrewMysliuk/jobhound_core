@@ -19,7 +19,7 @@ type HimalayasCollectorConfig struct {
 	Disabled bool
 	// MaxPages: 0 → collector default; -1 → unlimited pages; >0 → cap.
 	MaxPages int
-	// Search is the free-text q for GET …/jobs/api/search (same role as DouCollectorConfig.Search).
+	// Search is the free-text q for GET …/jobs/api/search.
 	// Empty → browse full JSON feed; non-empty → search mode only.
 	Search string
 }

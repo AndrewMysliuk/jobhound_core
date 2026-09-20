@@ -26,12 +26,4 @@ type Notifier struct{}
 
 func (Notifier) Send(context.Context, []schema.ScoredJob) error { return nil }
 
-// SessionProvider returns an empty path (collectors.SessionProvider test double).
-type SessionProvider struct{}
-
-func (SessionProvider) CookieFilePath() string { return "" }
-
-var (
-	_ collectors.Collector       = Collector{}
-	_ collectors.SessionProvider = SessionProvider{}
-)
+var _ collectors.Collector = Collector{}

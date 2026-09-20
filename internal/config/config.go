@@ -16,25 +16,20 @@ type Config struct {
 	DataDir string
 	// DebugHTTPAddr enables cmd/agent local debug HTTP when non-empty (see EnvDebugHTTPAddr); flag -debug-http-addr overrides.
 	DebugHTTPAddr string
-	// DouCollector configures the DOU.ua collector (005-job-collectors).
-	DouCollector DouCollectorConfig
 	// HimalayasCollector configures the Himalayas JSON collector (005-job-collectors).
 	HimalayasCollector HimalayasCollectorConfig
-	// DjinniCollector configures the Djinni HTML + JSON-LD collector (005-job-collectors).
-	DjinniCollector DjinniCollectorConfig
 	// BuiltinCollector configures the Built In remote listing collector (005-job-collectors).
 	BuiltinCollector BuiltinCollectorConfig
 	// Browser configures Tier-3 headless document fetch (005-job-collectors / browserfetch); Enabled defaults true (JOBHOUND_BROWSER_ENABLED=0 to opt out).
 	Browser BrowserConfig
 
-	AnthropicAPIKey     string
-	AnthropicModel      string
-	TelegramBotToken    string
-	TelegramChatID      string
-	LinkedInCookiesPath string
-	HTTPUserAgent       string
-	IncludeKeywords     []string
-	ExcludeKeywords     []string
+	AnthropicAPIKey  string
+	AnthropicModel   string
+	TelegramBotToken string
+	TelegramChatID   string
+	HTTPUserAgent    string
+	IncludeKeywords  []string
+	ExcludeKeywords  []string
 }
 
 // Load reads supported environment variables into Config.
@@ -52,9 +47,7 @@ func Load() Config {
 		Logging:            LoadLoggingFromEnv(),
 		DataDir:            loadDataDirFromEnv(),
 		DebugHTTPAddr:      loadDebugHTTPAddrFromEnv(),
-		DouCollector:       LoadDouCollectorFromEnv(),
 		HimalayasCollector: LoadHimalayasCollectorFromEnv(),
-		DjinniCollector:    LoadDjinniCollectorFromEnv(),
 		BuiltinCollector:   LoadBuiltinCollectorFromEnv(),
 		Browser:            LoadBrowserFromEnv(),
 		AnthropicAPIKey:    LoadAnthropicAPIKeyFromEnv(),

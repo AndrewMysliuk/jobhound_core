@@ -7,7 +7,7 @@ import "time"
 // ID is set via StableJobID / AssignStableID in domain/utils (see specs/001-agent-skeleton-and-domain/spec.md).
 type Job struct {
 	ID          string
-	Source      string // e.g. "himalayas", "djinni"
+	Source      string // e.g. "himalayas", "builtin"
 	Title       string
 	Company     string
 	URL         string // canonical job posting (listing) page; used for stable id before ApplyURL fallback

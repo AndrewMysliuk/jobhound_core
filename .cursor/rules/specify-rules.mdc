@@ -6,17 +6,17 @@ alwaysApply: true
 
 # jobhound_core Development Guidelines
 
-Spec-driven workflow via `.specify` and `/speckit.*` commands. Update this file when plans change (or run the Specify update script when wired).
+Feature slices: `.cursor/templates/` → `docs/<feature_slug>/` (`*-concept.md`, `*-schemas-contracts.md`, `*-tasks.md`). Audit with `.cursor/skills/audit-feature-tasks`. Update this file when architecture decisions change.
 
 ## Active Technologies
 
 - Go 1.24 — standard library first; `net/http` / `html` / `encoding/json` for Tier-1 API and static fetchers
 - `github.com/PuerkitoBio/goquery` for HTML sources (Tier 2)
-- `github.com/go-rod/rod` + session cookies file for LinkedIn (Tier 3)
+- `github.com/go-rod/rod` for Built In / `browserfetch` (Tier 3)
 - PostgreSQL + GORM + migrations — jobs, history, profile, dedup
 - Temporal — workflows/activities for manual runs (scheduled auto-refresh is product backlog until specced)
 - Claude API for scoring; product delivery channels (e.g. HTTP/API) per specs—third-party push notifications out of MVP scope
-- Local: Docker Compose (Postgres + Temporal); production: GCP (see `specs/000-epic-overview`)
+- Local: Docker Compose (Postgres + Temporal); production: GCP
 
 ## Project Structure
 
@@ -55,7 +55,7 @@ migrations/              # SQL migration files
 - **`workflows/`** — **required** when the module uses Temporal (not optional). `New...` constructor explicitly calls `RegisterWorkflow` for every workflow. Temporal-to-domain mapping helpers go in `workflows/mappers.go` (or `workflows/utils/`). `activities/` for activity structs and methods.
 - **`utils/`** — small helpers for that module only. Standalone functions that would otherwise float at the module root belong here.
 
-Temporal connection lives in `internal/config`; workflow/activity code under `internal/<feature>/workflows/`. Full pattern catalogue: `.specify/memory/constitution.md`.
+Temporal connection lives in `internal/config`; workflow/activity code under `internal/<feature>/workflows/`.
 
 ## Canonical Patterns
 
@@ -110,14 +110,16 @@ Other feature modules: typed request/response (and other wire) structs in **`sch
 ## Code Style
 
 - Go 1.24 conventions; interfaces on module boundaries in `internal/<feature>/contract.go` (or split files); persistence only under `internal/<feature>/storage`
-- No secrets or real `.env` in git — document `JOBHOUND_*` names in `specs/*/contracts/environment.md`, `README.md`, and `internal/config` (do not duplicate long env lists in the Makefile)
+- No secrets or real `.env` in git — document `JOBHOUND_*` names in `README.md` and `internal/config` (do not duplicate long env lists in the Makefile)
 - **Config**: all shared `JOBHOUND_*` (and other app) env names and parsing live in `internal/config`; `cmd/*` loads and passes structs into `internal/*`
 - Table-driven tests where behavior branches; keep `main` / `cmd` **thin** — composition only, no business rules
 - **Comments**: prefer clear names and structure over comment walls. Do not add large banner comments or redundant docblocks on every method; document **non-obvious** invariants, edge cases, or public API where `godoc` matters. If the code is obvious, leave it uncommented
 
 ## Recent Changes
 
-- 2026-04-07: **Constitution v1.8.3** — principle IV persistence wording tightened (see `.specify/memory/constitution.md`).
+- 2026-09-20: Collectors keep-set `europe_remotely` / `working_nomads` / `himalayas` / `builtin`; rod stays for Built In; LinkedIn cancelled (no session cookies).
+- 2026-09-20: Replaced Spec Kit (`.specify` + `/speckit.*` + `specs/`) with `.cursor/templates/` + `audit-feature-tasks`. Engineering rules stay in this file.
+- 2026-04-07: **Constitution v1.8.3** — principle IV persistence wording tightened (Postgres via GORM + migrations).
 - 2026-04-07: **`pipeline_run_jobs`** — `stage2_status` + optional `stage3_status` in consolidated `000001_initial_schema`; `EffectiveRunJobStatusFromRow` lives in **`internal/pipeline/utils/`** (constitution: no standalone helpers at `internal/pipeline` root).
 - 2026-04-05: **`internal/domain`** — `schema/` + `utils/` kernel layout (was flat `package domain`).
 - 2026-04-05: **`schema/`** — defined as full module **data model** (structs, enums, named model constants, payloads, errors); not limited to HTTP DTOs. Constitution v1.8.0 aligned.

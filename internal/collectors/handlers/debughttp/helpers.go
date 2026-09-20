@@ -10,8 +10,6 @@ import (
 	"time"
 
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/builtin"
-	"github.com/andrewmysliuk/jobhound_core/internal/collectors/djinni"
-	"github.com/andrewmysliuk/jobhound_core/internal/collectors/dou"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/europeremotely"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/himalayas"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/schema"
@@ -70,27 +68,6 @@ func applyEuropeRemotelyOverrides(req *schema.CollectorsPOSTBody, c *europeremot
 	}
 	if req.SearchKeywords != nil {
 		c.FeedForm.Set("search_keywords", *req.SearchKeywords)
-	}
-}
-
-func applyDouOverrides(req *schema.CollectorsPOSTBody, c *dou.DOU) {
-	if req.Search != nil && strings.TrimSpace(*req.Search) != "" {
-		c.Search = strings.TrimSpace(*req.Search)
-	}
-	if req.DouInterRequestDelayMs != nil {
-		c.InterRequestDelay = time.Duration(*req.DouInterRequestDelayMs) * time.Millisecond
-	}
-}
-
-func applyDjinniOverrides(req *schema.CollectorsPOSTBody, c *djinni.Djinni) {
-	if req.AllKeywords != nil && strings.TrimSpace(*req.AllKeywords) != "" {
-		c.AllKeywords = strings.TrimSpace(*req.AllKeywords)
-	}
-	if req.DjinniPage != nil && *req.DjinniPage > 0 {
-		c.StartPage = *req.DjinniPage
-	}
-	if req.DjinniInterRequestDelayMs != nil {
-		c.InterRequestDelay = time.Duration(*req.DjinniInterRequestDelayMs) * time.Millisecond
 	}
 }
 

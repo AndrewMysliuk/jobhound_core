@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-rod/rod"
@@ -29,6 +30,7 @@ type RodOptions struct {
 type RodFetcher struct {
 	browser    *rod.Browser
 	navTimeout time.Duration
+	pageMu     sync.Mutex
 }
 
 // NewRodFetcher launches Chromium and connects. It fails fast if the browser cannot start.
@@ -83,6 +85,11 @@ func sleepOrCtxDone(ctx context.Context, d time.Duration) error {
 func (f *RodFetcher) FetchHTMLDocument(ctx context.Context, rawURL string) ([]byte, error) {
 	if f == nil || f.browser == nil {
 		return nil, fmt.Errorf("browserfetch: nil RodFetcher")
+	}
+	f.pageMu.Lock()
+	defer f.pageMu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	u, err := requireAbsoluteHTTPS(rawURL)
 	if err != nil {

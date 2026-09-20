@@ -6,7 +6,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/builtin"
+	collectorsschema "github.com/andrewmysliuk/jobhound_core/internal/collectors/schema"
 	"github.com/andrewmysliuk/jobhound_core/internal/domain/schema"
+	"github.com/andrewmysliuk/jobhound_core/internal/ingest"
 	ingestschema "github.com/andrewmysliuk/jobhound_core/internal/ingest/schema"
 	ingest_workflows "github.com/andrewmysliuk/jobhound_core/internal/ingest/workflows"
 	manualschema "github.com/andrewmysliuk/jobhound_core/internal/manual/schema"
@@ -15,6 +18,7 @@ import (
 	pipeutils "github.com/andrewmysliuk/jobhound_core/internal/pipeline/utils"
 	"github.com/andrewmysliuk/jobhound_core/internal/platform/logging"
 	"github.com/andrewmysliuk/jobhound_core/internal/platform/temporalopts"
+	"github.com/google/uuid"
 	"go.temporal.io/sdk/workflow"
 )
 
@@ -144,47 +148,104 @@ func ManualSlotRunWorkflow(ctx workflow.Context, in manualschema.ManualSlotRunWo
 	return agg, nil
 }
 
+type ingestChildSpec struct {
+	source string
+	query  string
+}
+
+func expandIngestChildren(sourceIDs []string) []ingestChildSpec {
+	var children []ingestChildSpec
+	for _, src := range sourceIDs {
+		queries := collectorsschema.Queries(src)
+		if len(queries) == 0 {
+			children = append(children, ingestChildSpec{source: src, query: ""})
+			continue
+		}
+		for _, q := range queries {
+			children = append(children, ingestChildSpec{source: src, query: q})
+		}
+	}
+	return children
+}
+
+func ingestQueryWorkflowSegment(query string) string {
+	q := ingest.NormalizeSourceID(query)
+	if q == "" {
+		return "catalog"
+	}
+	return sanitizeWorkflowIDSegment(q)
+}
+
 func runParallelIngest(ctx workflow.Context, agg *manualschema.ManualSlotRunAggregate, in manualschema.ManualSlotRunWorkflowInput, explicitRefresh bool) {
 	info := workflow.GetInfo(ctx)
 	parentID := info.WorkflowExecution.ID
-	futures := make([]workflow.ChildWorkflowFuture, len(in.SourceIDs))
-	for i, src := range in.SourceIDs {
-		childCtx := workflow.WithChildOptions(ctx, workflow.ChildWorkflowOptions{
-			WorkflowID:          fmt.Sprintf("%s-ingest-%s", parentID, sanitizeWorkflowIDSegment(src)),
-			WorkflowRunTimeout:  25 * time.Minute,
-			WorkflowTaskTimeout: time.Minute,
-		})
-		inIngest := ingestschema.IngestSourceInput{
-			SlotID:            in.SlotID,
-			SourceID:          src,
-			ExplicitRefresh:   explicitRefresh,
-			SlotSearchQuery:   in.SlotSearchQuery,
+	children := expandIngestChildren(in.SourceIDs)
+	var parallel, serial []ingestChildSpec
+	for _, ch := range children {
+		if ch.source == builtin.SourceName {
+			serial = append(serial, ch)
+			continue
 		}
-		futures[i] = workflow.ExecuteChildWorkflow(childCtx, ingest_workflows.IngestSourceWorkflowName, inIngest)
+		parallel = append(parallel, ch)
 	}
 
 	agg.Ingest = make(map[string]ingestschema.IngestSourceOutput, len(in.SourceIDs))
 	var errParts []string
-	for i, src := range in.SourceIDs {
+	collect := func(ch ingestChildSpec, fut workflow.ChildWorkflowFuture) {
 		var out ingestschema.IngestSourceOutput
-		if err := futures[i].Get(ctx, &out); err != nil {
+		if err := fut.Get(ctx, &out); err != nil {
 			workflow.GetLogger(ctx).Error("ingest child workflow failed",
 				logging.FieldWorkflow, manualschema.ManualSlotRunWorkflowName,
 				logging.FieldSlotID, in.SlotID.String(),
-				logging.FieldSourceID, src,
+				logging.FieldSourceID, ch.source,
+				"search_query", ch.query,
 				"error", err,
 			)
-			errParts = append(errParts, fmt.Sprintf("ingest %s: %v", src, err))
-			continue
+			errParts = append(errParts, fmt.Sprintf("ingest %s (%s): %v", ch.source, ingestQueryWorkflowSegment(ch.query), err))
+			return
 		}
-		agg.Ingest[src] = out
+		prev := agg.Ingest[ch.source]
+		prev.JobsWritten += out.JobsWritten
+		prev.JobsSkipped += out.JobsSkipped
+		prev.JobsFilteredOut += out.JobsFilteredOut
+		prev.UsedIncremental = prev.UsedIncremental || out.UsedIncremental
+		prev.WatermarkAdvanced = prev.WatermarkAdvanced || out.WatermarkAdvanced
+		agg.Ingest[ch.source] = prev
 	}
+
+	futs := make([]workflow.ChildWorkflowFuture, len(parallel))
+	for i, ch := range parallel {
+		futs[i] = startIngestChild(ctx, parentID, in.SlotID, ch, explicitRefresh)
+	}
+	for i, ch := range parallel {
+		collect(ch, futs[i])
+	}
+	for _, ch := range serial {
+		collect(ch, startIngestChild(ctx, parentID, in.SlotID, ch, explicitRefresh))
+	}
+
 	if len(errParts) > 0 {
 		if agg.ErrorSummary != "" {
 			agg.ErrorSummary += "; "
 		}
 		agg.ErrorSummary += strings.Join(errParts, "; ")
 	}
+}
+
+func startIngestChild(ctx workflow.Context, parentID string, slotID uuid.UUID, ch ingestChildSpec, explicitRefresh bool) workflow.ChildWorkflowFuture {
+	srcSeg := sanitizeWorkflowIDSegment(ch.source)
+	querySeg := ingestQueryWorkflowSegment(ch.query)
+	childCtx := workflow.WithChildOptions(ctx, workflow.ChildWorkflowOptions{
+		WorkflowID:          fmt.Sprintf("%s-ingest-%s-%s", parentID, srcSeg, querySeg),
+		WorkflowRunTimeout:  25 * time.Minute,
+		WorkflowTaskTimeout: time.Minute,
+	})
+	return workflow.ExecuteChildWorkflow(childCtx, ingest_workflows.IngestSourceWorkflowName, ingestschema.IngestSourceInput{
+		SlotID:          slotID,
+		SourceID:        ch.source,
+		ExplicitRefresh: explicitRefresh,
+		SlotSearchQuery: ch.query,
+	})
 }
 
 func sanitizeWorkflowIDSegment(s string) string {

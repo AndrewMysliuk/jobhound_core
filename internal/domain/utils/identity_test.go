@@ -31,11 +31,11 @@ func TestNormalizeListingURL_equivalence(t *testing.T) {
 
 func TestStableJobID_sourceMatters(t *testing.T) {
 	u := "https://example.com/jobs/1"
-	a, err := utils.StableJobID("djinni", u)
+	a, err := utils.StableJobID("himalayas", u)
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, err := utils.StableJobID("linkedin", u)
+	b, err := utils.StableJobID("builtin", u)
 	if err != nil {
 		t.Fatal(err)
 	}

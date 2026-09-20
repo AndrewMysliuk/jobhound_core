@@ -25,8 +25,3 @@ type IncrementalCollector interface {
 type SlotSearchFetcher interface {
 	FetchWithSlotSearch(ctx context.Context, slotQuery string) ([]schema.Job, error)
 }
-
-// SessionProvider supplies browser/session state for headless collectors.
-type SessionProvider interface {
-	CookieFilePath() string
-}

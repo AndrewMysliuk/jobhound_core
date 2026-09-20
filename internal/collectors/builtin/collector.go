@@ -22,6 +22,9 @@ const SourceName = "builtin"
 
 const listingPageSizeHint = 20
 
+// DefaultMaxJobs caps details per search query when MaxJobs is 0 (10 parallel queries share one Chromium).
+const DefaultMaxJobs = 20
+
 // debugBuiltinSingleListingScope limits listing to the first territory and page 1 only (set true for local browser-fetch experiments).
 const debugBuiltinSingleListingScope = false
 
@@ -33,7 +36,7 @@ type BuiltIn struct {
 	InterRequestDelay time.Duration
 	// MaxListingPagesPerCountry is 1 or 2; zero means 1 (resources/builtin.md).
 	MaxListingPagesPerCountry int
-	// MaxJobs stops after N successful jobs when > 0 (debug / response caps).
+	// MaxJobs: 0 → DefaultMaxJobs; -1 → no cap; >0 → explicit cap.
 	MaxJobs int
 	// TestAlpha3 limits countries when non-empty (unit tests); production uses normativeTerritories order filtered by this set.
 	TestAlpha3 []string
@@ -79,6 +82,16 @@ func (c *BuiltIn) listingBaseResolved() (*url.URL, error) {
 	return url.Parse("https://builtin.com/jobs/remote")
 }
 
+func (c *BuiltIn) maxJobsEffective() int {
+	if c == nil || c.MaxJobs == 0 {
+		return DefaultMaxJobs
+	}
+	if c.MaxJobs < 0 {
+		return 0
+	}
+	return c.MaxJobs
+}
+
 func (c *BuiltIn) maxPagesPerCountry() int {
 	if c == nil || c.MaxListingPagesPerCountry <= 0 {
 		return 1
@@ -122,6 +135,7 @@ func (c *BuiltIn) fetchRemote(ctx context.Context, search string) ([]schema.Job,
 		return nil, fmt.Errorf("built-in: UseBrowser set but HTMLDocumentFetcher is nil")
 	}
 	maxPages := c.maxPagesPerCountry()
+	maxJobs := c.maxJobsEffective()
 	terrs := c.territoriesOrdered()
 	if debugBuiltinSingleListingScope {
 		if len(terrs) > 0 {
@@ -137,7 +151,13 @@ func (c *BuiltIn) fetchRemote(ctx context.Context, search string) ([]schema.Job,
 	}
 
 	for _, terr := range terrs {
+		if maxJobs > 0 && len(ordered) >= maxJobs {
+			break
+		}
 		for page := 1; page <= maxPages; page++ {
+			if maxJobs > 0 && len(ordered) >= maxJobs {
+				break
+			}
 			c.sleep(ctx)
 			listURL, err := c.buildListingURL(base, search, terr.Alpha3, page)
 			if err != nil {
@@ -176,10 +196,13 @@ func (c *BuiltIn) fetchRemote(ctx context.Context, search string) ([]schema.Job,
 			}
 		}
 	}
+	if maxJobs > 0 && len(ordered) > maxJobs {
+		ordered = ordered[:maxJobs]
+	}
 
 	var jobs []schema.Job
 	for _, uc := range ordered {
-		if c != nil && c.MaxJobs > 0 && len(jobs) >= c.MaxJobs {
+		if maxJobs > 0 && len(jobs) >= maxJobs {
 			break
 		}
 		c.sleep(ctx)

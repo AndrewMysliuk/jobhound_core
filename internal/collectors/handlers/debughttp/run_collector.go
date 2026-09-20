@@ -10,17 +10,32 @@ import (
 
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/builtin"
-	"github.com/andrewmysliuk/jobhound_core/internal/collectors/djinni"
-	"github.com/andrewmysliuk/jobhound_core/internal/collectors/dou"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/europeremotely"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/golangcafe"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/himalayas"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/remotifyeurope"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/vuejobs"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/wellfound"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/workingnomads"
 	"github.com/andrewmysliuk/jobhound_core/internal/domain/schema"
 	"github.com/andrewmysliuk/jobhound_core/internal/platform/logging"
 	"github.com/rs/zerolog"
 )
 
-func runCollectorDebug(w http.ResponseWriter, r *http.Request, logH zerolog.Logger, coll collectors.Collector, wnConcrete *workingnomads.WorkingNomads, erConcrete *europeremotely.EuropeRemotely, douConcrete *dou.DOU, himConcrete *himalayas.Himalayas, djinConcrete *djinni.Djinni, builtinConcrete *builtin.BuiltIn) {
+func runCollectorDebug(
+	w http.ResponseWriter,
+	r *http.Request,
+	logH zerolog.Logger,
+	coll collectors.Collector,
+	wnConcrete *workingnomads.WorkingNomads,
+	erConcrete *europeremotely.EuropeRemotely,
+	himConcrete *himalayas.Himalayas,
+	builtinConcrete *builtin.BuiltIn,
+	remotifyConcrete *remotifyeurope.RemotifyEurope,
+	wellfoundConcrete *wellfound.Wellfound,
+	vueJobsConcrete *vuejobs.VueJobs,
+	golangCafeConcrete *golangcafe.GolangCafe,
+) {
 	if coll == nil {
 		logH.Error().Msg("collector not configured")
 		http.Error(w, "collector not configured", http.StatusInternalServerError)
@@ -59,10 +74,12 @@ func runCollectorDebug(w http.ResponseWriter, r *http.Request, logH zerolog.Logg
 
 	isWN := coll.Name() == workingnomads.SourceName && wnConcrete != nil
 	isER := coll.Name() == europeremotely.SourceName && erConcrete != nil
-	isDOU := coll.Name() == dou.SourceName && douConcrete != nil
 	isHim := coll.Name() == himalayas.SourceName && himConcrete != nil
-	isDjin := coll.Name() == djinni.SourceName && djinConcrete != nil
 	isBuiltin := coll.Name() == builtin.SourceName && builtinConcrete != nil
+	isRemotify := coll.Name() == remotifyeurope.SourceName && remotifyConcrete != nil
+	isWellfound := coll.Name() == wellfound.SourceName && wellfoundConcrete != nil
+	isVueJobs := coll.Name() == vuejobs.SourceName && vueJobsConcrete != nil
+	isGolangCafe := coll.Name() == golangcafe.SourceName && golangCafeConcrete != nil
 	switch {
 	case isWN:
 		c := *wnConcrete
@@ -72,14 +89,6 @@ func runCollectorDebug(w http.ResponseWriter, r *http.Request, logH zerolog.Logg
 		} else if limit == 0 {
 			// resolveLimit(0) = unlimited jobs; lift DefaultMaxPages so debug can scrape beyond MVP cap.
 			c.MaxPages = -1
-		}
-		jobs, fetchErr = c.Fetch(ctx)
-		upstreamFetched = len(jobs)
-	case isDOU:
-		c := *douConcrete
-		applyDouOverrides(&req, &c)
-		if limit > 0 {
-			c.MaxJobs = limit
 		}
 		jobs, fetchErr = c.Fetch(ctx)
 		upstreamFetched = len(jobs)
@@ -99,14 +108,6 @@ func runCollectorDebug(w http.ResponseWriter, r *http.Request, logH zerolog.Logg
 		}
 		jobs, fetchErr = c.Fetch(ctx)
 		upstreamFetched = len(jobs)
-	case isDjin:
-		c := *djinConcrete
-		applyDjinniOverrides(&req, &c)
-		if limit > 0 {
-			c.MaxJobs = limit
-		}
-		jobs, fetchErr = c.Fetch(ctx)
-		upstreamFetched = len(jobs)
 	case isBuiltin:
 		c := *builtinConcrete
 		applyBuiltinOverrides(&req, &c)
@@ -122,6 +123,50 @@ func runCollectorDebug(w http.ResponseWriter, r *http.Request, logH zerolog.Logg
 		} else {
 			jobs, fetchErr = c.FetchWithSlotSearch(ctx, slotQ)
 		}
+		upstreamFetched = len(jobs)
+	case isRemotify:
+		c := *remotifyConcrete
+		if limit > 0 {
+			c.MaxJobs = limit
+		}
+		slotQ := ""
+		if req.Q != nil {
+			slotQ = strings.TrimSpace(*req.Q)
+		}
+		if slotQ == "" {
+			jobs, fetchErr = c.Fetch(ctx)
+		} else {
+			jobs, fetchErr = c.FetchWithSlotSearch(ctx, slotQ)
+		}
+		upstreamFetched = len(jobs)
+	case isWellfound:
+		c := *wellfoundConcrete
+		if limit > 0 {
+			c.MaxJobs = limit
+		}
+		slotQ := ""
+		if req.Q != nil {
+			slotQ = strings.TrimSpace(*req.Q)
+		}
+		if slotQ == "" {
+			jobs, fetchErr = c.Fetch(ctx)
+		} else {
+			jobs, fetchErr = c.FetchWithSlotSearch(ctx, slotQ)
+		}
+		upstreamFetched = len(jobs)
+	case isVueJobs:
+		c := *vueJobsConcrete
+		if limit > 0 {
+			c.MaxJobs = limit
+		}
+		jobs, fetchErr = c.Fetch(ctx)
+		upstreamFetched = len(jobs)
+	case isGolangCafe:
+		c := *golangCafeConcrete
+		if limit > 0 {
+			c.MaxJobs = limit
+		}
+		jobs, fetchErr = c.Fetch(ctx)
 		upstreamFetched = len(jobs)
 	default:
 		jobs, fetchErr = coll.Fetch(ctx)
@@ -147,7 +192,7 @@ func runCollectorDebug(w http.ResponseWriter, r *http.Request, logH zerolog.Logg
 		Collector: coll.Name(),
 		Count:     len(jobs),
 	}
-	if !isWN && !isER && !isDOU && !isHim && !isDjin && !isBuiltin && upstreamFetched > len(jobs) {
+	if !isWN && !isER && !isHim && !isBuiltin && !isRemotify && !isWellfound && !isVueJobs && !isGolangCafe && upstreamFetched > len(jobs) {
 		resp.UpstreamFetched = upstreamFetched
 	}
 

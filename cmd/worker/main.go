@@ -10,10 +10,13 @@ import (
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/bootstrap"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/builtin"
-	"github.com/andrewmysliuk/jobhound_core/internal/collectors/djinni"
-	"github.com/andrewmysliuk/jobhound_core/internal/collectors/dou"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/europeremotely"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/himalayas"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/golangcafe"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/remotifyeurope"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/vuejobs"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/wellfound"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/weworkremotely"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/workingnomads"
 	"github.com/andrewmysliuk/jobhound_core/internal/config"
 	"github.com/andrewmysliuk/jobhound_core/internal/ingest"
@@ -100,22 +103,13 @@ func main() {
 			ingestRedis = ingest.NewRedisCoordinatorWithTTL(rdb, appCfg.Ingest.LockTTLSeconds, appCfg.Ingest.CooldownTTLSeconds)
 			ingestWatermarks = ingest.NewGormWatermarkStore(getter)
 			bootCtx, bcancel := context.WithTimeout(context.Background(), 2*time.Minute)
-			er, wn, douColl, djinColl, builtinColl, himColl, err := bootstrap.MVPCollectors(bootCtx, nil, appCfg.DataDir, appCfg.DouCollector, appCfg.DjinniCollector, appCfg.BuiltinCollector, appCfg.HimalayasCollector, appCfg.Browser)
+			er, wn, builtinColl, himColl, reColl, wwrColl, wfColl, vjColl, gcColl, err := bootstrap.MVPCollectors(bootCtx, nil, appCfg.DataDir, appCfg.BuiltinCollector, appCfg.HimalayasCollector, appCfg.Browser)
 			bcancel()
 			if err != nil {
 				log.Error().Err(err).Msg("collectors bootstrap")
 				os.Exit(1)
 			}
-			ingestCollectors = map[string]collectors.Collector{
-				ingest.NormalizeSourceID(europeremotely.SourceName): er,
-				ingest.NormalizeSourceID(workingnomads.SourceName):  wn,
-				ingest.NormalizeSourceID(dou.SourceName):            douColl,
-				ingest.NormalizeSourceID(djinni.SourceName):         djinColl,
-				ingest.NormalizeSourceID(builtin.SourceName):        builtinColl,
-			}
-			if himColl != nil {
-				ingestCollectors[ingest.NormalizeSourceID(himalayas.SourceName)] = himColl
-			}
+			ingestCollectors = ingestCollectorMap(er, wn, builtinColl, himColl, reColl, wwrColl, wfColl, vjColl, gcColl)
 			ingestExplicitRefresh = appCfg.Ingest.ExplicitRefresh
 		}
 	}
@@ -153,4 +147,25 @@ func main() {
 		log.Error().Err(err).Msg("worker")
 		os.Exit(1)
 	}
+}
+
+// ingestCollectorMap keys must match slotsutils.DefaultIngestSourceIDs (himalayas omitted when nil).
+func ingestCollectorMap(
+	er, wn, builtinColl, himColl,
+	reColl, wwrColl, wfColl, vjColl, gcColl collectors.Collector,
+) map[string]collectors.Collector {
+	m := map[string]collectors.Collector{
+		ingest.NormalizeSourceID(europeremotely.SourceName):  er,
+		ingest.NormalizeSourceID(workingnomads.SourceName):   wn,
+		ingest.NormalizeSourceID(builtin.SourceName):         builtinColl,
+		ingest.NormalizeSourceID(remotifyeurope.SourceName):   reColl,
+		ingest.NormalizeSourceID(weworkremotely.SourceName):   wwrColl,
+		ingest.NormalizeSourceID(wellfound.SourceName):       wfColl,
+		ingest.NormalizeSourceID(vuejobs.SourceName):         vjColl,
+		ingest.NormalizeSourceID(golangcafe.SourceName):       gcColl,
+	}
+	if himColl != nil {
+		m[ingest.NormalizeSourceID(himalayas.SourceName)] = himColl
+	}
+	return m
 }
