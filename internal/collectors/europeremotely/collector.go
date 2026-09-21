@@ -142,12 +142,22 @@ func (c *EuropeRemotely) Fetch(ctx context.Context) ([]schema.Job, error) {
 			}
 			postedAt := resolvePostedAt(nowFn(), card.postedDisplay, detail.postedDisplay, warn)
 
+			applyURL := detail.applyURL
+			if nu, err := utils.NormalizeApplyURL(applyURL); err == nil {
+				applyURL = nu
+			}
+			if applyURL != "" {
+				if missing, err := utils.RecruiteeJobPageMissing(ctx, client, applyURL); err == nil && missing {
+					applyURL = ""
+				}
+			}
+
 			j := schema.Job{
 				Source:      SourceName,
 				Title:       title,
 				Company:     company,
 				URL:         listingURL,
-				ApplyURL:    detail.applyURL,
+				ApplyURL:    applyURL,
 				Description: detail.description,
 				PostedAt:    postedAt,
 				Remote:      utils.RemoteMVPRule(title, detail.description, detail.tags),
