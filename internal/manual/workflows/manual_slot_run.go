@@ -8,7 +8,6 @@ import (
 
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/builtin"
 	collectorsschema "github.com/andrewmysliuk/jobhound_core/internal/collectors/schema"
-	"github.com/andrewmysliuk/jobhound_core/internal/domain/schema"
 	"github.com/andrewmysliuk/jobhound_core/internal/ingest"
 	ingestschema "github.com/andrewmysliuk/jobhound_core/internal/ingest/schema"
 	ingest_workflows "github.com/andrewmysliuk/jobhound_core/internal/ingest/workflows"
@@ -75,20 +74,10 @@ func ManualSlotRunWorkflow(ctx workflow.Context, in manualschema.ManualSlotRunWo
 	}
 
 	if in.NeedsStage2() {
-		ctxAct := workflow.WithActivityOptions(ctx, temporalopts.DefaultActivityOptions())
-		var jobs []schema.Job
-		if err := workflow.ExecuteActivity(ctxAct, manualschema.ListSlotJobsPassedStage1ActivityName, in.SlotID).Get(ctxAct, &jobs); err != nil {
-			workflow.GetLogger(ctx).Error("ListSlotJobsPassedStage1 activity failed",
-				logging.FieldWorkflow, manualschema.ManualSlotRunWorkflowName,
-				logging.FieldSlotID, in.SlotID.String(),
-				"error", err,
-			)
-			return agg, err
-		}
 		ctxPipe := workflow.WithActivityOptions(ctx, temporalopts.PipelinePersistActivityOptions())
 		in2 := pipelineschema.PersistPipelineStage2Input{
 			PipelineRunID:      runID,
-			Jobs:               jobs,
+			SlotID:             in.SlotID,
 			BroadRules:         in.BroadRules,
 			KeywordRules:       in.KeywordRules,
 			BroadFilterKeyHash: in.BroadFilterKeyHash,
@@ -103,8 +92,8 @@ func ManualSlotRunWorkflow(ctx workflow.Context, in manualschema.ManualSlotRunWo
 			)
 			return agg, err
 		}
-		passed := len(s2out.AfterKeywords)
-		rejected := len(s2out.AfterBroad) - passed
+		passed := s2out.AfterKeywordsCount
+		rejected := s2out.AfterBroadCount - passed
 		if rejected < 0 {
 			rejected = 0
 		}

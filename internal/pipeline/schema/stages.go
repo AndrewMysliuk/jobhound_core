@@ -4,6 +4,7 @@ package schema
 import (
 	jobdata "github.com/andrewmysliuk/jobhound_core/internal/domain/schema"
 	"github.com/andrewmysliuk/jobhound_core/internal/pipeline"
+	"github.com/google/uuid"
 )
 
 // PipelineStagesInput is the payload for RunPipelineStages.
@@ -25,17 +26,19 @@ type PipelineStagesOutput struct {
 // that passed stage 1 (004 omission model: stage-1 drops get no pipeline_run_jobs row).
 type PersistPipelineStage2Input struct {
 	PipelineRunID int64
-	Jobs          []jobdata.Job
+	// SlotID when set and Jobs is empty: activity loads PASSED_STAGE_1 jobs for the slot from DB (008).
+	SlotID uuid.UUID
+	Jobs   []jobdata.Job
 	BroadRules    pipeline.BroadFilterRules
 	KeywordRules  pipeline.KeywordRules
 	// BroadFilterKeyHash is optional SHA-256 hex of the canonical broad filter key (006); persisted on pipeline_runs when non-empty.
 	BroadFilterKeyHash string
 }
 
-// PersistPipelineStage2Output holds stage 1–2 job lists after persistence.
+// PersistPipelineStage2Output holds stage 1–2 counts after persistence (not full job payloads — large slots).
 type PersistPipelineStage2Output struct {
-	AfterBroad    []jobdata.Job
-	AfterKeywords []jobdata.Job
+	AfterBroadCount    int
+	AfterKeywordsCount int
 }
 
 // PersistPipelineStage3Input drives stage-3 scoring for one pipeline run (after stage 2 has persisted).

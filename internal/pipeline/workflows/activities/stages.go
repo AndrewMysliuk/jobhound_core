@@ -14,6 +14,7 @@ import (
 	pipelineschema "github.com/andrewmysliuk/jobhound_core/internal/pipeline/schema"
 	pipeutils "github.com/andrewmysliuk/jobhound_core/internal/pipeline/utils"
 	"github.com/andrewmysliuk/jobhound_core/internal/platform/logging"
+	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 )
 
@@ -71,8 +72,22 @@ func (a *Activities) RunPersistPipelineStage2(ctx context.Context, in pipelinesc
 	if in.PipelineRunID <= 0 {
 		return nil, fmt.Errorf("pipeline activities: pipeline run id is required")
 	}
+	jobs := in.Jobs
+	if len(jobs) == 0 {
+		if in.SlotID == uuid.Nil {
+			return nil, fmt.Errorf("pipeline activities: slot_id or jobs are required")
+		}
+		if a.Jobs == nil {
+			return nil, fmt.Errorf("pipeline activities: RunPersistPipelineStage2 requires Jobs repository when loading by slot_id")
+		}
+		var err error
+		jobs, err = a.Jobs.ListSlotJobsPassedStage1(ctx, in.SlotID)
+		if err != nil {
+			return nil, err
+		}
+	}
 	log := logging.EnrichWithContext(ctx, logging.LoggerWithActivity(ctx, a.Log, manualschema.PersistPipelineStage2ActivityName))
-	log.Debug().Int("job_count", len(in.Jobs)).Msg("persist stage 2 start")
+	log.Debug().Int("job_count", len(jobs)).Msg("persist stage 2 start")
 	if in.BroadFilterKeyHash != "" {
 		if err := a.Runs.SetBroadFilterKeyHash(ctx, in.PipelineRunID, in.BroadFilterKeyHash); err != nil {
 			log.Error().Err(err).Msg("set broad filter key hash")
@@ -84,7 +99,7 @@ func (a *Activities) RunPersistPipelineStage2(ctx context.Context, in pipelinesc
 		clock = time.Now
 	}
 
-	stage1, err := pipeutils.ApplyBroadFilter(clock, in.BroadRules, in.Jobs)
+	stage1, err := pipeutils.ApplyBroadFilter(clock, in.BroadRules, jobs)
 	if err != nil {
 		log.Error().Err(err).Msg("broad filter")
 		return nil, err
@@ -108,8 +123,8 @@ func (a *Activities) RunPersistPipelineStage2(ctx context.Context, in pipelinesc
 
 	log.Debug().Int("after_broad", len(stage1)).Int("after_keywords", len(stage2)).Msg("persist stage 2 done")
 	return &pipelineschema.PersistPipelineStage2Output{
-		AfterBroad:    stage1,
-		AfterKeywords: stage2,
+		AfterBroadCount:    len(stage1),
+		AfterKeywordsCount: len(stage2),
 	}, nil
 }
 
