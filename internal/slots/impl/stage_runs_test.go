@@ -7,6 +7,7 @@ import (
 	"time"
 
 	manualschema "github.com/andrewmysliuk/jobhound_core/internal/manual/schema"
+	pipelineschema "github.com/andrewmysliuk/jobhound_core/internal/pipeline/schema"
 	pipelinestorage "github.com/andrewmysliuk/jobhound_core/internal/pipeline/storage"
 	"github.com/andrewmysliuk/jobhound_core/internal/platform/logging"
 	"github.com/andrewmysliuk/jobhound_core/internal/platform/pgsql"
@@ -98,7 +99,7 @@ func stageRunTestDB(t *testing.T) *gorm.DB {
 	return db
 }
 
-func TestRunStage2_startsWorkflowWithKeywordRules(t *testing.T) {
+func TestRunStage2_startsWorkflowWithRules(t *testing.T) {
 	ctx := context.Background()
 	db := stageRunTestDB(t)
 	slotID := uuid.MustParse("11111111-1111-4111-8111-111111111111")
@@ -120,7 +121,13 @@ func TestRunStage2_startsWorkflowWithKeywordRules(t *testing.T) {
 		[]string{"src"},
 		logging.Nop(),
 	)
-	out, err := svc.RunStage2(ctx, slotschema.RunStage2Params{SlotID: slotID.String(), Include: []string{"a", "b"}, Exclude: []string{"x"}})
+	w := 1
+	rules := []pipelineschema.Stage2Rule{
+		{ID: "inc-a", Field: pipelineschema.RuleFieldTitleBody, Op: pipelineschema.RuleOpPhrase, Values: []string{"a"}, Action: pipelineschema.RuleActionBoost, Weight: &w},
+		{ID: "inc-b", Field: pipelineschema.RuleFieldTitleBody, Op: pipelineschema.RuleOpPhrase, Values: []string{"b"}, Action: pipelineschema.RuleActionBoost, Weight: &w},
+		{ID: "exc-x", Field: pipelineschema.RuleFieldTitleBody, Op: pipelineschema.RuleOpPhrase, Values: []string{"x"}, Action: pipelineschema.RuleActionReject},
+	}
+	out, err := svc.RunStage2(ctx, slotschema.RunStage2Params{SlotID: slotID.String(), Rules: rules})
 	require.NoError(t, err)
 	require.Equal(t, slotID.String(), out.SlotID)
 	require.Equal(t, 2, out.Stage)
@@ -129,8 +136,7 @@ func TestRunStage2_startsWorkflowWithKeywordRules(t *testing.T) {
 	in, ok := ft.gotArgs[0].(manualschema.ManualSlotRunWorkflowInput)
 	require.True(t, ok)
 	require.Equal(t, manualschema.RunKindPipelineStage2, in.Kind)
-	require.Equal(t, []string{"a", "b"}, in.KeywordRules.Include)
-	require.Equal(t, []string{"x"}, in.KeywordRules.Exclude)
+	require.Equal(t, rules, in.Rules)
 }
 
 func TestRunStage2_stageAlreadyRunning(t *testing.T) {
@@ -155,7 +161,7 @@ func TestRunStage2_stageAlreadyRunning(t *testing.T) {
 		[]string{"src"},
 		logging.Nop(),
 	)
-	_, err := svc.RunStage2(ctx, slotschema.RunStage2Params{SlotID: slotID.String(), Include: []string{"a"}, Exclude: []string{"b"}})
+	_, err := svc.RunStage2(ctx, slotschema.RunStage2Params{SlotID: slotID.String(), Rules: nil})
 	require.ErrorIs(t, err, slots.ErrStageAlreadyRunning)
 	require.Nil(t, ft.gotWorkflow)
 }

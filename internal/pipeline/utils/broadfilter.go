@@ -9,6 +9,8 @@ import (
 	"github.com/andrewmysliuk/jobhound_core/internal/pipeline"
 )
 
+const defaultBroadFilterWindow = 10 * 24 * time.Hour
+
 // ValidateBroadFilterRules returns an error when explicit date bounds are inconsistent.
 func ValidateBroadFilterRules(rules pipeline.BroadFilterRules) error {
 	if (rules.From == nil) != (rules.To == nil) {
@@ -21,7 +23,7 @@ func ValidateBroadFilterRules(rules pipeline.BroadFilterRules) error {
 }
 
 // ApplyBroadFilter returns jobs that pass stage 1 rules, preserving input order.
-// clock supplies "now" for the default 7-day window when From/To are unset; if nil, time.Now is used.
+// clock supplies "now" for the default posted window when From/To are unset; if nil, time.Now is used.
 func ApplyBroadFilter(clock func() time.Time, rules pipeline.BroadFilterRules, jobs []schema.Job) ([]schema.Job, error) {
 	if err := ValidateBroadFilterRules(rules); err != nil {
 		return nil, err
@@ -34,7 +36,7 @@ func ApplyBroadFilter(clock func() time.Time, rules pipeline.BroadFilterRules, j
 	var winFrom, winTo time.Time
 	if rules.From == nil {
 		winTo = now
-		winFrom = now.Add(-7 * 24 * time.Hour)
+		winFrom = now.Add(-defaultBroadFilterWindow)
 	} else {
 		winFrom = rules.From.UTC()
 		winTo = rules.To.UTC()

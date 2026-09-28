@@ -1,9 +1,10 @@
 package schema
 
+import pipelineschema "github.com/andrewmysliuk/jobhound_core/internal/pipeline/schema"
+
 // Stage2RunRequest is POST …/stages/2/run body.
 type Stage2RunRequest struct {
-	Include []string `json:"include"`
-	Exclude []string `json:"exclude"`
+	Rules []pipelineschema.Stage2Rule `json:"rules"`
 }
 
 // Stage3RunRequest is POST …/stages/3/run body.

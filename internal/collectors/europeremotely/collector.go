@@ -152,19 +152,26 @@ func (c *EuropeRemotely) Fetch(ctx context.Context) ([]schema.Job, error) {
 				}
 			}
 
+			hiringCountries, hiringRegions, hiringRaw := utils.ParseHiringScope(c.Countries, card.locationRaw, detail.locationRaw)
+			if len(hiringCountries) == 0 && len(hiringRegions) == 0 {
+				hiringRegions = []string{schema.RegionCodeEurope.String()}
+			}
 			j := schema.Job{
-				Source:      SourceName,
-				Title:       title,
-				Company:     company,
-				URL:         listingURL,
-				ApplyURL:    applyURL,
-				Description: detail.description,
-				PostedAt:    postedAt,
-				Remote:      utils.RemoteMVPRule(title, detail.description, detail.tags),
-				CountryCode: c.countryCode(card.locationRaw, detail.locationRaw),
-				SalaryRaw:   salaryRaw(card.compensation, detail.compensationRaw),
-				Tags:        detail.tags,
-				Position:    utils.InferPosition(title, detail.description, detail.tags),
+				Source:          SourceName,
+				Title:           title,
+				Company:         company,
+				URL:             listingURL,
+				ApplyURL:        applyURL,
+				Description:     detail.description,
+				PostedAt:        postedAt,
+				Remote:          utils.RemoteMVPRule(title, detail.description, detail.tags),
+				CountryCode:     c.countryCode(card.locationRaw, detail.locationRaw),
+				HiringCountries: hiringCountries,
+				HiringRegions:   hiringRegions,
+				HiringRaw:       hiringRaw,
+				SalaryRaw:       salaryRaw(card.compensation, detail.compensationRaw),
+				Tags:            detail.tags,
+				Position:        utils.InferPosition(title, detail.description, detail.tags),
 			}
 			if err := domainutils.AssignStableID(&j); err != nil {
 				return nil, fmt.Errorf("stable id: %w", err)
@@ -209,28 +216,11 @@ func (c *EuropeRemotely) maxFeedPagesEffective() int {
 }
 
 func (c *EuropeRemotely) countryCode(listingLoc, detailLoc string) string {
-	if c.Countries == nil {
-		return ""
-	}
-	for _, part := range splitLocationParts(listingLoc, detailLoc) {
-		if code := c.Countries.Alpha2ForName(part); code != "" {
-			return code
-		}
+	countries, _, _ := utils.ParseHiringScope(c.Countries, listingLoc, detailLoc)
+	if len(countries) > 0 {
+		return countries[0]
 	}
 	return ""
-}
-
-func splitLocationParts(a, b string) []string {
-	var out []string
-	for _, s := range []string{a, b} {
-		for _, p := range strings.Split(s, ",") {
-			p = strings.TrimSpace(p)
-			if p != "" {
-				out = append(out, p)
-			}
-		}
-	}
-	return out
 }
 
 func cloneValues(v url.Values) url.Values {

@@ -1,6 +1,10 @@
 package utils
 
-import "strings"
+import (
+	"strings"
+
+	jobschema "github.com/andrewmysliuk/jobhound_core/internal/domain/schema"
+)
 
 // NormalizePlainText trims and collapses inner whitespace (specs/005 domain-mapping-mvp.md).
 func NormalizePlainText(s string) string {
@@ -24,18 +28,18 @@ func InferPosition(title, description string, tags []string) *string {
 	}
 	text := b.String()
 	groups := []struct {
-		label string
+		label jobschema.PositionLabel
 		keys  []string
 	}{
-		{"full-stack", []string{"full-stack", "full stack", "fullstack"}},
-		{"frontend", []string{"frontend", "front-end", "front end"}},
-		{"backend", []string{"backend", "back-end", "back end"}},
+		{jobschema.PositionLabelFullStack, []string{"full-stack", "full stack", "fullstack"}},
+		{jobschema.PositionLabelFrontend, []string{"frontend", "front-end", "front end"}},
+		{jobschema.PositionLabelBackend, []string{"backend", "back-end", "back end"}},
 	}
 	for _, g := range groups {
 		for _, k := range g.keys {
 			if strings.Contains(text, k) {
-				l := g.label
-				return &l
+				s := g.label.String()
+				return &s
 			}
 		}
 	}

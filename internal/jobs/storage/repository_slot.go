@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -84,6 +85,8 @@ type jobListScanRow struct {
 	SlotFirstSeenAt    time.Time `gorm:"column:sj_first_seen"`
 	PRJStatus          string    `gorm:"column:prj_status"`
 	PRJStage3Rationale *string   `gorm:"column:prj_stage3_rationale"`
+	PRJStage2Hits      []byte    `gorm:"column:prj_stage2_hits"`
+	PRJStage2Boost     int       `gorm:"column:prj_stage2_boost"`
 }
 
 func jobListOrderSQL(jt string) string {
@@ -102,10 +105,17 @@ func (r *Repository) stage2JobListBase(ctx context.Context, slotID uuid.UUID, ru
 	q := r.get().WithContext(ctx).Table(jt).
 		Joins("INNER JOIN slot_jobs ON slot_jobs.job_id = "+jt+".id AND slot_jobs.slot_id = ?", slotID).
 		Joins("INNER JOIN pipeline_run_jobs prj ON prj.job_id = " + jt + ".id")
-	if strings.TrimSpace(statusFilter) == "" {
+	switch strings.TrimSpace(statusFilter) {
+	case "":
 		return q.Where("prj.pipeline_run_id = ?", runID)
+	case pipeline.Stage2ListFilterEligible:
+		return q.Where("prj.pipeline_run_id = ? AND prj.stage2_status IN ?", runID, []string{
+			string(pipeline.RunJobPassedStage2),
+			string(pipeline.RunJobUnknownStage2),
+		})
+	default:
+		return q.Where("prj.pipeline_run_id = ? AND prj.stage2_status = ?", runID, statusFilter)
 	}
-	return q.Where("prj.pipeline_run_id = ? AND prj.stage2_status = ?", runID, statusFilter)
 }
 
 func (r *Repository) stage3JobListBase(ctx context.Context, slotID uuid.UUID, runID int64, statusFilter string) *gorm.DB {
@@ -147,6 +157,13 @@ func (r *Repository) countAndListJobEntries(base *gorm.DB, jt string, offset, li
 			Job:               rows[i].ToDomain(),
 			FirstSeenAt:       rows[i].SlotFirstSeenAt.UTC(),
 			PipelineRunStatus: rows[i].PRJStatus,
+			Stage2Boost:       rows[i].PRJStage2Boost,
+		}
+		if len(rows[i].PRJStage2Hits) > 0 {
+			var hits []pipeline.Stage2Hit
+			if err := json.Unmarshal(rows[i].PRJStage2Hits, &hits); err == nil {
+				ent.Stage2Hits = hits
+			}
 		}
 		if rows[i].PRJStage3Rationale != nil && *rows[i].PRJStage3Rationale != "" {
 			ent.Stage3Rationale = rows[i].PRJStage3Rationale
@@ -186,7 +203,8 @@ func (r *Repository) ListPipelineRunStage2Jobs(ctx context.Context, slotID uuid.
 		return nil, 0, fmt.Errorf("offset must be non-negative")
 	}
 	jt := Job{}.TableName()
-	return r.countAndListJobEntries(r.stage2JobListBase(ctx, slotID, pipelineRunID, statusFilter), jt, offset, limit, "prj.stage2_status AS prj_status")
+	return r.countAndListJobEntries(r.stage2JobListBase(ctx, slotID, pipelineRunID, statusFilter), jt, offset, limit,
+		"prj.stage2_status AS prj_status, prj.stage2_hits AS prj_stage2_hits, prj.stage2_boost AS prj_stage2_boost")
 }
 
 // ListPipelineRunStage3Jobs implements [jobs.JobRepository.ListPipelineRunStage3Jobs].

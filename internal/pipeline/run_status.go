@@ -8,14 +8,18 @@ const (
 	RunJobPassedStage1   RunJobStatus = "PASSED_STAGE_1"
 	RunJobRejectedStage2 RunJobStatus = "REJECTED_STAGE_2"
 	RunJobPassedStage2   RunJobStatus = "PASSED_STAGE_2"
+	RunJobUnknownStage2  RunJobStatus = "UNKNOWN_STAGE_2"
 	RunJobPassedStage3   RunJobStatus = "PASSED_STAGE_3"
 	RunJobRejectedStage3 RunJobStatus = "REJECTED_STAGE_3"
 )
 
+// Stage2ListFilterEligible is a GET …/stages/2/jobs ?status= value (not stored on rows): PASSED_STAGE_2 and UNKNOWN_STAGE_2.
+const Stage2ListFilterEligible = "ELIGIBLE_STAGE_2"
+
 // Valid reports whether s is allowed for a pipeline_run_jobs row (§1.2 only).
 func (s RunJobStatus) Valid() bool {
 	switch s {
-	case RunJobRejectedStage2, RunJobPassedStage2, RunJobPassedStage3, RunJobRejectedStage3:
+	case RunJobRejectedStage2, RunJobPassedStage2, RunJobUnknownStage2, RunJobPassedStage3, RunJobRejectedStage3:
 		return true
 	default:
 		return false

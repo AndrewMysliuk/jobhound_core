@@ -40,6 +40,9 @@ func testSQLite(t *testing.T) *gorm.DB {
 			posted_at TIMESTAMP,
 			is_remote INTEGER,
 			country_code TEXT NOT NULL DEFAULT '',
+			hiring_countries TEXT NOT NULL DEFAULT '[]',
+			hiring_regions TEXT NOT NULL DEFAULT '[]',
+			hiring_raw TEXT NOT NULL DEFAULT '',
 			salary_raw TEXT NOT NULL DEFAULT '',
 			tags TEXT NOT NULL DEFAULT '[]',
 			timezone_offsets TEXT NOT NULL DEFAULT '[]',
@@ -53,12 +56,15 @@ func testSQLite(t *testing.T) *gorm.DB {
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			created_at TIMESTAMP NOT NULL,
 			slot_id TEXT,
-			broad_filter_key_hash TEXT
+			broad_filter_key_hash TEXT,
+			rules TEXT NOT NULL DEFAULT '[]'
 		)`,
 		`CREATE TABLE pipeline_run_jobs (
 			pipeline_run_id INTEGER NOT NULL REFERENCES pipeline_runs(id) ON DELETE CASCADE,
 			job_id TEXT NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
 			stage2_status TEXT NOT NULL,
+			stage2_hits TEXT NOT NULL DEFAULT '[]',
+			stage2_boost INTEGER NOT NULL DEFAULT 0,
 			stage3_status TEXT,
 			stage3_rationale TEXT,
 			PRIMARY KEY (pipeline_run_id, job_id)
@@ -120,7 +126,7 @@ func TestRunPersistPipelineStage2_and_3_persistsAndScoresCappedBatch(t *testing.
 	jobs := make([]schema.Job, len(ids))
 	for i, id := range ids {
 		jobs[i] = schema.Job{
-			ID: id, Title: "Go Dev", Description: "backend golang",
+			ID: id, Title: "Go Dev", Company: fmt.Sprintf("co-%02d", i), Description: "backend golang",
 			PostedAt: now.Add(-24 * time.Hour), Remote: ptr(true), CountryCode: "DE",
 		}
 	}
@@ -134,7 +140,7 @@ func TestRunPersistPipelineStage2_and_3_persistsAndScoresCappedBatch(t *testing.
 			RemoteOnly:       true,
 			CountryAllowlist: []string{"de"},
 		},
-		KeywordRules: pipeline.KeywordRules{Include: []string{"backend"}},
+		Rules: []pipelineschema.Stage2Rule{stage2BoostPhraseRule("need-backend", "backend", 1)},
 	}
 	_, err = a.RunPersistPipelineStage2(ctx, stage2In)
 	require.NoError(t, err)
@@ -201,7 +207,7 @@ func TestRunPersistPipelineStage3_stage3RejectScore(t *testing.T) {
 			RemoteOnly:       true,
 			CountryAllowlist: []string{"de"},
 		},
-		KeywordRules: pipeline.KeywordRules{Include: []string{"backend"}},
+		Rules: []pipelineschema.Stage2Rule{stage2BoostPhraseRule("need-backend", "backend", 1)},
 	})
 	require.NoError(t, err)
 

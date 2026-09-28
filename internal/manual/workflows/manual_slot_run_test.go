@@ -28,16 +28,23 @@ func TestManualSlotRunWorkflow_pipelineStage2_inMemory(t *testing.T) {
 		return 7, nil
 	}, activity.RegisterOptions{Name: manualschema.CreatePipelineRunActivityName})
 
-	env.RegisterActivityWithOptions(func(context.Context, pipelineschema.PersistPipelineStage2Input) (*pipelineschema.PersistPipelineStage2Output, error) {
+	var gotStage2In pipelineschema.PersistPipelineStage2Input
+	env.RegisterActivityWithOptions(func(_ context.Context, in pipelineschema.PersistPipelineStage2Input) (*pipelineschema.PersistPipelineStage2Output, error) {
+		gotStage2In = in
 		return &pipelineschema.PersistPipelineStage2Output{
 			AfterBroadCount:    2,
 			AfterKeywordsCount: 1,
 		}, nil
 	}, activity.RegisterOptions{Name: manualschema.PersistPipelineStage2ActivityName})
 
+	w := 2
+	rules := []pipelineschema.Stage2Rule{
+		{ID: "boost-go", Field: pipelineschema.RuleFieldTitle, Op: pipelineschema.RuleOpPhrase, Values: []string{"go"}, Action: pipelineschema.RuleActionBoost, Weight: &w},
+	}
 	env.ExecuteWorkflow(ManualSlotRunWorkflow, manualschema.ManualSlotRunWorkflowInput{
 		SlotID: slotID,
 		Kind:   manualschema.RunKindPipelineStage2,
+		Rules:  rules,
 	})
 
 	require.True(t, env.IsWorkflowCompleted())
@@ -53,6 +60,9 @@ func TestManualSlotRunWorkflow_pipelineStage2_inMemory(t *testing.T) {
 	require.Equal(t, 1, agg.Stage2.Passed)
 	require.Equal(t, 1, agg.Stage2.Rejected)
 	require.Nil(t, agg.Stage3)
+	require.Equal(t, int64(7), gotStage2In.PipelineRunID)
+	require.Equal(t, slotID, gotStage2In.SlotID)
+	require.Equal(t, rules, gotStage2In.Rules)
 }
 
 func TestManualSlotRunWorkflow_parallelIngest_inMemory(t *testing.T) {
@@ -83,4 +93,37 @@ func TestManualSlotRunWorkflow_parallelIngest_inMemory(t *testing.T) {
 	require.Len(t, agg.Ingest, 2)
 	require.Equal(t, 2, agg.Ingest["src_a"].JobsWritten)
 	require.Equal(t, 2, agg.Ingest["src_b"].JobsWritten)
+}
+
+func TestManualSlotRunWorkflow_builtinIngest_expandsAndAggregates_inMemory(t *testing.T) {
+	t.Parallel()
+
+	slotID := uuid.MustParse("33333333-3333-4333-8333-333333333333")
+
+	var suite testsuite.WorkflowTestSuite
+	env := suite.NewTestWorkflowEnvironment()
+	env.RegisterWorkflow(ManualSlotRunWorkflow)
+	env.RegisterWorkflow(ingest_workflows.IngestSourceWorkflow)
+
+	var builtinChildRuns int
+	env.RegisterActivityWithOptions(func(_ context.Context, in ingestschema.IngestSourceInput) (*ingestschema.IngestSourceOutput, error) {
+		if in.SourceID == "builtin" {
+			builtinChildRuns++
+		}
+		return &ingestschema.IngestSourceOutput{JobsWritten: 1}, nil
+	}, activity.RegisterOptions{Name: ingest_activities.RunIngestSourceActivityName})
+
+	env.ExecuteWorkflow(ManualSlotRunWorkflow, manualschema.ManualSlotRunWorkflowInput{
+		SlotID:    slotID,
+		Kind:      manualschema.RunKindIngestSources,
+		SourceIDs: []string{"builtin"},
+	})
+
+	require.True(t, env.IsWorkflowCompleted())
+	require.NoError(t, env.GetWorkflowError())
+
+	var agg manualschema.ManualSlotRunAggregate
+	require.NoError(t, env.GetWorkflowResult(&agg))
+	require.Equal(t, 10, builtinChildRuns, "builtin uses q-list queries (10 children), run serially after parallel sources")
+	require.Equal(t, 10, agg.Ingest["builtin"].JobsWritten)
 }

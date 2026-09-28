@@ -85,6 +85,7 @@ func jobFromWire(cr *utils.CountryResolver, w jobWire, onPubDateWarn func(raw fl
 		tz = append([]float64(nil), w.TimezoneRestrictions...)
 	}
 
+	hiringCountries, hiringRegions, hiringRaw := utils.ParseHiringScope(cr, w.LocationRestrictions...)
 	j := schema.Job{
 		Source:          SourceName,
 		Title:           title,
@@ -95,6 +96,9 @@ func jobFromWire(cr *utils.CountryResolver, w jobWire, onPubDateWarn func(raw fl
 		PostedAt:        postedAt,
 		Remote:          remote,
 		CountryCode:     countryFromRestrictions(cr, w.LocationRestrictions),
+		HiringCountries: hiringCountries,
+		HiringRegions:   hiringRegions,
+		HiringRaw:       hiringRaw,
 		SalaryRaw:       formatSalaryRaw(w.MinSalary, w.MaxSalary, w.Currency),
 		Tags:            tags,
 		TimezoneOffsets: tz,
@@ -138,13 +142,9 @@ func trimStringSlice(in []string) []string {
 }
 
 func countryFromRestrictions(cr *utils.CountryResolver, restrictions []string) string {
-	for _, raw := range restrictions {
-		for _, part := range strings.Split(raw, ",") {
-			code := cr.Alpha2ForName(part)
-			if code != "" {
-				return code
-			}
-		}
+	countries, _, _ := utils.ParseHiringScope(cr, restrictions...)
+	if len(countries) > 0 {
+		return countries[0]
 	}
 	return ""
 }

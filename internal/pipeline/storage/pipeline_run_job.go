@@ -5,6 +5,8 @@ type PipelineRunJob struct {
 	PipelineRunID   int64   `gorm:"column:pipeline_run_id;primaryKey"`
 	JobID           string  `gorm:"column:job_id;primaryKey;type:text"`
 	Stage2Status    string  `gorm:"column:stage2_status;type:text;not null"`
+	Stage2Hits      []byte  `gorm:"column:stage2_hits;type:jsonb;not null;default:'[]'"`
+	Stage2Boost     int     `gorm:"column:stage2_boost;not null;default:0"`
 	Stage3Status    *string `gorm:"column:stage3_status;type:text"`
 	Stage3Rationale *string `gorm:"column:stage3_rationale;type:text"`
 }

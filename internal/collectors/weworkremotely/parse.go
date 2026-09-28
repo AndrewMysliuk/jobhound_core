@@ -67,18 +67,27 @@ func jobFromRSSItem(countries *utils.CountryResolver, item rssItem) (schema.Job,
 	descPlain := utils.StripHTMLToPlainText(descHTML)
 	tags := skillsTags(item.Skills, item.Category)
 	postedAt, _ := parseRSSPubDate(strings.TrimSpace(item.PubDate))
-	countryCode := countryFromWWR(countries, item)
+	// WWR states the hiring restriction in <region> ("Anywhere in the World", "USA Only", "Europe Only").
+	// <country>/<state> is the company location, so they are only a fallback when <region> says nothing.
+	hiringCountries, hiringRegions, hiringRaw := utils.ParseHiringScope(countries, item.Region)
+	if len(hiringCountries) == 0 && len(hiringRegions) == 0 {
+		hiringCountries, hiringRegions, hiringRaw = utils.ParseHiringScope(countries, item.Country, item.State)
+	}
+	countryCode := countryFromWWR(hiringCountries)
 	j := schema.Job{
-		Source:      SourceName,
-		Title:       title,
-		Company:     company,
-		URL:         listingURL,
-		Description: descPlain,
-		PostedAt:    postedAt,
-		Remote:      remoteFromWWR(item.Region, title, descPlain, tags),
-		CountryCode: countryCode,
-		Tags:        tags,
-		Position:    utils.InferPosition(title, descPlain, tags),
+		Source:          SourceName,
+		Title:           title,
+		Company:         company,
+		URL:             listingURL,
+		Description:     descPlain,
+		PostedAt:        postedAt,
+		Remote:          remoteFromWWR(item.Region, title, descPlain, tags),
+		CountryCode:     countryCode,
+		HiringCountries: hiringCountries,
+		HiringRegions:   hiringRegions,
+		HiringRaw:       hiringRaw,
+		Tags:            tags,
+		Position:        utils.InferPosition(title, descPlain, tags),
 	}
 	if err := domainutils.AssignStableID(&j); err != nil {
 		return schema.Job{}, false, fmt.Errorf("stable id: %w", err)
@@ -141,18 +150,9 @@ func remoteFromWWR(region, title, desc string, tags []string) *bool {
 	return utils.RemoteMVPRule(title, desc, tags)
 }
 
-func countryFromWWR(r *utils.CountryResolver, item rssItem) string {
-	if r == nil {
-		return ""
-	}
-	for _, candidate := range []string{item.Country, item.State, item.Region} {
-		candidate = strings.TrimSpace(candidate)
-		if candidate == "" {
-			continue
-		}
-		if code := r.Alpha2ForName(candidate); code != "" {
-			return code
-		}
+func countryFromWWR(hiringCountries []string) string {
+	if len(hiringCountries) > 0 {
+		return hiringCountries[0]
 	}
 	return ""
 }

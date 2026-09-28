@@ -23,7 +23,7 @@ const SourceName = "builtin"
 const listingPageSizeHint = 20
 
 // DefaultMaxJobs caps details per search query when MaxJobs is 0 (10 parallel queries share one Chromium).
-const DefaultMaxJobs = 20
+const DefaultMaxJobs = 40
 
 // debugBuiltinSingleListingScope limits listing to the first territory and page 1 only (set true for local browser-fetch experiments).
 const debugBuiltinSingleListingScope = false
@@ -238,19 +238,26 @@ func (c *BuiltIn) fetchRemote(ctx context.Context, search string) ([]schema.Job,
 				applyURL = au
 			}
 		}
+		hiringRaw := uc.alpha2
+		var hiringCountries []string
+		if uc.alpha2 != "" {
+			hiringCountries = []string{uc.alpha2}
+		}
 		j := schema.Job{
-			Source:      SourceName,
-			Title:       title,
-			Company:     strings.TrimSpace(jp.company),
-			URL:         canonURL,
-			ApplyURL:    applyURL,
-			Description: descPlain,
-			PostedAt:    parsePostedAt(jp.datePosted, c.onDatePostedWarn()),
-			Remote:      resolveRemote(jp, tags),
-			CountryCode: uc.alpha2,
-			SalaryRaw:   formatSalaryRaw(jp.baseSalaryRaw),
-			Tags:        tags,
-			Position:    utils.InferPosition(title, descPlain, tags),
+			Source:          SourceName,
+			Title:           title,
+			Company:         strings.TrimSpace(jp.company),
+			URL:             canonURL,
+			ApplyURL:        applyURL,
+			Description:     descPlain,
+			PostedAt:        parsePostedAt(jp.datePosted, c.onDatePostedWarn()),
+			Remote:          resolveRemote(jp, tags),
+			CountryCode:     uc.alpha2,
+			HiringCountries: hiringCountries,
+			HiringRaw:       hiringRaw,
+			SalaryRaw:       formatSalaryRaw(jp.baseSalaryRaw),
+			Tags:            tags,
+			Position:        utils.InferPosition(title, descPlain, tags),
 		}
 		if err := domainutils.AssignStableID(&j); err != nil {
 			c.collectSkip(ctx, fmt.Sprintf("stable id %s", uc.url), err)

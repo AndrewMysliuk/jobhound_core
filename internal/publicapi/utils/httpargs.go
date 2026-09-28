@@ -23,15 +23,16 @@ func ParseStageDigit(s string) (int, bool) {
 	return int(s[0] - '0'), true
 }
 
-// ParseJobListQuery extracts page, limit, and optional status filter from query params, applying defaults.
+// ParseJobListQuery extracts page, limit, optional status filter, and debug=1 from query params, applying defaults.
 // status is non-empty when ?status= is present (stages 2–3 job lists).
+// debug is true only when ?debug=1 exactly; any other non-empty debug value yields ok=false.
 // Returns ok=false if any present value is malformed or out of range.
-func ParseJobListQuery(q map[string][]string) (page, limit int, status string, ok bool) {
+func ParseJobListQuery(q map[string][]string) (page, limit int, status string, debug bool, ok bool) {
 	page = 1
 	if vs := q["page"]; len(vs) > 0 && strings.TrimSpace(vs[0]) != "" {
 		p, err := strconv.Atoi(strings.TrimSpace(vs[0]))
 		if err != nil || p < 1 {
-			return 0, 0, "", false
+			return 0, 0, "", false, false
 		}
 		page = p
 	}
@@ -39,12 +40,22 @@ func ParseJobListQuery(q map[string][]string) (page, limit int, status string, o
 	if vs := q["limit"]; len(vs) > 0 && strings.TrimSpace(vs[0]) != "" {
 		l, err := strconv.Atoi(strings.TrimSpace(vs[0]))
 		if err != nil || l < 1 || l > schema.MaxJobListLimit {
-			return 0, 0, "", false
+			return 0, 0, "", false, false
 		}
 		limit = l
 	}
 	if vs := q["status"]; len(vs) > 0 {
 		status = strings.TrimSpace(vs[0])
 	}
-	return page, limit, status, true
+	if vs := q["debug"]; len(vs) > 0 {
+		d := strings.TrimSpace(vs[0])
+		if d == "" {
+			return page, limit, status, false, true
+		}
+		if d != "1" {
+			return 0, 0, "", false, false
+		}
+		debug = true
+	}
+	return page, limit, status, debug, true
 }

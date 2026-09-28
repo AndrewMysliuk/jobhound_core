@@ -79,7 +79,7 @@ func ManualSlotRunWorkflow(ctx workflow.Context, in manualschema.ManualSlotRunWo
 			PipelineRunID:      runID,
 			SlotID:             in.SlotID,
 			BroadRules:         in.BroadRules,
-			KeywordRules:       in.KeywordRules,
+			Rules:              append([]pipelineschema.Stage2Rule(nil), in.Rules...),
 			BroadFilterKeyHash: in.BroadFilterKeyHash,
 		}
 		var s2out pipelineschema.PersistPipelineStage2Output
@@ -171,7 +171,7 @@ func runParallelIngest(ctx workflow.Context, agg *manualschema.ManualSlotRunAggr
 	children := expandIngestChildren(in.SourceIDs)
 	var parallel, serial []ingestChildSpec
 	for _, ch := range children {
-		if ch.source == builtin.SourceName {
+		if ingest.NormalizeSourceID(ch.source) == builtin.SourceName {
 			serial = append(serial, ch)
 			continue
 		}

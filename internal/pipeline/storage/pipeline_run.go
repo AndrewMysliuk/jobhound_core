@@ -8,6 +8,7 @@ type PipelineRun struct {
 	CreatedAt          time.Time `gorm:"column:created_at;not null"`
 	SlotID             *string   `gorm:"column:slot_id"` // UUID canonical string when set (FK to search_slots when that table exists).
 	BroadFilterKeyHash *string   `gorm:"column:broad_filter_key_hash"`
+	Rules              []byte    `gorm:"column:rules;type:jsonb;not null;default:'[]'"`
 }
 
 // TableName is the normative SQL table name.

@@ -12,7 +12,14 @@ import (
 // all fields except description; excludes created_at/updated_at (not on schema.Job).
 func jobEqualForIngestSkip(a, b schema.Job) bool {
 	if a.ID != b.ID || a.Source != b.Source || a.Title != b.Title || a.Company != b.Company ||
-		a.URL != b.URL || a.ApplyURL != b.ApplyURL || a.SalaryRaw != b.SalaryRaw || a.CountryCode != b.CountryCode {
+		a.URL != b.URL || a.ApplyURL != b.ApplyURL || a.SalaryRaw != b.SalaryRaw || a.CountryCode != b.CountryCode ||
+		a.HiringRaw != b.HiringRaw {
+		return false
+	}
+	if !stringSliceEqualSorted(a.HiringCountries, b.HiringCountries) {
+		return false
+	}
+	if !stringSliceEqualSorted(a.HiringRegions, b.HiringRegions) {
 		return false
 	}
 	if !a.PostedAt.Equal(b.PostedAt) {

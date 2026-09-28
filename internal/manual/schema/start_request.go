@@ -6,21 +6,22 @@ import (
 	"time"
 
 	"github.com/andrewmysliuk/jobhound_core/internal/pipeline"
+	pipelineschema "github.com/andrewmysliuk/jobhound_core/internal/pipeline/schema"
 	"github.com/google/uuid"
 )
 
 // ManualSlotRunStartRequest is the stable JSON body for starting a manual slot run (009); maps to [ManualSlotRunWorkflowInput].
 type ManualSlotRunStartRequest struct {
-	SlotID             string                `json:"slot_id"`
-	UserID             *string               `json:"user_id,omitempty"`
-	Kind               RunKind               `json:"kind"`
-	Profile            string                `json:"profile,omitempty"`
-	SourceIDs          []string              `json:"source_ids,omitempty"`
-	ExplicitRefresh    bool                  `json:"explicit_refresh,omitempty"`
-	BroadRules         *BroadFilterRulesJSON `json:"broad_rules,omitempty"`
-	KeywordRules       *KeywordRulesJSON     `json:"keyword_rules,omitempty"`
-	BroadFilterKeyHash string                `json:"broad_filter_key_hash,omitempty"`
-	PipelineRunID      *int64                `json:"pipeline_run_id,omitempty"`
+	SlotID             string                      `json:"slot_id"`
+	UserID             *string                     `json:"user_id,omitempty"`
+	Kind               RunKind                     `json:"kind"`
+	Profile            string                      `json:"profile,omitempty"`
+	SourceIDs          []string                    `json:"source_ids,omitempty"`
+	ExplicitRefresh    bool                        `json:"explicit_refresh,omitempty"`
+	BroadRules         *BroadFilterRulesJSON       `json:"broad_rules,omitempty"`
+	Rules              []pipelineschema.Stage2Rule `json:"rules,omitempty"`
+	BroadFilterKeyHash string                      `json:"broad_filter_key_hash,omitempty"`
+	PipelineRunID      *int64                      `json:"pipeline_run_id,omitempty"`
 }
 
 // ManualSlotRunStartResponse is the JSON response for a completed manual slot run (009); same fields as [ManualSlotRunAggregate].
@@ -33,12 +34,6 @@ type BroadFilterRulesJSON struct {
 	RoleSynonyms     []string `json:"role_synonyms,omitempty"`
 	RemoteOnly       bool     `json:"remote_only,omitempty"`
 	CountryAllowlist []string `json:"country_allowlist,omitempty"`
-}
-
-// KeywordRulesJSON mirrors [pipeline.KeywordRules] for JSON boundaries.
-type KeywordRulesJSON struct {
-	Include []string `json:"include,omitempty"`
-	Exclude []string `json:"exclude,omitempty"`
 }
 
 // ToPipeline converts JSON DTOs into pipeline broad-filter rules.
@@ -64,17 +59,6 @@ func (j *BroadFilterRulesJSON) ToPipeline() (pipeline.BroadFilterRules, error) {
 	return out, nil
 }
 
-// ToPipeline converts JSON DTOs into pipeline keyword rules.
-func (j *KeywordRulesJSON) ToPipeline() pipeline.KeywordRules {
-	if j == nil {
-		return pipeline.KeywordRules{}
-	}
-	return pipeline.KeywordRules{
-		Include: append([]string(nil), j.Include...),
-		Exclude: append([]string(nil), j.Exclude...),
-	}
-}
-
 // ToWorkflowInput builds workflow input from the HTTP-oriented request (009).
 func (req ManualSlotRunStartRequest) ToWorkflowInput() (ManualSlotRunWorkflowInput, error) {
 	slotID, err := uuid.Parse(strings.TrimSpace(req.SlotID))
@@ -98,9 +82,7 @@ func (req ManualSlotRunStartRequest) ToWorkflowInput() (ManualSlotRunWorkflowInp
 		}
 		in.BroadRules = br
 	}
-	if req.KeywordRules != nil {
-		in.KeywordRules = req.KeywordRules.ToPipeline()
-	}
+	in.Rules = append([]pipelineschema.Stage2Rule(nil), req.Rules...)
 	return in, nil
 }
 

@@ -98,8 +98,8 @@ func TestPostStage2Run_validationAnd409(t *testing.T) {
 	}
 	h := NewHTTPHandler(nil, Deps{Logger: zerolog.Nop(), Slots: ms, Profile: stubProfile{}})
 
-	t.Run("missing_include", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/slots/"+sid+"/stages/2/run", bytes.NewBufferString(`{"exclude":[]}`))
+	t.Run("missing_rules", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/slots/"+sid+"/stages/2/run", bytes.NewBufferString(`{}`))
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, req)
@@ -109,7 +109,7 @@ func TestPostStage2Run_validationAnd409(t *testing.T) {
 	})
 
 	t.Run("ok", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/slots/"+sid+"/stages/2/run", bytes.NewBufferString(`{"include":["a"],"exclude":["b"]}`))
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/slots/"+sid+"/stages/2/run", bytes.NewBufferString(`{"rules":[{"id":"r1","field":"title","op":"phrase","values":["a"],"action":"reject"}]}`))
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, req)
@@ -120,7 +120,7 @@ func TestPostStage2Run_validationAnd409(t *testing.T) {
 
 	ms409 := &mockSlotsStageRuns{run2Err: slots.ErrStageAlreadyRunning}
 	h409 := NewHTTPHandler(nil, Deps{Logger: zerolog.Nop(), Slots: ms409, Profile: stubProfile{}})
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/slots/"+sid+"/stages/2/run", bytes.NewBufferString(`{"include":[],"exclude":[]}`))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/slots/"+sid+"/stages/2/run", bytes.NewBufferString(`{"rules":[]}`))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	h409.ServeHTTP(rec, req)

@@ -20,22 +20,24 @@ func (h *HTTPHandler) getStageJobs(w http.ResponseWriter, r *http.Request) {
 		apputils.WriteAPIError(w, http.StatusBadRequest, "invalid_stage", "stage must be 1, 2, or 3")
 		return
 	}
-	page, limit, statusQ, ok := apputils.ParseJobListQuery(r.URL.Query())
+	page, limit, statusQ, debug, ok := apputils.ParseJobListQuery(r.URL.Query())
 	if !ok {
-		apputils.WriteAPIError(w, http.StatusBadRequest, "invalid_query", "invalid page, limit, or status query")
+		apputils.WriteAPIError(w, http.StatusBadRequest, "invalid_query", "invalid page, limit, status, or debug query")
 		return
 	}
 	if stage == 1 && statusQ != "" {
 		apputils.WriteAPIError(w, http.StatusBadRequest, "invalid_query", "status filter is only allowed for stages 2 and 3")
 		return
 	}
-	resp, err := h.deps.Slots.ListJobs(ctx, slotschema.ListJobsParams{SlotID: slotID, Stage: stage, Page: page, Limit: limit, StatusQuery: statusQ})
+	resp, err := h.deps.Slots.ListJobs(ctx, slotschema.ListJobsParams{
+		SlotID: slotID, Stage: stage, Page: page, Limit: limit, StatusQuery: statusQ, Stage2Debug: stage == 2 && debug,
+	})
 	if errors.Is(err, slots.ErrNotFound) {
 		apputils.WriteAPIError(w, http.StatusNotFound, "not_found", "slot not found")
 		return
 	}
 	if errors.Is(err, slots.ErrInvalidJobListQuery) {
-		apputils.WriteAPIError(w, http.StatusBadRequest, "invalid_query", "invalid status query parameter (use PASSED_STAGE_2, REJECTED_STAGE_2, PASSED_STAGE_3, or REJECTED_STAGE_3)")
+		apputils.WriteAPIError(w, http.StatusBadRequest, "invalid_query", "invalid status query parameter (use ELIGIBLE_STAGE_2, PASSED_STAGE_2, REJECTED_STAGE_2, UNKNOWN_STAGE_2, PASSED_STAGE_3, or REJECTED_STAGE_3)")
 		return
 	}
 	if err != nil {

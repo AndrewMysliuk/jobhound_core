@@ -19,6 +19,9 @@ CREATE TABLE jobs (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     is_remote BOOLEAN,
     country_code TEXT NOT NULL DEFAULT '',
+    hiring_countries JSONB NOT NULL DEFAULT '[]'::jsonb,
+    hiring_regions JSONB NOT NULL DEFAULT '[]'::jsonb,
+    hiring_raw TEXT NOT NULL DEFAULT '',
     salary_raw TEXT NOT NULL DEFAULT '',
     tags JSONB NOT NULL DEFAULT '[]'::jsonb,
     timezone_offsets JSONB NOT NULL DEFAULT '[]'::jsonb,
@@ -53,7 +56,8 @@ CREATE TABLE pipeline_runs (
     id BIGSERIAL PRIMARY KEY,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     broad_filter_key_hash TEXT NULL,
-    slot_id UUID NULL REFERENCES slots (id) ON DELETE CASCADE
+    slot_id UUID NULL REFERENCES slots (id) ON DELETE CASCADE,
+    rules JSONB NOT NULL DEFAULT '[]'::jsonb
 );
 
 CREATE INDEX pipeline_runs_slot_id_idx ON pipeline_runs (slot_id);
@@ -62,15 +66,17 @@ CREATE TABLE pipeline_run_jobs (
     pipeline_run_id BIGINT NOT NULL REFERENCES pipeline_runs (id) ON DELETE CASCADE,
     job_id TEXT NOT NULL REFERENCES jobs (id) ON DELETE CASCADE,
     stage2_status TEXT NOT NULL,
+    stage2_hits JSONB NOT NULL DEFAULT '[]'::jsonb,
+    stage2_boost INT NOT NULL DEFAULT 0,
     stage3_status TEXT NULL,
     stage3_rationale TEXT NULL,
     CONSTRAINT pipeline_run_jobs_stage_check CHECK (
-        stage2_status IN ('REJECTED_STAGE_2', 'PASSED_STAGE_2')
+        stage2_status IN ('REJECTED_STAGE_2', 'PASSED_STAGE_2', 'UNKNOWN_STAGE_2')
             AND (
                 stage3_status IS NULL
                 OR (
                     stage3_status IN ('PASSED_STAGE_3', 'REJECTED_STAGE_3')
-                    AND stage2_status = 'PASSED_STAGE_2'
+                    AND stage2_status IN ('PASSED_STAGE_2', 'UNKNOWN_STAGE_2')
                 )
             )
     ),

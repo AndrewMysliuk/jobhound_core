@@ -20,6 +20,9 @@ type Job struct {
 	PostedAt        *time.Time `gorm:"column:posted_at"`
 	IsRemote        *bool      `gorm:"column:is_remote"`
 	CountryCode     string     `gorm:"column:country_code;type:text;not null;default:''"`
+	HiringCountries []byte     `gorm:"column:hiring_countries;type:jsonb;not null"`
+	HiringRegions   []byte     `gorm:"column:hiring_regions;type:jsonb;not null"`
+	HiringRaw       string     `gorm:"column:hiring_raw;type:text;not null;default:''"`
 	SalaryRaw       string     `gorm:"column:salary_raw;type:text;not null;default:''"`
 	Tags            []byte     `gorm:"column:tags;type:jsonb;not null"`
 	TimezoneOffsets []byte     `gorm:"column:timezone_offsets;type:jsonb;not null"`
@@ -49,6 +52,9 @@ func NewJobModel(j schema.Job) Job {
 		Position:    j.Position,
 	}
 	m.Tags = encodeJobTags(j.Tags)
+	m.HiringCountries = encodeHiringCountries(j.HiringCountries)
+	m.HiringRegions = encodeHiringRegions(j.HiringRegions)
+	m.HiringRaw = j.HiringRaw
 	m.TimezoneOffsets = encodeTimezoneOffsets(j.TimezoneOffsets)
 	if j.ApplyURL != "" {
 		u := j.ApplyURL
@@ -124,6 +130,56 @@ func decodeTimezoneOffsets(b []byte) []float64 {
 	return v
 }
 
+func encodeHiringCountries(countries []string) []byte {
+	if len(countries) == 0 {
+		return []byte("[]")
+	}
+	b, err := json.Marshal(countries)
+	if err != nil {
+		return []byte("[]")
+	}
+	return b
+}
+
+func decodeHiringCountries(b []byte) []string {
+	if len(b) == 0 {
+		return nil
+	}
+	var v []string
+	if err := json.Unmarshal(b, &v); err != nil {
+		return nil
+	}
+	if len(v) == 0 {
+		return nil
+	}
+	return v
+}
+
+func encodeHiringRegions(regions []string) []byte {
+	if len(regions) == 0 {
+		return []byte("[]")
+	}
+	b, err := json.Marshal(regions)
+	if err != nil {
+		return []byte("[]")
+	}
+	return b
+}
+
+func decodeHiringRegions(b []byte) []string {
+	if len(b) == 0 {
+		return nil
+	}
+	var v []string
+	if err := json.Unmarshal(b, &v); err != nil {
+		return nil
+	}
+	if len(v) == 0 {
+		return nil
+	}
+	return v
+}
+
 // ToDomain maps this row to schema.Job (contracts/jobs-schema.md).
 func (m *Job) ToDomain() schema.Job {
 	j := schema.Job{
@@ -134,6 +190,9 @@ func (m *Job) ToDomain() schema.Job {
 		URL:             m.URL,
 		Description:     m.Description,
 		SalaryRaw:       m.SalaryRaw,
+		HiringCountries: decodeHiringCountries(m.HiringCountries),
+		HiringRegions:   decodeHiringRegions(m.HiringRegions),
+		HiringRaw:       m.HiringRaw,
 		Tags:            decodeJobTags(m.Tags),
 		TimezoneOffsets: decodeTimezoneOffsets(m.TimezoneOffsets),
 		Position:        m.Position,

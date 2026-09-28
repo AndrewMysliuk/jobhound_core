@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	manualschema "github.com/andrewmysliuk/jobhound_core/internal/manual/schema"
+	pipelineschema "github.com/andrewmysliuk/jobhound_core/internal/pipeline/schema"
 	"github.com/andrewmysliuk/jobhound_core/internal/slots"
 	enumspb "go.temporal.io/api/enums/v1"
 	"go.temporal.io/sdk/client"
@@ -85,11 +86,9 @@ func publicStagePayloadBytes(stage int, in manualschema.ManualSlotRunWorkflowInp
 		})
 	case 2:
 		return json.Marshal(struct {
-			Include []string `json:"include"`
-			Exclude []string `json:"exclude"`
+			Rules []pipelineschema.Stage2Rule `json:"rules"`
 		}{
-			Include: append([]string(nil), in.KeywordRules.Include...),
-			Exclude: append([]string(nil), in.KeywordRules.Exclude...),
+			Rules: append([]pipelineschema.Stage2Rule(nil), in.Rules...),
 		})
 	case 3:
 		return json.Marshal(struct {

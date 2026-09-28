@@ -72,19 +72,24 @@ func jobFromSource(countries *utils.CountryResolver, src jobSource) (schema.Job,
 	tags := boardTags(src)
 	title := strings.TrimSpace(src.Title)
 	company := strings.TrimSpace(src.Company)
+	hiringRawInputs := workingNomadsLocationInputs(src)
+	hiringCountries, hiringRegions, hiringRaw := utils.ParseHiringScope(countries, hiringRawInputs...)
 	j := schema.Job{
-		Source:      SourceName,
-		Title:       title,
-		Company:     company,
-		URL:         listingURL,
-		ApplyURL:    applyURL,
-		Description: descPlain,
-		PostedAt:    postedAt,
-		Remote:      utils.RemoteMVPRule(title, descPlain, tags),
-		CountryCode: countryFromWN(countries, src),
-		SalaryRaw:   salaryRawWN(src),
-		Tags:        tags,
-		Position:    utils.InferPosition(title, descPlain, tags),
+		Source:          SourceName,
+		Title:           title,
+		Company:         company,
+		URL:             listingURL,
+		ApplyURL:        applyURL,
+		Description:     descPlain,
+		PostedAt:        postedAt,
+		Remote:          utils.RemoteMVPRule(title, descPlain, tags),
+		CountryCode:     countryFromWN(countries, src),
+		HiringCountries: hiringCountries,
+		HiringRegions:   hiringRegions,
+		HiringRaw:       hiringRaw,
+		SalaryRaw:       salaryRawWN(src),
+		Tags:            tags,
+		Position:        utils.InferPosition(title, descPlain, tags),
 	}
 	if err := domainutils.AssignStableID(&j); err != nil {
 		return schema.Job{}, fmt.Errorf("stable id: %w", err)
@@ -168,23 +173,18 @@ func salaryRawWN(src jobSource) string {
 	}
 }
 
+func workingNomadsLocationInputs(src jobSource) []string {
+	out := append([]string(nil), src.Locations...)
+	if base := strings.TrimSpace(src.LocationBase); base != "" {
+		out = append(out, base)
+	}
+	return out
+}
+
 func countryFromWN(r *utils.CountryResolver, src jobSource) string {
-	if r == nil {
-		return ""
-	}
-	for _, loc := range src.Locations {
-		for _, part := range strings.Split(loc, ",") {
-			part = strings.TrimSpace(part)
-			if code := r.Alpha2ForName(part); code != "" {
-				return code
-			}
-		}
-	}
-	for _, part := range strings.Split(src.LocationBase, ",") {
-		part = strings.TrimSpace(part)
-		if code := r.Alpha2ForName(part); code != "" {
-			return code
-		}
+	countries, _, _ := utils.ParseHiringScope(r, workingNomadsLocationInputs(src)...)
+	if len(countries) > 0 {
+		return countries[0]
 	}
 	return ""
 }

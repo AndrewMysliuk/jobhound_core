@@ -6,21 +6,27 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/utils"
+	"github.com/andrewmysliuk/jobhound_core/internal/domain/schema"
 )
 
 var ldJSONRE = regexp.MustCompile(`(?s)<script type="application/ld\+json">(.*?)</script>`)
 
 // JobDetail is parsed from a job detail page (JSON-LD JobPosting).
 type JobDetail struct {
-	Title       string
-	Company     string
-	Description string
-	PostedAt    time.Time
-	Remote      *bool
+	Title           string
+	Company         string
+	Description     string
+	PostedAt        time.Time
+	Remote          *bool
+	HiringCountries []string
+	HiringRegions   []string
+	HiringRaw       string
 }
 
 // ParseJobDetailHTML extracts JobPosting fields from detail HTML.
-func ParseJobDetailHTML(html string) (JobDetail, error) {
+func ParseJobDetailHTML(html string, countries *utils.CountryResolver) (JobDetail, error) {
 	jp, err := firstJobPostingFromHTML(html)
 	if err != nil {
 		return JobDetail{}, err
@@ -34,21 +40,118 @@ func ParseJobDetailHTML(html string) (JobDetail, error) {
 	} else if t, err := time.Parse(time.RFC3339, jp.DatePosted); err == nil {
 		out.PostedAt = t.UTC()
 	}
-	if strings.EqualFold(strings.TrimSpace(jp.JobLocationType), "TELECOMMUTE") {
+	telecommute := strings.EqualFold(strings.TrimSpace(jp.JobLocationType), "TELECOMMUTE")
+	if telecommute {
 		v := true
 		out.Remote = &v
+	}
+	locStrings := append([]string(nil), locationStringsFromJSONLD(jp.ApplicantLocationRequirements)...)
+	locStrings = append(locStrings, locationStringsFromJSONLD(jp.JobLocation)...)
+	out.HiringCountries, out.HiringRegions, out.HiringRaw = utils.ParseHiringScope(countries, locStrings...)
+	if telecommute && len(out.HiringCountries) == 0 && len(out.HiringRegions) == 0 {
+		out.HiringRegions = []string{schema.RegionCodeWorldwide.String()}
 	}
 	return out, nil
 }
 
 type jobPostingWire struct {
-	Type            json.RawMessage `json:"@type"`
-	Title           string          `json:"title"`
-	Company         string          `json:"-"`
-	Description     string          `json:"description"`
-	DatePosted      string          `json:"datePosted"`
-	JobLocationType string          `json:"jobLocationType"`
-	HiringOrg       json.RawMessage `json:"hiringOrganization"`
+	Type                          json.RawMessage `json:"@type"`
+	Title                         string          `json:"title"`
+	Company                       string          `json:"-"`
+	Description                   string          `json:"description"`
+	DatePosted                    string          `json:"datePosted"`
+	JobLocationType               string          `json:"jobLocationType"`
+	HiringOrg                     json.RawMessage `json:"hiringOrganization"`
+	ApplicantLocationRequirements json.RawMessage `json:"applicantLocationRequirements"`
+	JobLocation                   json.RawMessage `json:"jobLocation"`
+}
+
+func locationStringsFromJSONLD(raw json.RawMessage) []string {
+	if len(bytesTrimSpace(raw)) == 0 {
+		return nil
+	}
+	var out []string
+	collectLocationStrings(raw, &out)
+	return out
+}
+
+func collectLocationStrings(raw json.RawMessage, out *[]string) {
+	raw = bytesTrimSpace(raw)
+	if len(raw) == 0 {
+		return
+	}
+	switch raw[0] {
+	case '[':
+		var blocks []json.RawMessage
+		if err := json.Unmarshal(raw, &blocks); err != nil {
+			return
+		}
+		for _, block := range blocks {
+			collectLocationStrings(block, out)
+		}
+	case '{':
+		var o map[string]json.RawMessage
+		if err := json.Unmarshal(raw, &o); err != nil {
+			return
+		}
+		t := jsonLDTypeName(o["@type"])
+		if strings.EqualFold(t, "Country") {
+			if name := jsonLDStringField(o["name"]); name != "" {
+				*out = append(*out, name)
+			}
+			return
+		}
+		if strings.EqualFold(t, "Place") {
+			if addrRaw, ok := o["address"]; ok {
+				var addr map[string]json.RawMessage
+				if err := json.Unmarshal(addrRaw, &addr); err == nil {
+					if c := jsonLDStringField(addr["addressCountry"]); c != "" {
+						*out = append(*out, c)
+					}
+					if r := jsonLDStringField(addr["addressRegion"]); r != "" {
+						*out = append(*out, r)
+					}
+				}
+			}
+			return
+		}
+		for _, v := range o {
+			if len(v) > 0 && (v[0] == '{' || v[0] == '[') {
+				collectLocationStrings(v, out)
+			}
+		}
+	}
+}
+
+func jsonLDTypeName(raw json.RawMessage) string {
+	if len(raw) == 0 {
+		return ""
+	}
+	var s string
+	if err := json.Unmarshal(raw, &s); err == nil {
+		return strings.TrimSpace(s)
+	}
+	var arr []string
+	if err := json.Unmarshal(raw, &arr); err == nil {
+		for _, v := range arr {
+			v = strings.TrimSpace(v)
+			if v != "" {
+				return v
+			}
+		}
+	}
+	return ""
+}
+
+func jsonLDStringField(raw json.RawMessage) string {
+	if len(raw) == 0 {
+		return ""
+	}
+	var s string
+	if err := json.Unmarshal(raw, &s); err == nil {
+		return strings.TrimSpace(s)
+	}
+	return ""
 }
 
 func firstJobPostingFromHTML(html string) (jobPostingWire, error) {

@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/andrewmysliuk/jobhound_core/internal/pipeline"
+	pipelineschema "github.com/andrewmysliuk/jobhound_core/internal/pipeline/schema"
 	"github.com/google/uuid"
 )
 
@@ -23,8 +24,8 @@ type ManualSlotRunWorkflowInput struct {
 	// SlotSearchQuery is passed to each IngestSourceWorkflow child (ingest: per-source job search).
 	SlotSearchQuery string
 
-	BroadRules   pipeline.BroadFilterRules
-	KeywordRules pipeline.KeywordRules
+	BroadRules pipeline.BroadFilterRules
+	Rules      []pipelineschema.Stage2Rule
 	// BroadFilterKeyHash optional SHA-256 hex persisted on pipeline_runs when stage 2 runs (006).
 	BroadFilterKeyHash string
 

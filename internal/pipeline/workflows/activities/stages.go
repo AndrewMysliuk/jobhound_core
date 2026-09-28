@@ -3,6 +3,7 @@ package pipeline_activities
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -48,7 +49,8 @@ func (a *Activities) RunPipelineStages(ctx context.Context, in pipelineschema.Pi
 		log.Error().Err(err).Msg("broad filter")
 		return nil, err
 	}
-	stage2 := pipeutils.ApplyKeywordFilter(stage1, in.KeywordRules)
+	duplicateOf := pipeutils.DuplicateJobIDs(stage1)
+	stage2 := pipeutils.JobsAfterStage2(stage1, in.Rules, duplicateOf)
 	scored, err := pipeutils.ScoreJobs(ctx, in.Profile, stage2, a.Scorer)
 	if err != nil {
 		log.Error().Err(err).Msg("score jobs")
@@ -104,19 +106,26 @@ func (a *Activities) RunPersistPipelineStage2(ctx context.Context, in pipelinesc
 		log.Error().Err(err).Msg("broad filter")
 		return nil, err
 	}
-	stage2 := pipeutils.ApplyKeywordFilter(stage1, in.KeywordRules)
-	stage2OK := make(map[string]struct{}, len(stage2))
-	for _, j := range stage2 {
-		stage2OK[j.ID] = struct{}{}
+	duplicateOf := pipeutils.DuplicateJobIDs(stage1)
+	stage2 := pipeutils.JobsAfterStage2(stage1, in.Rules, duplicateOf)
+
+	rulesJSON, err := json.Marshal(in.Rules)
+	if err != nil {
+		return nil, fmt.Errorf("pipeline activities: marshal rules snapshot: %w", err)
+	}
+	if err := a.Runs.SetRunRulesSnapshot(ctx, in.PipelineRunID, rulesJSON); err != nil {
+		log.Error().Err(err).Msg("set rules snapshot")
+		return nil, err
 	}
 
 	for _, j := range stage1 {
-		st := pipeline.RunJobRejectedStage2
-		if _, ok := stage2OK[j.ID]; ok {
-			st = pipeline.RunJobPassedStage2
+		ev, err := pipeutils.EvaluateStage2(j, in.Rules, duplicateOf)
+		if err != nil {
+			log.Error().Err(err).Str("job_id", j.ID).Msg("evaluate stage 2")
+			return nil, err
 		}
-		if err := a.Runs.SetRunJobStatus(ctx, in.PipelineRunID, j.ID, st); err != nil {
-			log.Error().Err(err).Str("job_id", j.ID).Msg("set run job status")
+		if err := a.Runs.UpsertRunJobStage2(ctx, in.PipelineRunID, j.ID, ev.Status, ev.Hits, ev.Boost); err != nil {
+			log.Error().Err(err).Str("job_id", j.ID).Msg("upsert run job stage 2")
 			return nil, err
 		}
 	}

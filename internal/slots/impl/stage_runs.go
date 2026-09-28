@@ -7,7 +7,7 @@ import (
 
 	manualschema "github.com/andrewmysliuk/jobhound_core/internal/manual/schema"
 	manualworkflows "github.com/andrewmysliuk/jobhound_core/internal/manual/workflows"
-	"github.com/andrewmysliuk/jobhound_core/internal/pipeline"
+	pipelineschema "github.com/andrewmysliuk/jobhound_core/internal/pipeline/schema"
 	"github.com/andrewmysliuk/jobhound_core/internal/publicapi/schema"
 	"github.com/andrewmysliuk/jobhound_core/internal/slots"
 	slotschema "github.com/andrewmysliuk/jobhound_core/internal/slots/schema"
@@ -54,9 +54,9 @@ func (s *Service) RunStage2(ctx context.Context, p slotschema.RunStage2Params) (
 		return nil, err
 	}
 	in := manualschema.ManualSlotRunWorkflowInput{
-		SlotID:       u,
-		Kind:         manualschema.RunKindPipelineStage2,
-		KeywordRules: pipeline.KeywordRules{Include: append([]string(nil), p.Include...), Exclude: append([]string(nil), p.Exclude...)},
+		SlotID: u,
+		Kind:   manualschema.RunKindPipelineStage2,
+		Rules:  append([]pipelineschema.Stage2Rule(nil), p.Rules...),
 	}
 	if err := in.Validate(); err != nil {
 		return nil, err

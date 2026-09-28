@@ -26,6 +26,9 @@ type jobDebugJSON struct {
 	PostedAt        string    `json:"posted_at,omitempty"`
 	Remote          *bool     `json:"remote"`
 	CountryCode     string    `json:"country_code,omitempty"`
+	HiringCountries []string  `json:"hiring_countries,omitempty"`
+	HiringRegions   []string  `json:"hiring_regions,omitempty"`
+	HiringRaw       string    `json:"hiring_raw,omitempty"`
 	SalaryRaw       string    `json:"salary_raw,omitempty"`
 	Tags            []string  `json:"tags,omitempty"`
 	TimezoneOffsets []float64 `json:"timezone_offsets,omitempty"`
@@ -44,6 +47,9 @@ func jobToDebugJSON(j schema.Job) jobDebugJSON {
 		Description:     j.Description,
 		Remote:          j.Remote,
 		CountryCode:     j.CountryCode,
+		HiringCountries: j.HiringCountries,
+		HiringRegions:   j.HiringRegions,
+		HiringRaw:       j.HiringRaw,
 		SalaryRaw:       j.SalaryRaw,
 		Tags:            j.Tags,
 		TimezoneOffsets: j.TimezoneOffsets,

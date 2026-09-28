@@ -36,6 +36,9 @@ func testSlotJobsDB(t *testing.T) *gorm.DB {
 			posted_at TIMESTAMP,
 			is_remote INTEGER,
 			country_code TEXT NOT NULL DEFAULT '',
+			hiring_countries TEXT NOT NULL DEFAULT '[]',
+			hiring_regions TEXT NOT NULL DEFAULT '[]',
+			hiring_raw TEXT NOT NULL DEFAULT '',
 			salary_raw TEXT NOT NULL DEFAULT '',
 			tags TEXT NOT NULL DEFAULT '[]',
 			timezone_offsets TEXT NOT NULL DEFAULT '[]',
@@ -61,6 +64,8 @@ func testSlotJobsDB(t *testing.T) *gorm.DB {
 			pipeline_run_id INTEGER NOT NULL REFERENCES pipeline_runs(id) ON DELETE CASCADE,
 			job_id TEXT NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
 			stage2_status TEXT NOT NULL,
+			stage2_hits TEXT NOT NULL DEFAULT '[]',
+			stage2_boost INTEGER NOT NULL DEFAULT 0,
 			stage3_status TEXT,
 			stage3_rationale TEXT,
 			PRIMARY KEY (pipeline_run_id, job_id)
@@ -312,6 +317,12 @@ func TestRepository_ListPipelineRunStage2Jobs_statusFilter(t *testing.T) {
 		now, passed, now, now).Error; err != nil {
 		t.Fatal(err)
 	}
+	if err := db.Exec(`
+		INSERT INTO jobs (id, source, title, company, url, description, tags, posted_at, stage1_status, created_at, updated_at)
+		VALUES ('ju', 's', 't', 'c', 'u', 'd', '[]', ?, ?, ?, ?)`,
+		now, passed, now, now).Error; err != nil {
+		t.Fatal(err)
+	}
 	if err := repo.UpsertSlotJob(ctx, slotA, "jp"); err != nil {
 		t.Fatal(err)
 	}
@@ -321,13 +332,17 @@ func TestRepository_ListPipelineRunStage2Jobs_statusFilter(t *testing.T) {
 	if err := repo.UpsertSlotJob(ctx, slotA, "jm"); err != nil {
 		t.Fatal(err)
 	}
+	if err := repo.UpsertSlotJob(ctx, slotA, "ju"); err != nil {
+		t.Fatal(err)
+	}
 	if err := db.Exec(`INSERT INTO pipeline_runs (id, created_at, slot_id) VALUES (1, ?, ?)`, now, slotA.String()).Error; err != nil {
 		t.Fatal(err)
 	}
 	stP := string(pipeline.RunJobPassedStage2)
 	stR := string(pipeline.RunJobRejectedStage2)
+	stU := string(pipeline.RunJobUnknownStage2)
 	st3 := string(pipeline.RunJobPassedStage3)
-	if err := db.Exec(`INSERT INTO pipeline_run_jobs (pipeline_run_id, job_id, stage2_status) VALUES (1, 'jp', ?), (1, 'jr', ?)`, stP, stR).Error; err != nil {
+	if err := db.Exec(`INSERT INTO pipeline_run_jobs (pipeline_run_id, job_id, stage2_status) VALUES (1, 'jp', ?), (1, 'jr', ?), (1, 'ju', ?)`, stP, stR, stU).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Exec(`INSERT INTO pipeline_run_jobs (pipeline_run_id, job_id, stage2_status, stage3_status) VALUES (1, 'jm', ?, ?)`, stP, st3).Error; err != nil {
@@ -337,7 +352,7 @@ func TestRepository_ListPipelineRunStage2Jobs_statusFilter(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if total != 3 || len(all) != 3 {
+	if total != 4 || len(all) != 4 {
 		t.Fatalf("all: total=%d len=%d", total, len(all))
 	}
 	if all[0].PipelineRunStatus == "" || all[1].PipelineRunStatus == "" || all[2].PipelineRunStatus == "" {
@@ -366,5 +381,22 @@ func TestRepository_ListPipelineRunStage2Jobs_statusFilter(t *testing.T) {
 	}
 	if totalF != 1 || len(failedOnly) != 1 || failedOnly[0].Job.ID != "jr" || failedOnly[0].PipelineRunStatus != stR {
 		t.Fatalf("failed: %+v", failedOnly)
+	}
+	eligible, totalE, err := repo.ListPipelineRunStage2Jobs(ctx, slotA, 1, pipeline.Stage2ListFilterEligible, 0, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if totalE != 3 || len(eligible) != 3 {
+		t.Fatalf("eligible: total=%d len=%d", totalE, len(eligible))
+	}
+	eligibleIDs := map[string]bool{}
+	for _, e := range eligible {
+		if e.PipelineRunStatus != stP && e.PipelineRunStatus != stU {
+			t.Fatalf("eligible row %q has status %q", e.Job.ID, e.PipelineRunStatus)
+		}
+		eligibleIDs[e.Job.ID] = true
+	}
+	if !eligibleIDs["jp"] || !eligibleIDs["jm"] || !eligibleIDs["ju"] || eligibleIDs["jr"] {
+		t.Fatalf("eligible ids: %+v", eligibleIDs)
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"time"
 
 	jobdata "github.com/andrewmysliuk/jobhound_core/internal/domain/schema"
+	"github.com/andrewmysliuk/jobhound_core/internal/pipeline"
 )
 
 // Stage1StatusPassed is the jobs.stage1_status value after broad stage 1 (007 pipeline-run-job-status.md §3).
@@ -15,4 +16,6 @@ type JobListEntry struct {
 	FirstSeenAt       time.Time
 	PipelineRunStatus string  // stage2_status (stage 2 list) or stage3_status (stage 3 list); empty for stage 1
 	Stage3Rationale   *string // from pipeline_run_jobs when listing stage 3; nil otherwise
+	Stage2Hits        []pipeline.Stage2Hit
+	Stage2Boost       int
 }

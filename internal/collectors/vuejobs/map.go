@@ -9,13 +9,13 @@ import (
 	domainutils "github.com/andrewmysliuk/jobhound_core/internal/domain/utils"
 )
 
-func jobsFromListing(rows []ListingJob) ([]schema.Job, error) {
+func jobsFromListing(rows []ListingJob, countries *utils.CountryResolver) ([]schema.Job, error) {
 	var out []schema.Job
 	for _, row := range rows {
 		if row.PROLocked {
 			continue
 		}
-		j, ok, err := jobFromListing(row)
+		j, ok, err := jobFromListing(row, countries)
 		if err != nil {
 			return nil, err
 		}
@@ -26,7 +26,7 @@ func jobsFromListing(rows []ListingJob) ([]schema.Job, error) {
 	return out, nil
 }
 
-func jobFromListing(row ListingJob) (schema.Job, bool, error) {
+func jobFromListing(row ListingJob, countries *utils.CountryResolver) (schema.Job, bool, error) {
 	title := strings.TrimSpace(row.Title)
 	company := strings.TrimSpace(row.Company)
 	if title == "" || company == "" {
@@ -57,15 +57,30 @@ func jobFromListing(row ListingJob) (schema.Job, bool, error) {
 	descPlain := utils.StripHTMLToPlainText(row.Description)
 	postedAt, _ := parsePublishedAt(row.PublishedAt)
 
+	workPlaceInputs := make([]string, 0, len(row.WorkPlace))
+	for _, w := range row.WorkPlace {
+		if s := strings.TrimSpace(w); s != "" {
+			workPlaceInputs = append(workPlaceInputs, s)
+		}
+	}
+	hiringCountries, hiringRegions, hiringRaw := utils.ParseHiringScope(countries, workPlaceInputs...)
+	countryCode := ""
+	if len(hiringCountries) > 0 {
+		countryCode = hiringCountries[0]
+	}
 	j := schema.Job{
-		Source:      SourceName,
-		Title:       title,
-		Company:     company,
-		URL:         listingURL,
-		ApplyURL:    applyURL,
-		Description: descPlain,
-		PostedAt:    postedAt,
-		Remote:      remoteFromWorkPlace(row.WorkPlace, title, descPlain),
+		Source:          SourceName,
+		Title:           title,
+		Company:         company,
+		URL:             listingURL,
+		ApplyURL:        applyURL,
+		Description:     descPlain,
+		PostedAt:        postedAt,
+		Remote:          remoteFromWorkPlace(row.WorkPlace, title, descPlain),
+		CountryCode:     countryCode,
+		HiringCountries: hiringCountries,
+		HiringRegions:   hiringRegions,
+		HiringRaw:       hiringRaw,
 	}
 	if err := domainutils.AssignStableID(&j); err != nil {
 		return schema.Job{}, false, err

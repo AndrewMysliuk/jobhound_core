@@ -9,6 +9,7 @@ import (
 	"github.com/andrewmysliuk/jobhound_core/internal/domain/schema"
 	"github.com/andrewmysliuk/jobhound_core/internal/llm"
 	"github.com/andrewmysliuk/jobhound_core/internal/pipeline"
+	pipelineschema "github.com/andrewmysliuk/jobhound_core/internal/pipeline/schema"
 	pipeutils "github.com/andrewmysliuk/jobhound_core/internal/pipeline/utils"
 	"github.com/andrewmysliuk/jobhound_core/internal/platform/logging"
 	"github.com/rs/zerolog"
@@ -20,9 +21,9 @@ type Pipeline struct {
 	Collector collectors.Collector
 	// Clock is used for stage 1 default date window; nil means time.Now.
 	Clock func() time.Time
-	// BroadRules and KeywordRules are per-run (event) parameters.
-	BroadRules   pipeline.BroadFilterRules
-	KeywordRules pipeline.KeywordRules
+	// BroadRules and Rules are per-run (event) parameters.
+	BroadRules pipeline.BroadFilterRules
+	Rules      []pipelineschema.Stage2Rule
 	// Profile is user CV / preferences text for stage 3.
 	Profile string
 
@@ -59,7 +60,7 @@ func (p *Pipeline) Run(ctx context.Context) error {
 		log.Error().Err(err).Msg("broad filter")
 		return err
 	}
-	stage2 := pipeutils.ApplyKeywordFilter(stage1, p.KeywordRules)
+	stage2 := pipeutils.JobsAfterStage2(stage1, p.Rules, nil)
 
 	scored, err := pipeutils.ScoreJobs(ctx, p.Profile, stage2, p.Scorer)
 	if err != nil {

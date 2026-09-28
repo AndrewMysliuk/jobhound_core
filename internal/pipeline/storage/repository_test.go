@@ -2,11 +2,13 @@ package storage
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/andrewmysliuk/jobhound_core/internal/pipeline"
+	pipelineschema "github.com/andrewmysliuk/jobhound_core/internal/pipeline/schema"
 	"github.com/andrewmysliuk/jobhound_core/internal/platform/pgsql"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
@@ -35,6 +37,9 @@ func testDB(t *testing.T) *gorm.DB {
 			posted_at TIMESTAMP,
 			is_remote INTEGER,
 			country_code TEXT NOT NULL DEFAULT '',
+			hiring_countries TEXT NOT NULL DEFAULT '[]',
+			hiring_regions TEXT NOT NULL DEFAULT '[]',
+			hiring_raw TEXT NOT NULL DEFAULT '',
 			salary_raw TEXT NOT NULL DEFAULT '',
 			tags TEXT NOT NULL DEFAULT '[]',
 			timezone_offsets TEXT NOT NULL DEFAULT '[]',
@@ -48,12 +53,15 @@ func testDB(t *testing.T) *gorm.DB {
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			created_at TIMESTAMP NOT NULL,
 			slot_id TEXT,
-			broad_filter_key_hash TEXT
+			broad_filter_key_hash TEXT,
+			rules TEXT NOT NULL DEFAULT '[]'
 		)`,
 		`CREATE TABLE pipeline_run_jobs (
 			pipeline_run_id INTEGER NOT NULL REFERENCES pipeline_runs(id) ON DELETE CASCADE,
 			job_id TEXT NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
 			stage2_status TEXT NOT NULL,
+			stage2_hits TEXT NOT NULL DEFAULT '[]',
+			stage2_boost INTEGER NOT NULL DEFAULT 0,
 			stage3_status TEXT,
 			stage3_rationale TEXT,
 			PRIMARY KEY (pipeline_run_id, job_id)
@@ -447,6 +455,102 @@ func TestRepository_ManualPatchStage2Bucket_clearsStage3(t *testing.T) {
 	require.Equal(t, string(pipeline.RunJobRejectedStage2), row.Stage2Status)
 	require.Nil(t, row.Stage3Status)
 	require.Nil(t, row.Stage3Rationale)
+}
+
+func TestRepository_UpsertRunJobStage2_hitsBoostAndUnknown(t *testing.T) {
+	db := testDB(t)
+	repo := NewRepository(pgsql.NewGetter(db))
+	ctx := context.Background()
+	runID, err := repo.CreateRun(ctx, nil)
+	require.NoError(t, err)
+	seedJob(t, db, "u1")
+
+	hits := []pipeline.Stage2Hit{
+		{RuleID: "penalty-remote", Action: string(pipelineschema.RuleActionPenalty), Matched: "remote"},
+		{RuleID: "flag-java", Action: string(pipelineschema.RuleActionFlag), Matched: "java"},
+	}
+	require.NoError(t, repo.UpsertRunJobStage2(ctx, runID, "u1", pipeline.RunJobUnknownStage2, hits, -3))
+
+	var row PipelineRunJob
+	require.NoError(t, db.Where("pipeline_run_id = ? AND job_id = 'u1'", runID).First(&row).Error)
+	require.Equal(t, string(pipeline.RunJobUnknownStage2), row.Stage2Status)
+	require.Equal(t, -3, row.Stage2Boost)
+	var gotHits []pipeline.Stage2Hit
+	require.NoError(t, json.Unmarshal(row.Stage2Hits, &gotHits))
+	require.Equal(t, hits, gotHits)
+}
+
+func TestRepository_SetRunRulesSnapshot(t *testing.T) {
+	db := testDB(t)
+	repo := NewRepository(pgsql.NewGetter(db))
+	ctx := context.Background()
+	runID, err := repo.CreateRun(ctx, nil)
+	require.NoError(t, err)
+
+	w := 2
+	rules := []pipelineschema.Stage2Rule{
+		{
+			ID:     "boost-go",
+			Field:  pipelineschema.RuleFieldTitle,
+			Op:     pipelineschema.RuleOpPhrase,
+			Values: []string{"go"},
+			Action: pipelineschema.RuleActionBoost,
+			Weight: &w,
+		},
+	}
+	rulesJSON, err := json.Marshal(rules)
+	require.NoError(t, err)
+	require.NoError(t, repo.SetRunRulesSnapshot(ctx, runID, rulesJSON))
+
+	var run PipelineRun
+	require.NoError(t, db.First(&run, runID).Error)
+	var got []pipelineschema.Stage2Rule
+	require.NoError(t, json.Unmarshal(run.Rules, &got))
+	require.Equal(t, rules, got)
+}
+
+func TestRepository_ListPassedStage2JobIDs_includesUnknownOrdersByBoost(t *testing.T) {
+	db := testDB(t)
+	repo := NewRepository(pgsql.NewGetter(db))
+	ctx := context.Background()
+	runID, err := repo.CreateRun(ctx, nil)
+	require.NoError(t, err)
+
+	for _, id := range []string{"low", "high", "unk"} {
+		seedJob(t, db, id)
+	}
+	tLow := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	tHigh := time.Date(2026, 3, 3, 0, 0, 0, 0, time.UTC)
+	tUnk := time.Date(2026, 3, 2, 0, 0, 0, 0, time.UTC)
+	require.NoError(t, db.Exec(`UPDATE jobs SET posted_at = ? WHERE id = 'low'`, tLow).Error)
+	require.NoError(t, db.Exec(`UPDATE jobs SET posted_at = ? WHERE id = 'high'`, tHigh).Error)
+	require.NoError(t, db.Exec(`UPDATE jobs SET posted_at = ? WHERE id = 'unk'`, tUnk).Error)
+
+	require.NoError(t, repo.UpsertRunJobStage2(ctx, runID, "low", pipeline.RunJobPassedStage2, nil, 1))
+	require.NoError(t, repo.UpsertRunJobStage2(ctx, runID, "high", pipeline.RunJobPassedStage2, nil, 5))
+	require.NoError(t, repo.UpsertRunJobStage2(ctx, runID, "unk", pipeline.RunJobUnknownStage2, nil, 5))
+	seedJob(t, db, "rej")
+	require.NoError(t, repo.UpsertRunJobStage2(ctx, runID, "rej", pipeline.RunJobRejectedStage2, nil, 99))
+
+	got, err := repo.ListPassedStage2JobIDs(ctx, runID)
+	require.NoError(t, err)
+	require.Equal(t, []string{"high", "unk", "low"}, got)
+}
+
+func TestRepository_SetRunJobStatus_unknownStage2ThenStage3(t *testing.T) {
+	db := testDB(t)
+	repo := NewRepository(pgsql.NewGetter(db))
+	ctx := context.Background()
+	runID, err := repo.CreateRun(ctx, nil)
+	require.NoError(t, err)
+	seedJob(t, db, "uz")
+	require.NoError(t, repo.SetRunJobStatus(ctx, runID, "uz", pipeline.RunJobUnknownStage2))
+	require.NoError(t, repo.SetRunJobStatus(ctx, runID, "uz", pipeline.RunJobRejectedStage3))
+
+	st, ok, err := repo.GetRunJobStatus(ctx, runID, "uz")
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Equal(t, pipeline.RunJobRejectedStage3, st)
 }
 
 func TestRepository_ManualPatchStage3Bucket(t *testing.T) {

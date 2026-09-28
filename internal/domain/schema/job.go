@@ -18,6 +18,12 @@ type Job struct {
 	Remote *bool
 	// CountryCode is ISO 3166-1 alpha-2 when known; empty string means unknown.
 	CountryCode string
+	// HiringCountries lists every ISO 3166-1 alpha-2 the listing is restricted to; nil/empty = not stated.
+	HiringCountries []string
+	// HiringRegions lists RegionCode values when the board states a region instead of countries; nil/empty = none.
+	HiringRegions []string
+	// HiringRaw is the board's restriction text verbatim; "" when absent.
+	HiringRaw string
 	// SalaryRaw is opaque compensation text from the board; empty if none (005 collectors).
 	SalaryRaw string
 	// Tags are skill/topic labels; nil or empty means none (persisted as JSON []).

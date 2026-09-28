@@ -28,6 +28,7 @@ const DefaultMaxPages = 5
 // RemotifyEurope fetches jobs via Next.js server actions and listing detail pages.
 type RemotifyEurope struct {
 	HTTPClient *http.Client
+	Countries  *utils.CountryResolver
 	// ListingURL defaults to DefaultListingURL.
 	ListingURL string
 	// MaxPages: 0 → DefaultMaxPages; -1 → no cap; >0 → explicit cap.
@@ -164,6 +165,22 @@ func (c *RemotifyEurope) fetchJobDetail(ctx context.Context, client *http.Client
 	if detail.RemoteKnown {
 		j.Remote = detail.Remote
 	}
+	telecommute := detail.RemoteKnown && detail.Remote != nil && *detail.Remote
+	hiringCountries, hiringRegions, hiringRaw := utils.ParseHiringScope(c.Countries, detail.LocationTexts...)
+	if telecommute && len(hiringCountries) == 0 && len(hiringRegions) == 0 {
+		hiringRegions = []string{schema.RegionCodeWorldwide.String()}
+	}
+	if len(hiringCountries) == 0 && len(hiringRegions) == 0 {
+		hiringRegions = []string{schema.RegionCodeEurope.String()}
+	}
+	countryCode := ""
+	if len(hiringCountries) > 0 {
+		countryCode = hiringCountries[0]
+	}
+	j.CountryCode = countryCode
+	j.HiringCountries = hiringCountries
+	j.HiringRegions = hiringRegions
+	j.HiringRaw = hiringRaw
 	if err := domainutils.AssignStableID(&j); err != nil {
 		return schema.Job{}, err
 	}

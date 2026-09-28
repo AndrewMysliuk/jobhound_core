@@ -32,6 +32,7 @@ const listingPageSizeHint = 25
 // Wellfound fetches role listing HTML then job detail pages (JSON-LD JobPosting).
 type Wellfound struct {
 	HTTPClient *http.Client
+	Countries  *utils.CountryResolver
 	// MaxPages: 0 → DefaultMaxPages; -1 → no cap; >0 → explicit cap.
 	MaxPages int
 	// MaxJobs stops after this many jobs (0 = unlimited).
@@ -101,7 +102,7 @@ func (c *Wellfound) fetchRole(ctx context.Context, slug string) ([]schema.Job, e
 		if err != nil {
 			continue
 		}
-		detail, err := ParseJobDetailHTML(string(detailHTML))
+		detail, err := ParseJobDetailHTML(string(detailHTML), c.Countries)
 		if err != nil {
 			continue
 		}
@@ -121,14 +122,20 @@ func (c *Wellfound) fetchRole(ctx context.Context, slug string) ([]schema.Job, e
 			continue
 		}
 		j := schema.Job{
-			Source:      SourceName,
-			Title:       title,
-			Company:     company,
-			URL:         canonURL,
-			ApplyURL:    "",
-			Description: detail.Description,
-			PostedAt:    detail.PostedAt,
-			Remote:      detail.Remote,
+			Source:          SourceName,
+			Title:           title,
+			Company:         company,
+			URL:             canonURL,
+			ApplyURL:        "",
+			Description:     detail.Description,
+			PostedAt:        detail.PostedAt,
+			Remote:          detail.Remote,
+			HiringCountries: detail.HiringCountries,
+			HiringRegions:   detail.HiringRegions,
+			HiringRaw:       detail.HiringRaw,
+		}
+		if len(detail.HiringCountries) > 0 {
+			j.CountryCode = detail.HiringCountries[0]
 		}
 		if err := domainutils.AssignStableID(&j); err != nil {
 			continue

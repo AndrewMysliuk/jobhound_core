@@ -135,6 +135,7 @@ func TestMigrations007PipelineTables_integration(t *testing.T) {
 		"created_at":            {"timestamp with time zone", "NO"},
 		"slot_id":               {"uuid", "YES"},
 		"broad_filter_key_hash": {"text", "YES"},
+		"rules":                 {"jsonb", "NO"},
 	})
 
 	prjCols, err := fetchTableColumns(sqlDB, "pipeline_run_jobs")
@@ -150,6 +151,8 @@ func TestMigrations007PipelineTables_integration(t *testing.T) {
 		"stage2_status":    {"text", "NO"},
 		"stage3_status":    {"text", "YES"},
 		"stage3_rationale": {"text", "YES"},
+		"stage2_hits":      {"jsonb", "NO"},
+		"stage2_boost":     {"integer", "NO"},
 	})
 
 	var nIdx int
@@ -180,6 +183,65 @@ func TestMigrations007PipelineTables_integration(t *testing.T) {
 	}
 	if delRule != "CASCADE" {
 		t.Fatalf("pipeline_run_jobs.job_id ON DELETE: got %q want CASCADE", delRule)
+	}
+}
+
+// TestMigrationsStage2RuleHits_integration asserts UNKNOWN_STAGE_2 CHECK and stage2 hits / boost / rules snapshot (stage2-field-rules).
+func TestMigrationsStage2RuleHits_integration(t *testing.T) {
+	sqlDB := migrateUpAndOpenDB(t)
+	t.Cleanup(func() { _ = sqlDB.Close() })
+
+	ctx := context.Background()
+	tx, err := sqlDB.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = tx.Rollback() })
+
+	jobID := "stage2_rule_hits_integration_job"
+	_, err = tx.ExecContext(ctx, `
+		INSERT INTO jobs (id, source, title, company, url, description, created_at, updated_at)
+		VALUES ($1, 's', 't', 'c', 'https://example.com', 'd', NOW(), NOW())`,
+		jobID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var runID int64
+	if err := tx.QueryRowContext(ctx, `
+		INSERT INTO pipeline_runs (rules) VALUES ('[{"id":"r1"}]'::jsonb) RETURNING id`,
+	).Scan(&runID); err != nil {
+		t.Fatal(err)
+	}
+
+	hits := `[{"rule_id":"r1","action":"boost","matched":"go"}]`
+	_, err = tx.ExecContext(ctx, `
+		INSERT INTO pipeline_run_jobs (pipeline_run_id, job_id, stage2_status, stage2_hits, stage2_boost, stage3_status)
+		VALUES ($1, $2, 'UNKNOWN_STAGE_2', $3::jsonb, -2, 'PASSED_STAGE_3')`,
+		runID, jobID, hits)
+	if err != nil {
+		t.Fatalf("UNKNOWN_STAGE_2 with stage3 should be allowed: %v", err)
+	}
+
+	jobID2 := jobID + "_2"
+	_, err = tx.ExecContext(ctx, `
+		INSERT INTO jobs (id, source, title, company, url, description, created_at, updated_at)
+		VALUES ($1, 's', 't', 'c', 'https://example.com/2', 'd', NOW(), NOW())`,
+		jobID2)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = tx.ExecContext(ctx, `
+		INSERT INTO pipeline_run_jobs (pipeline_run_id, job_id, stage2_status, stage3_status)
+		VALUES ($1, $2, 'REJECTED_STAGE_2', 'PASSED_STAGE_3')`,
+		runID, jobID2)
+	if err == nil {
+		t.Fatal("REJECTED_STAGE_2 must not take stage3_status")
+	}
+
+	if err := tx.Commit(); err != nil {
+		t.Fatal(err)
 	}
 }
 

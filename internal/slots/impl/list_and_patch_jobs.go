@@ -20,13 +20,16 @@ func normalizeListStatusFilter(stage int, raw string) (string, error) {
 	if s == "" {
 		return "", nil
 	}
+	if stage == 2 && s == pipeline.Stage2ListFilterEligible {
+		return pipeline.Stage2ListFilterEligible, nil
+	}
 	st := pipeline.RunJobStatus(s)
 	if !st.Valid() {
 		return "", fmt.Errorf("invalid status")
 	}
 	switch stage {
 	case 2:
-		if st != pipeline.RunJobPassedStage2 && st != pipeline.RunJobRejectedStage2 {
+		if st != pipeline.RunJobPassedStage2 && st != pipeline.RunJobRejectedStage2 && st != pipeline.RunJobUnknownStage2 {
 			return "", fmt.Errorf("status not valid for stage 2 list")
 		}
 	case 3:
@@ -37,29 +40,6 @@ func normalizeListStatusFilter(stage int, raw string) (string, error) {
 		return "", fmt.Errorf("invalid stage")
 	}
 	return s, nil
-}
-
-func jobListItemFromEntry(e jobschema.JobListEntry, includePipelineStatus bool) schema.JobListItem {
-	item := schema.JobListItem{
-		JobID:           e.Job.ID,
-		Title:           e.Job.Title,
-		Company:         e.Job.Company,
-		Description:     e.Job.Description,
-		SourceID:        e.Job.Source,
-		URL:             e.Job.URL,
-		ApplyURL:        e.Job.ApplyURL,
-		FirstSeenAt:     e.FirstSeenAt.UTC(),
-		Stage3Rationale: e.Stage3Rationale,
-	}
-	if includePipelineStatus && e.PipelineRunStatus != "" {
-		st := e.PipelineRunStatus
-		item.Status = &st
-	}
-	if !e.Job.PostedAt.IsZero() {
-		t := e.Job.PostedAt.UTC()
-		item.PostedAt = &t
-	}
-	return item
 }
 
 // ListJobs implements [slots.API.ListJobs].
@@ -117,7 +97,7 @@ func (s *Service) ListJobs(ctx context.Context, p slotschema.ListJobsParams) (sc
 	includePRStatus := p.Stage == 2 || p.Stage == 3
 	items := make([]schema.JobListItem, 0, len(entries))
 	for _, e := range entries {
-		item := jobListItemFromEntry(e, includePRStatus)
+		item := slotschema.JobListItemFromEntry(e, includePRStatus, p.Stage2Debug)
 		if p.Stage != 3 {
 			item.Stage3Rationale = nil
 		}

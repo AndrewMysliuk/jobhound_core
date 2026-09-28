@@ -90,6 +90,15 @@ func domainJobEqual(a, b schema.Job) bool {
 	if a.CountryCode != b.CountryCode {
 		return false
 	}
+	if a.HiringRaw != b.HiringRaw {
+		return false
+	}
+	if !stringSliceEqual(a.HiringCountries, b.HiringCountries) {
+		return false
+	}
+	if !stringSliceEqual(a.HiringRegions, b.HiringRegions) {
+		return false
+	}
 	switch {
 	case a.UserID == nil && b.UserID == nil:
 	case a.UserID == nil || b.UserID == nil:

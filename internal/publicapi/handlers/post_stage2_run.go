@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 
+	pipeutils "github.com/andrewmysliuk/jobhound_core/internal/pipeline/utils"
 	"github.com/andrewmysliuk/jobhound_core/internal/platform/logging"
 	"github.com/andrewmysliuk/jobhound_core/internal/publicapi/schema"
 	apputils "github.com/andrewmysliuk/jobhound_core/internal/publicapi/utils"
@@ -19,7 +20,11 @@ func (h *HTTPHandler) postStage2Run(w http.ResponseWriter, r *http.Request) {
 	if !apputils.ReadValidatedJSON(w, r, logH, schemaStage2Run, &body) {
 		return
 	}
-	out, err := h.deps.Slots.RunStage2(ctx, slotschema.RunStage2Params{SlotID: slotID, Include: body.Include, Exclude: body.Exclude})
+	if err := pipeutils.ValidateStage2Rules(body.Rules); err != nil {
+		apputils.WriteAPIError(w, http.StatusBadRequest, "invalid_body", err.Error())
+		return
+	}
+	out, err := h.deps.Slots.RunStage2(ctx, slotschema.RunStage2Params{SlotID: slotID, Rules: body.Rules})
 	if errors.Is(err, slots.ErrNotFound) {
 		apputils.WriteAPIError(w, http.StatusNotFound, "not_found", "slot not found")
 		return

@@ -38,8 +38,11 @@ func TestActivities_RunPipelineStages(t *testing.T) {
 			RemoteOnly:       true,
 			CountryAllowlist: []string{"de"},
 		},
-		KeywordRules: pipeline.KeywordRules{Include: []string{"backend"}},
-		Profile:      "cv",
+		Rules: []pipelineschema.Stage2Rule{
+			stage2BoostPhraseRule("need-backend", "backend", 1),
+			stage2RejectPhraseRule("no-systems", "systems"),
+		},
+		Profile: "cv",
 	})
 	require.NoError(t, err)
 	require.Len(t, out.AfterBroad, 1)
@@ -49,3 +52,18 @@ func TestActivities_RunPipelineStages(t *testing.T) {
 }
 
 func ptr(b bool) *bool { return &b }
+
+func stage2BoostPhraseRule(id, phrase string, weight int) pipelineschema.Stage2Rule {
+	w := weight
+	return pipelineschema.Stage2Rule{
+		ID: id, Field: pipelineschema.RuleFieldTitleBody, Op: pipelineschema.RuleOpPhrase,
+		Values: []string{phrase}, Action: pipelineschema.RuleActionBoost, Weight: &w,
+	}
+}
+
+func stage2RejectPhraseRule(id, phrase string) pipelineschema.Stage2Rule {
+	return pipelineschema.Stage2Rule{
+		ID: id, Field: pipelineschema.RuleFieldTitleBody, Op: pipelineschema.RuleOpPhrase,
+		Values: []string{phrase}, Action: pipelineschema.RuleActionReject,
+	}
+}

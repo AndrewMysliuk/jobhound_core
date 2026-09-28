@@ -9,10 +9,10 @@ import (
 
 // PipelineStagesInput is the payload for RunPipelineStages.
 type PipelineStagesInput struct {
-	Jobs         []jobdata.Job
-	BroadRules   pipeline.BroadFilterRules
-	KeywordRules pipeline.KeywordRules
-	Profile      string
+	Jobs       []jobdata.Job
+	BroadRules pipeline.BroadFilterRules
+	Rules      []Stage2Rule
+	Profile    string
 }
 
 // PipelineStagesOutput holds intermediate lists and the final scored jobs (stage 3).
@@ -27,10 +27,10 @@ type PipelineStagesOutput struct {
 type PersistPipelineStage2Input struct {
 	PipelineRunID int64
 	// SlotID when set and Jobs is empty: activity loads PASSED_STAGE_1 jobs for the slot from DB (008).
-	SlotID uuid.UUID
-	Jobs   []jobdata.Job
-	BroadRules    pipeline.BroadFilterRules
-	KeywordRules  pipeline.KeywordRules
+	SlotID     uuid.UUID
+	Jobs       []jobdata.Job
+	BroadRules pipeline.BroadFilterRules
+	Rules      []Stage2Rule
 	// BroadFilterKeyHash is optional SHA-256 hex of the canonical broad filter key (006); persisted on pipeline_runs when non-empty.
 	BroadFilterKeyHash string
 }
