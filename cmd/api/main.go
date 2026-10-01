@@ -20,6 +20,7 @@ import (
 	slotsimpl "github.com/andrewmysliuk/jobhound_core/internal/slots/impl"
 	slotstorage "github.com/andrewmysliuk/jobhound_core/internal/slots/storage"
 	slotsutils "github.com/andrewmysliuk/jobhound_core/internal/slots/utils"
+	zlog "github.com/rs/zerolog/log"
 	"go.temporal.io/sdk/client"
 )
 
@@ -28,6 +29,7 @@ const shutdownTimeout = 30 * time.Second
 func main() {
 	appCfg := config.Load()
 	log := logging.NewRoot(appCfg.Logging.Level, appCfg.Logging.Format, "api")
+	zlog.Logger = log
 
 	if appCfg.Database.URL == "" {
 		log.Error().Str("env", config.EnvDatabaseURL).Msg("required database URL missing")

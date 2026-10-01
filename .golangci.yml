@@ -1,0 +1,36 @@
+version: "2"
+
+linters:
+  default: none
+  enable:
+    - errcheck
+    - errorlint
+    - govet
+    - staticcheck
+    - unused
+    - depguard
+  settings:
+    depguard:
+      rules:
+        impl-no-temporal-sdk:
+          list-mode: lax
+          files:
+            - "**/impl/*.go"
+            - "**/impl/**/*.go"
+          deny:
+            - pkg: go.temporal.io/sdk
+              desc: Temporal SDK stays in workflows, not impl
+        domain-no-gorm:
+          list-mode: lax
+          files:
+            - "internal/domain/**"
+            - "**/internal/domain/**"
+          deny:
+            - pkg: gorm.io/gorm
+              desc: domain must not import GORM
+            - pkg: gorm.io/driver
+              desc: domain must not import GORM drivers
+
+formatters:
+  enable:
+    - gofmt

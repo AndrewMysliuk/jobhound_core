@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -113,11 +114,16 @@ func (c *EuropeRemotely) Fetch(ctx context.Context) ([]schema.Job, error) {
 
 			detailHTML, err := httpGet(ctx, client, listingURL)
 			if err != nil {
-				return nil, fmt.Errorf("detail %s: %w", listingURL, err)
+				if ctx.Err() != nil {
+					return nil, err
+				}
+				skipDetail(ctx, "detail fetch", listingURL, err)
+				continue
 			}
 			detail, err := parseJobDetailHTML(string(detailHTML), base)
 			if err != nil {
-				return nil, fmt.Errorf("detail %s: %w", listingURL, err)
+				skipDetail(ctx, "detail parse", listingURL, err)
+				continue
 			}
 
 			title := strings.TrimSpace(detail.title)
@@ -125,14 +131,16 @@ func (c *EuropeRemotely) Fetch(ctx context.Context) ([]schema.Job, error) {
 				title = strings.TrimSpace(card.title)
 			}
 			if title == "" {
-				return nil, fmt.Errorf("detail %s: empty title", listingURL)
+				skipDetail(ctx, "detail empty title", listingURL, fmt.Errorf("empty title"))
+				continue
 			}
 			company := strings.TrimSpace(detail.company)
 			if company == "" {
 				company = strings.TrimSpace(card.company)
 			}
 			if company == "" {
-				return nil, fmt.Errorf("detail %s: empty company", listingURL)
+				skipDetail(ctx, "detail empty company", listingURL, fmt.Errorf("empty company"))
+				continue
 			}
 
 			warn := func(raw string) {
@@ -202,6 +210,10 @@ func (c *EuropeRemotely) FetchWithSlotSearch(ctx context.Context, slotQuery stri
 	form.Set("search_keywords", q)
 	c2.FeedForm = form
 	return c2.Fetch(ctx)
+}
+
+func skipDetail(ctx context.Context, op, listingURL string, err error) {
+	slog.WarnContext(ctx, "europe_remotely: fetch skip", "source", SourceName, "op", op, "url", listingURL, "err", err)
 }
 
 func (c *EuropeRemotely) maxFeedPagesEffective() int {
@@ -279,7 +291,7 @@ func postForm(ctx context.Context, client *http.Client, rawURL string, form url.
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	b, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
@@ -300,7 +312,7 @@ func httpGet(ctx context.Context, client *http.Client, rawURL string) ([]byte, e
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	b, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err

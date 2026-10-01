@@ -13,7 +13,7 @@ import (
 )
 
 var (
-	chunkPathRE = regexp.MustCompile(`/_next/static/chunks/[^"'\s<>]+\.js`)
+	chunkPathRE    = regexp.MustCompile(`/_next/static/chunks/[^"'\s<>]+\.js`)
 	jobsListCallRE = regexp.MustCompile(`\(\d+,\w+\.(\w+)\)\(24,new Date\(\)\.toISOString\(\)`)
 )
 
@@ -42,7 +42,7 @@ func DiscoverNextAction(ctx context.Context, client *http.Client, listingURL str
 	if err != nil {
 		return "", fmt.Errorf("remotify europe: listing page: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	html, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", err
@@ -79,7 +79,7 @@ func fetchJobsActionFromChunkURL(ctx context.Context, client *http.Client, chunk
 	if err != nil {
 		return "", false, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	b, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", false, err

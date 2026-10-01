@@ -152,6 +152,6 @@ func loadCountryResolver(dataDir string) (*utils.CountryResolver, error) {
 	if err != nil {
 		return nil, fmt.Errorf("collectors bootstrap: countries file %q: %w", p, err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	return utils.LoadCountryResolver(f)
 }

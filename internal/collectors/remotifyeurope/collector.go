@@ -214,7 +214,7 @@ func (c *RemotifyEurope) postFlight(ctx context.Context, client *http.Client, li
 	if err != nil {
 		return nil, fmt.Errorf("remotify europe: listing post: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	b, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
@@ -235,7 +235,7 @@ func (c *RemotifyEurope) getHTML(ctx context.Context, client *http.Client, u str
 	if err != nil {
 		return nil, fmt.Errorf("remotify europe: GET %s: %w", u, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	b, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err

@@ -8,7 +8,7 @@ import (
 
 	jobdata "github.com/andrewmysliuk/jobhound_core/internal/domain/schema"
 	jobsschema "github.com/andrewmysliuk/jobhound_core/internal/jobs/schema"
-	"github.com/andrewmysliuk/jobhound_core/internal/pipeline"
+	pipelineschema "github.com/andrewmysliuk/jobhound_core/internal/pipeline/schema"
 	"github.com/andrewmysliuk/jobhound_core/internal/platform/pgsql"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -203,7 +203,7 @@ func TestRepository_SaveIngest_descriptionOnlyDoesNotTouchPipelineRunJobs(t *tes
 	if err := db.Exec(`INSERT INTO pipeline_runs (id, created_at, updated_at) VALUES (1, ?, ?)`, now, now).Error; err != nil {
 		t.Fatal(err)
 	}
-	wantStatus := string(pipeline.RunJobPassedStage2)
+	wantStatus := string(pipelineschema.RunJobPassedStage2)
 	if err := db.Exec(
 		`INSERT INTO pipeline_run_jobs (pipeline_run_id, job_id, stage2_status) VALUES (1, 'j1', ?)`,
 		wantStatus,

@@ -97,10 +97,7 @@ func (c *Himalayas) fetchBrowseMode(ctx context.Context, client *http.Client, ma
 	offset := 0
 	limit := DefaultPageLimit
 	pages := 0
-	for {
-		if maxPages > 0 && pages >= maxPages {
-			break
-		}
+	for maxPages <= 0 || pages < maxPages {
 		u, err := url.Parse(base)
 		if err != nil {
 			return nil, fmt.Errorf("himalayas browse url: %w", err)
@@ -155,10 +152,7 @@ func (c *Himalayas) fetchSearchMode(ctx context.Context, client *http.Client, ma
 
 	var all []schema.Job
 	pages := 0
-	for {
-		if maxPages > 0 && pages >= maxPages {
-			break
-		}
+	for maxPages <= 0 || pages < maxPages {
 		u, err := url.Parse(base)
 		if err != nil {
 			return nil, fmt.Errorf("himalayas search url: %w", err)
@@ -214,7 +208,7 @@ func (c *Himalayas) getEnvelope(ctx context.Context, client *http.Client, rawURL
 	if err != nil {
 		return apiEnvelope{}, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return apiEnvelope{}, err

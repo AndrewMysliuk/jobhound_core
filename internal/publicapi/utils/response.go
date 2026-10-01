@@ -6,10 +6,12 @@ import (
 	"errors"
 	"io"
 	"net/http"
-	"strings"
 
+	"github.com/andrewmysliuk/jobhound_core/internal/pipeline"
 	"github.com/andrewmysliuk/jobhound_core/internal/publicapi/schema"
+	"github.com/andrewmysliuk/jobhound_core/internal/slots"
 	"github.com/rs/zerolog"
+	zlog "github.com/rs/zerolog/log"
 )
 
 const maxJSONBodyBytes = 1 << 20
@@ -21,41 +23,116 @@ func WriteJSON(w http.ResponseWriter, status int, v any) {
 	_ = json.NewEncoder(w).Encode(v)
 }
 
-// WriteAPIError writes the standard error envelope (400, 404, 409, 422, 500).
-// For 500, message is replaced with a generic phrase so callers never leak internals.
-func WriteAPIError(w http.ResponseWriter, status int, code, message string) {
-	if status == http.StatusInternalServerError {
-		message = "internal server error"
+type sentinelCode struct {
+	err  error
+	code schema.APIErrorCode
+}
+
+// sentinelCodes is the contracts order. Slot cap is the same code with a different body.
+var sentinelCodes = []sentinelCode{
+	{slots.ErrNotFound, schema.APIErrorCodeSlotNotFound},
+	{slots.ErrSlotLimitReached, schema.APIErrorCodeSlotLimitReached},
+	{slots.ErrInvalidSlotName, schema.APIErrorCodeValidationFailed},
+	{slots.ErrIdempotencyKeyConflict, schema.APIErrorCodeIdempotencyKeyConflict},
+	{slots.ErrInvalidIdempotencyKey, schema.APIErrorCodeInvalidIdempotencyKey},
+	{slots.ErrStageAlreadyRunning, schema.APIErrorCodeStageAlreadyRunning},
+	{slots.ErrNoPipelineRun, schema.APIErrorCodeNoPipelineRun},
+	{slots.ErrProfileRequired, schema.APIErrorCodeProfileRequired},
+	{slots.ErrInvalidJobListQuery, schema.APIErrorCodeInvalidQuery},
+	{pipeline.ErrManualPatchNotInScope, schema.APIErrorCodeJobNotInScope},
+}
+
+// WriteError resolves err to a registered code and writes the envelope.
+// A typed APIError wins, then a sentinel, then INTERNAL.UNEXPECTED.
+// The 500 message is only the registry sentence.
+func WriteError(w http.ResponseWriter, err error) {
+	var apiErr schema.APIError
+	if errors.As(err, &apiErr) {
+		spec, ok := schema.Lookup(apiErr.Code)
+		if !ok {
+			writeUnexpected(w, err)
+			return
+		}
+		if apiErr.Cause != nil {
+			logCause(spec.Code, apiErr.Cause)
+		}
+		writeSpec(w, spec)
+		return
 	}
-	WriteJSON(w, status, schema.APIErrorBody{
-		Error: schema.APIErrorDetail{Code: code, Message: strings.TrimSpace(message)},
+	for _, row := range sentinelCodes {
+		if errors.Is(err, row.err) {
+			if row.code == schema.APIErrorCodeSlotLimitReached {
+				WriteSlotLimitReached(w)
+				return
+			}
+			spec, ok := schema.Lookup(row.code)
+			if !ok {
+				writeUnexpected(w, err)
+				return
+			}
+			writeSpec(w, spec)
+			return
+		}
+	}
+	writeUnexpected(w, err)
+}
+
+func writeUnexpected(w http.ResponseWriter, err error) {
+	logCause(schema.APIErrorCodeUnexpected, err)
+	spec, ok := schema.Lookup(schema.APIErrorCodeUnexpected)
+	if !ok {
+		WriteJSON(w, http.StatusInternalServerError, schema.APIErrorBody{
+			Error: schema.APIErrorDetail{Code: schema.APIErrorCodeUnexpected.String(), Message: "Internal server error."},
+		})
+		return
+	}
+	writeSpec(w, spec)
+}
+
+func writeSpec(w http.ResponseWriter, spec schema.APIErrorSpec) {
+	WriteJSON(w, spec.Status, schema.APIErrorBody{
+		Error: schema.APIErrorDetail{Code: spec.Code.String(), Message: spec.Message},
 	})
 }
 
-// WriteSlotLimitReached writes POST /slots 409 with top-level limit (contracts/http-public-api.md §4.3).
-func WriteSlotLimitReached(w http.ResponseWriter, message string) {
-	if strings.TrimSpace(message) == "" {
-		message = "slot limit reached"
+func logCause(code schema.APIErrorCode, cause error) {
+	ev := zlog.Error()
+	if code == schema.APIErrorCodeValidationFailed {
+		ev = zlog.Warn()
 	}
-	WriteJSON(w, http.StatusConflict, schema.SlotLimitReachedBody{
-		Error: schema.APIErrorDetail{Code: "slot_limit_reached", Message: message},
+	ev = ev.Str("code", code.String())
+	if cause != nil {
+		ev = ev.Err(cause)
+	}
+	ev.Msg("api error")
+}
+
+// WriteSlotLimitReached writes POST /slots 409 with top-level limit.
+func WriteSlotLimitReached(w http.ResponseWriter) {
+	spec, ok := schema.Lookup(schema.APIErrorCodeSlotLimitReached)
+	if !ok {
+		writeUnexpected(w, schema.APIError{Code: schema.APIErrorCodeSlotLimitReached})
+		return
+	}
+	WriteJSON(w, spec.Status, schema.SlotLimitReachedBody{
+		Error: schema.APIErrorDetail{Code: spec.Code.String(), Message: spec.Message},
 		Limit: 3,
 	})
 }
 
-// ReadJSON decodes a JSON body (max 1 MiB). On failure it writes 400 invalid_json and returns false.
+// ReadJSON decodes a JSON body (max 1 MiB). On failure it writes HTTP.INVALID_JSON and returns false.
 func ReadJSON(w http.ResponseWriter, r *http.Request, log zerolog.Logger, dst any) bool {
 	r.Body = http.MaxBytesReader(w, r.Body, maxJSONBodyBytes)
 	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(dst); err != nil {
 		log.Error().Err(err).Msg("decode json body")
-		WriteAPIError(w, http.StatusBadRequest, "invalid_json", "request body is not valid JSON")
+		WriteError(w, schema.APIError{Code: schema.APIErrorCodeInvalidJSON})
 		return false
 	}
 	if err := discardExtraJSON(dec); err != nil {
 		log.Error().Err(err).Msg("discard extra json")
-		WriteAPIError(w, http.StatusBadRequest, "invalid_json", "request body is not valid JSON")
+		WriteError(w, schema.APIError{Code: schema.APIErrorCodeInvalidJSON})
 		return false
 	}
 	return true
@@ -68,30 +145,30 @@ func ReadValidatedJSON(w http.ResponseWriter, r *http.Request, log zerolog.Logge
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		log.Error().Err(err).Msg("read json body")
-		WriteAPIError(w, http.StatusBadRequest, "invalid_json", "request body is not valid JSON")
+		WriteError(w, schema.APIError{Code: schema.APIErrorCodeInvalidJSON})
 		return false
 	}
 	var instance any
 	if err := json.Unmarshal(body, &instance); err != nil {
 		log.Error().Err(err).Msg("decode json for validation")
-		WriteAPIError(w, http.StatusBadRequest, "invalid_json", "request body is not valid JSON")
+		WriteError(w, schema.APIError{Code: schema.APIErrorCodeInvalidJSON})
 		return false
 	}
 	if err := ValidateJSONInstance(schemaBytes, instance); err != nil {
 		log.Warn().Err(err).Msg("json schema validation")
-		WriteAPIError(w, http.StatusBadRequest, "validation_error", err.Error())
+		WriteError(w, schema.APIError{Code: schema.APIErrorCodeValidationFailed})
 		return false
 	}
 	dec := json.NewDecoder(bytes.NewReader(body))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(dst); err != nil {
 		log.Error().Err(err).Msg("decode json body")
-		WriteAPIError(w, http.StatusBadRequest, "invalid_json", "request body is not valid JSON")
+		WriteError(w, schema.APIError{Code: schema.APIErrorCodeInvalidJSON})
 		return false
 	}
 	if err := discardExtraJSON(dec); err != nil {
 		log.Error().Err(err).Msg("discard extra json")
-		WriteAPIError(w, http.StatusBadRequest, "invalid_json", "request body is not valid JSON")
+		WriteError(w, schema.APIError{Code: schema.APIErrorCodeInvalidJSON})
 		return false
 	}
 	return true

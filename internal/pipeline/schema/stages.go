@@ -1,16 +1,15 @@
-// Package schema holds module-local DTOs for pipeline: Temporal activity payloads (stage rules stay at module root).
+// Package schema holds module-local DTOs for pipeline: Temporal activity payloads and stage rule types.
 package schema
 
 import (
 	jobdata "github.com/andrewmysliuk/jobhound_core/internal/domain/schema"
-	"github.com/andrewmysliuk/jobhound_core/internal/pipeline"
 	"github.com/google/uuid"
 )
 
 // PipelineStagesInput is the payload for RunPipelineStages.
 type PipelineStagesInput struct {
 	Jobs       []jobdata.Job
-	BroadRules pipeline.BroadFilterRules
+	BroadRules BroadFilterRules
 	Rules      []Stage2Rule
 	Profile    string
 }
@@ -29,7 +28,7 @@ type PersistPipelineStage2Input struct {
 	// SlotID when set and Jobs is empty: activity loads PASSED_STAGE_1 jobs for the slot from DB (008).
 	SlotID     uuid.UUID
 	Jobs       []jobdata.Job
-	BroadRules pipeline.BroadFilterRules
+	BroadRules BroadFilterRules
 	Rules      []Stage2Rule
 	// BroadFilterKeyHash is optional SHA-256 hex of the canonical broad filter key (006); persisted on pipeline_runs when non-empty.
 	BroadFilterKeyHash string

@@ -106,10 +106,7 @@ func (c *WorkingNomads) Fetch(ctx context.Context) ([]schema.Job, error) {
 	var all []schema.Job
 	from := 0
 	pagesDone := 0
-	for {
-		if maxPages > 0 && pagesDone >= maxPages {
-			break
-		}
+	for maxPages <= 0 || pagesDone < maxPages {
 		reqBody := esSearchRequest{
 			TrackTotalHits: true,
 			From:           from,
@@ -192,7 +189,7 @@ func postJSON(ctx context.Context, client *http.Client, rawURL string, payload [
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	b, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err

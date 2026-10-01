@@ -6,7 +6,7 @@ ENV_FILE ?= .env
 # Pass --env-file only when present (compose still auto-loads .env for interpolation when file exists).
 COMPOSE_ENV := $(shell test -f $(ENV_FILE) && printf '%s' '--env-file $(ENV_FILE)')
 
-.PHONY: build build-retention run run-debug run-worker test test-integration fmt vet tidy migrate-up migrate-down migrate-version \
+.PHONY: build build-retention run run-debug run-worker test test-integration fmt vet lint tidy migrate-up migrate-down migrate-version \
 	docker-up docker-down docker-down-volumes docker-ps docker-logs docker-migrate
 
 build:
@@ -38,6 +38,9 @@ fmt:
 
 vet:
 	go vet ./...
+
+lint:
+	golangci-lint run
 
 tidy:
 	go mod tidy

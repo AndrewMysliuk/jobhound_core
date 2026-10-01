@@ -182,7 +182,7 @@ func (a *Activities) RunPersistPipelineStage3(ctx context.Context, in pipelinesc
 		if cur, ok, err := a.Runs.GetRunJobStatus(ctx, in.PipelineRunID, id); err != nil {
 			log.Error().Err(err).Str("job_id", id).Msg("get run job status")
 			return nil, err
-		} else if ok && (cur == pipeline.RunJobPassedStage3 || cur == pipeline.RunJobRejectedStage3) {
+		} else if ok && (cur == pipelineschema.RunJobPassedStage3 || cur == pipelineschema.RunJobRejectedStage3) {
 			continue
 		}
 		job, err := a.Jobs.GetByID(ctx, id)

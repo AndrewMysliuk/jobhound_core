@@ -2,6 +2,7 @@ package ingest
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/google/uuid"
@@ -83,7 +84,7 @@ func (c *RedisCoordinator) Begin(ctx context.Context, slotID uuid.UUID, sourceID
 		Mode: "nx",
 		TTL:  c.lockTTL,
 	}).Err()
-	if err == redis.Nil {
+	if errors.Is(err, redis.Nil) {
 		return nil, ErrLockHeld
 	}
 	if err != nil {

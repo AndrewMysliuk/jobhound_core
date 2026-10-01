@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/andrewmysliuk/jobhound_core/internal/domain/schema"
-	"github.com/andrewmysliuk/jobhound_core/internal/pipeline"
 	pipelineschema "github.com/andrewmysliuk/jobhound_core/internal/pipeline/schema"
 	pipeutils "github.com/andrewmysliuk/jobhound_core/internal/pipeline/utils"
 	"github.com/stretchr/testify/require"
@@ -24,14 +23,14 @@ func TestStage2Rules_phraseCSharpAndNegation(t *testing.T) {
 		ID: "csharp", Field: pipelineschema.RuleFieldTitle, Op: pipelineschema.RuleOpPhrase,
 		Values: []string{"c#"}, Action: pipelineschema.RuleActionReject,
 	}})
-	require.Equal(t, pipeline.RunJobRejectedStage2, ev.Status)
+	require.Equal(t, pipelineschema.RunJobRejectedStage2, ev.Status)
 
 	jOnCall := schema.Job{Title: "SRE", Description: "includes on-call rotation"}
 	ev = evalStage2(t, jOnCall, []pipelineschema.Stage2Rule{{
 		ID: "oncall", Field: pipelineschema.RuleFieldBody, Op: pipelineschema.RuleOpPhrase,
 		Values: []string{"on-call"}, Action: pipelineschema.RuleActionFlag,
 	}})
-	require.Equal(t, pipeline.RunJobUnknownStage2, ev.Status)
+	require.Equal(t, pipelineschema.RunJobUnknownStage2, ev.Status)
 	require.Len(t, ev.Hits, 1)
 
 	jNoOnCall := schema.Job{Title: "SRE", Description: "no on-call duty here"}
@@ -39,7 +38,7 @@ func TestStage2Rules_phraseCSharpAndNegation(t *testing.T) {
 		ID: "oncall", Field: pipelineschema.RuleFieldBody, Op: pipelineschema.RuleOpPhrase,
 		Values: []string{"on call"}, NegationWindow: 3, Action: pipelineschema.RuleActionFlag,
 	}})
-	require.Equal(t, pipeline.RunJobUnknownStage2, ev.Status)
+	require.Equal(t, pipelineschema.RunJobUnknownStage2, ev.Status)
 	require.Empty(t, ev.Hits)
 
 	jNetEmbed := schema.Job{Title: "Architect", Description: "service.network design"}
@@ -47,7 +46,7 @@ func TestStage2Rules_phraseCSharpAndNegation(t *testing.T) {
 		ID: "dotnet", Field: pipelineschema.RuleFieldBody, Op: pipelineschema.RuleOpPhrase,
 		Values: []string{".net"}, Action: pipelineschema.RuleActionReject,
 	}})
-	require.Equal(t, pipeline.RunJobUnknownStage2, ev.Status)
+	require.Equal(t, pipelineschema.RunJobUnknownStage2, ev.Status)
 	require.Empty(t, ev.Hits)
 }
 
@@ -58,13 +57,13 @@ func TestStage2Rules_titlePhraseDoesNotSeeBody(t *testing.T) {
 		ID: "t", Field: pipelineschema.RuleFieldTitle, Op: pipelineschema.RuleOpPhrase,
 		Values: []string{"backend"}, Action: pipelineschema.RuleActionReject,
 	}})
-	require.Equal(t, pipeline.RunJobUnknownStage2, ev.Status)
+	require.Equal(t, pipelineschema.RunJobUnknownStage2, ev.Status)
 
 	ev = evalStage2(t, j, []pipelineschema.Stage2Rule{{
 		ID: "tb", Field: pipelineschema.RuleFieldTitleBody, Op: pipelineschema.RuleOpPhrase,
 		Values: []string{"backend"}, Action: pipelineschema.RuleActionReject,
 	}})
-	require.Equal(t, pipeline.RunJobRejectedStage2, ev.Status)
+	require.Equal(t, pipelineschema.RunJobRejectedStage2, ev.Status)
 }
 
 func TestStage2Rules_countriesAllowedParsing(t *testing.T) {
@@ -88,12 +87,12 @@ func TestStage2Rules_countriesExcludesWhen(t *testing.T) {
 		Values: []string{"RO"}, Action: pipelineschema.RuleActionReject,
 	}
 	ev := evalStage2(t, j, []pipelineschema.Stage2Rule{explicit})
-	require.Equal(t, pipeline.RunJobUnknownStage2, ev.Status)
+	require.Equal(t, pipelineschema.RunJobUnknownStage2, ev.Status)
 
 	always := explicit
 	always.When = pipelineschema.RuleWhenAlways
 	ev = evalStage2(t, j, []pipelineschema.Stage2Rule{always})
-	require.Equal(t, pipeline.RunJobRejectedStage2, ev.Status)
+	require.Equal(t, pipelineschema.RunJobRejectedStage2, ev.Status)
 }
 
 func TestStage2Rules_flagPenaltyBoostRejectPrecedence(t *testing.T) {
@@ -105,14 +104,14 @@ func TestStage2Rules_flagPenaltyBoostRejectPrecedence(t *testing.T) {
 		{ID: "f", Field: pipelineschema.RuleFieldBody, Op: pipelineschema.RuleOpPhrase,
 			Values: []string{"backend"}, Action: pipelineschema.RuleActionFlag},
 	})
-	require.Equal(t, pipeline.RunJobUnknownStage2, ev.Status)
+	require.Equal(t, pipelineschema.RunJobUnknownStage2, ev.Status)
 	require.Len(t, ev.Hits, 1)
 
 	ev = evalStage2(t, j, []pipelineschema.Stage2Rule{
 		{ID: "p", Field: pipelineschema.RuleFieldBody, Op: pipelineschema.RuleOpPhrase,
 			Values: []string{"backend"}, Action: pipelineschema.RuleActionPenalty, Weight: &wPen},
 	})
-	require.Equal(t, pipeline.RunJobUnknownStage2, ev.Status)
+	require.Equal(t, pipelineschema.RunJobUnknownStage2, ev.Status)
 	require.Equal(t, -2, ev.Boost)
 
 	ev = evalStage2(t, j, []pipelineschema.Stage2Rule{
@@ -121,5 +120,5 @@ func TestStage2Rules_flagPenaltyBoostRejectPrecedence(t *testing.T) {
 		{ID: "b", Field: pipelineschema.RuleFieldTitle, Op: pipelineschema.RuleOpPhrase,
 			Values: []string{"go"}, Action: pipelineschema.RuleActionBoost, Weight: &wBoost},
 	})
-	require.Equal(t, pipeline.RunJobRejectedStage2, ev.Status)
+	require.Equal(t, pipelineschema.RunJobRejectedStage2, ev.Status)
 }

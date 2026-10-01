@@ -57,7 +57,7 @@ func RecruiteeJobPageMissing(ctx context.Context, client *http.Client, rawApplyU
 	if err != nil {
 		return false, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode == http.StatusNotFound {
 		return true, nil
 	}

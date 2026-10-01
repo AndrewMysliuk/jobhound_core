@@ -154,13 +154,13 @@ func TestRunPersistPipelineStage2_and_3_persistsAndScoresCappedBatch(t *testing.
 
 	var nBacklog int64
 	require.NoError(t, db.Model(&pipelinestorage.PipelineRunJob{}).
-		Where("pipeline_run_id = ? AND stage2_status = ? AND stage3_status IS NULL", runID, string(pipeline.RunJobPassedStage2)).
+		Where("pipeline_run_id = ? AND stage2_status = ? AND stage3_status IS NULL", runID, string(pipelineschema.RunJobPassedStage2)).
 		Count(&nBacklog).Error)
 	require.Equal(t, int64(2), nBacklog, "two jobs remain eligible (passed stage2, stage3 not yet run)")
 
 	var nTerm int64
 	require.NoError(t, db.Model(&pipelinestorage.PipelineRunJob{}).
-		Where("pipeline_run_id = ? AND stage3_status IN ?", runID, []string{string(pipeline.RunJobPassedStage3), string(pipeline.RunJobRejectedStage3)}).
+		Where("pipeline_run_id = ? AND stage3_status IN ?", runID, []string{string(pipelineschema.RunJobPassedStage3), string(pipelineschema.RunJobRejectedStage3)}).
 		Count(&nTerm).Error)
 	require.Equal(t, int64(20), nTerm)
 
@@ -219,9 +219,9 @@ func TestRunPersistPipelineStage3_stage3RejectScore(t *testing.T) {
 
 	var pr pipelinestorage.PipelineRunJob
 	require.NoError(t, db.Where("pipeline_run_id = ? AND job_id = ?", runID, "a").First(&pr).Error)
-	require.Equal(t, string(pipeline.RunJobPassedStage2), pr.Stage2Status)
+	require.Equal(t, string(pipelineschema.RunJobPassedStage2), pr.Stage2Status)
 	require.NotNil(t, pr.Stage3Status)
-	require.Equal(t, string(pipeline.RunJobRejectedStage3), *pr.Stage3Status)
+	require.Equal(t, string(pipelineschema.RunJobRejectedStage3), *pr.Stage3Status)
 }
 
 type stubScorer func(context.Context, string, schema.Job) (schema.ScoredJob, error)

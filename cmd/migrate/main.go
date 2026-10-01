@@ -55,7 +55,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	defer m.Close()
+	defer func() { _, _ = m.Close() }()
 
 	switch args[0] {
 	case "up":

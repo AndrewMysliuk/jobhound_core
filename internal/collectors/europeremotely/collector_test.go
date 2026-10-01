@@ -256,6 +256,47 @@ func TestFetch_maxJobsStopsEarly(t *testing.T) {
 	require.Equal(t, 1, detailGets, "second job detail should not be fetched when MaxJobs=1")
 }
 
+func TestFetch_skipsDetailHTTPError(t *testing.T) {
+	mux := http.NewServeMux()
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+
+	u1 := srv.URL + "/job/blocked/"
+	u2 := srv.URL + "/job/ok/"
+	htmlFrag := `<div class="job-card"><h2 class="job-title"><a href="` + u1 + `">Blocked</a></h2><div class="company-name">A</div><div class="meta-item meta-location">DE</div><div class="job-time">Posted 1 day ago</div></div>` +
+		`<div class="job-card"><h2 class="job-title"><a href="` + u2 + `">Senior Go Engineer</a></h2><div class="company-name">Acme EU</div><div class="meta-item meta-location">Germany, Remote</div><div class="job-time">Posted 2 days ago</div></div>`
+	feedBytes, err := json.Marshal(map[string]any{"has_more": false, "html": htmlFrag})
+	require.NoError(t, err)
+
+	mux.HandleFunc("/ajax", func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, http.MethodPost, r.Method)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(feedBytes)
+	})
+	mux.HandleFunc("/job/blocked/", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusTooManyRequests)
+		_, _ = w.Write([]byte("error code: 1015"))
+	})
+	mux.HandleFunc("/job/ok/", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		_, _ = w.Write([]byte(detailFixtureHTML))
+	})
+
+	siteBase, err := url.Parse(srv.URL + "/")
+	require.NoError(t, err)
+	coll := &EuropeRemotely{
+		HTTPClient: srv.Client(),
+		FeedURL:    srv.URL + "/ajax",
+		FeedForm:   url.Values{"action": {"test"}},
+		SiteBase:   siteBase,
+		Countries:  testCountriesResolver(t),
+	}
+	jobs, err := coll.Fetch(context.Background())
+	require.NoError(t, err)
+	require.Len(t, jobs, 1)
+	require.Equal(t, "Senior Go Engineer", jobs[0].Title)
+}
+
 func TestResolvePostedAt_relativeClock(t *testing.T) {
 	anchor := time.Date(2026, 3, 30, 12, 0, 0, 0, time.UTC)
 	var warned []string

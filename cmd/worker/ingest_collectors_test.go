@@ -7,8 +7,8 @@ import (
 
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/builtin"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/europeremotely"
-	"github.com/andrewmysliuk/jobhound_core/internal/collectors/himalayas"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/golangcafe"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/himalayas"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/remotifyeurope"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/vuejobs"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/wellfound"

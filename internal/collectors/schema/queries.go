@@ -4,23 +4,23 @@ import "strings"
 
 // Q-list search strings (fixed order) for SlotSearchFetcher-backed sources.
 const (
-	QueryVue         = "vue"
-	QueryFrontend    = "frontend"
-	QueryFullStack   = "full-stack"
-	QueryTypescript  = "typescript"
-	QueryReact       = "react"
-	QueryGolang      = "golang"
-	QueryNode        = "node"
-	QueryAINative    = "AI native"
-	QueryAIEngineer  = "AI engineer"
-	QueryLLM         = "LLM"
+	QueryVue        = "vue"
+	QueryFrontend   = "frontend"
+	QueryFullStack  = "full-stack"
+	QueryTypescript = "typescript"
+	QueryReact      = "react"
+	QueryGolang     = "golang"
+	QueryNode       = "node"
+	QueryAINative   = "AI native"
+	QueryAIEngineer = "AI engineer"
+	QueryLLM        = "LLM"
 )
 
 // Wellfound /role/r/{slug} segments (fixed order).
 const (
-	WellfoundSlugFrontendEngineer              = "frontend-engineer"
-	WellfoundSlugFullStackEngineer             = "full-stack-engineer"
-	WellfoundSlugBackendEngineer               = "backend-engineer"
+	WellfoundSlugFrontendEngineer               = "frontend-engineer"
+	WellfoundSlugFullStackEngineer              = "full-stack-engineer"
+	WellfoundSlugBackendEngineer                = "backend-engineer"
 	WellfoundSlugArtificialIntelligenceEngineer = "artificial-intelligence-engineer"
 )
 

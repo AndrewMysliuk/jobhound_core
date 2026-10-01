@@ -9,6 +9,7 @@ import (
 	"context"
 
 	"github.com/andrewmysliuk/jobhound_core/internal/domain/schema"
+	pipelineschema "github.com/andrewmysliuk/jobhound_core/internal/pipeline/schema"
 	"github.com/google/uuid"
 )
 
@@ -29,15 +30,15 @@ type PipelineRunRepository interface {
 	CreateRun(ctx context.Context, slotID *uuid.UUID) (pipelineRunID int64, err error)
 	// SetBroadFilterKeyHash stores the SHA-256 hex broad filter key on the run (006); empty hash is a no-op.
 	SetBroadFilterKeyHash(ctx context.Context, pipelineRunID int64, hash string) error
-	SetRunJobStatus(ctx context.Context, pipelineRunID int64, jobID string, status RunJobStatus) error
+	SetRunJobStatus(ctx context.Context, pipelineRunID int64, jobID string, status pipelineschema.RunJobStatus) error
 	// UpsertRunJobStage2 inserts or updates stage-2 outcome with fired hits and boost sum.
-	UpsertRunJobStage2(ctx context.Context, pipelineRunID int64, jobID string, status RunJobStatus, hits []Stage2Hit, boost int) error
+	UpsertRunJobStage2(ctx context.Context, pipelineRunID int64, jobID string, status pipelineschema.RunJobStatus, hits []Stage2Hit, boost int) error
 	// SetRunRulesSnapshot stores the rules JSON snapshot on pipeline_runs for the run (JSON array of stage-2 rules).
 	SetRunRulesSnapshot(ctx context.Context, pipelineRunID int64, rulesJSON []byte) error
 	// SetRunJobStage3Rationale stores LLM rationale for a row already in a terminal stage-3 status (009 GET …/stages/3/jobs).
 	SetRunJobStage3Rationale(ctx context.Context, pipelineRunID int64, jobID string, rationale string) error
 	// GetRunJobStatus loads the per-run row; ok is false when missing.
-	GetRunJobStatus(ctx context.Context, pipelineRunID int64, jobID string) (status RunJobStatus, ok bool, err error)
+	GetRunJobStatus(ctx context.Context, pipelineRunID int64, jobID string) (status pipelineschema.RunJobStatus, ok bool, err error)
 	// ListPassedStage2JobIDs returns job_id for stage-3 candidates: PASSED_STAGE_2 or UNKNOWN_STAGE_2 with no stage-3 status.
 	// Ordering: stage2_boost descending, jobs.posted_at descending (NULLs last), then jobs.id ascending.
 	ListPassedStage2JobIDs(ctx context.Context, pipelineRunID int64) ([]string, error)

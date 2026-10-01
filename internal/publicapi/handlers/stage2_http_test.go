@@ -81,9 +81,7 @@ func TestPostStage2Run_rulesBody(t *testing.T) {
 				if err := json.Unmarshal(rec.Body.Bytes(), &errBody); err != nil {
 					t.Fatal(err)
 				}
-				if errBody.Error.Code != "invalid_body" && errBody.Error.Code != "validation_error" {
-					t.Fatalf("code %q", errBody.Error.Code)
-				}
+				assertAPIError(t, errBody.Error, schema.APIErrorCodeValidationFailed)
 			}
 		})
 	}
@@ -143,9 +141,7 @@ func TestGetStageJobs_stage2QueryAndDebug(t *testing.T) {
 		if err := json.Unmarshal(rec.Body.Bytes(), &errBody); err != nil {
 			t.Fatal(err)
 		}
-		if errBody.Error.Code != "invalid_query" {
-			t.Fatalf("code %q", errBody.Error.Code)
-		}
+		assertAPIError(t, errBody.Error, schema.APIErrorCodeInvalidQuery)
 	})
 
 	t.Run("without_debug_byte_baseline", func(t *testing.T) {

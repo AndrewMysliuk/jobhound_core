@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/andrewmysliuk/jobhound_core/internal/jobs/schema"
-	"github.com/andrewmysliuk/jobhound_core/internal/pipeline"
+	pipelineschema "github.com/andrewmysliuk/jobhound_core/internal/pipeline/schema"
 	"github.com/andrewmysliuk/jobhound_core/internal/platform/pgsql"
 	"github.com/google/uuid"
 	"gorm.io/driver/sqlite"
@@ -198,7 +198,7 @@ func TestRepository_slotQueries_tableDriven(t *testing.T) {
 		if err := db.Exec(`INSERT INTO pipeline_runs (id, created_at) VALUES (1, ?)`, now).Error; err != nil {
 			t.Fatal(err)
 		}
-		st := string(pipeline.RunJobPassedStage2)
+		st := string(pipelineschema.RunJobPassedStage2)
 		for _, id := range []string{"early", "late", "nilpa"} {
 			if err := db.Exec(
 				`INSERT INTO pipeline_run_jobs (pipeline_run_id, job_id, stage2_status) VALUES (1, ?, ?)`,
@@ -338,10 +338,10 @@ func TestRepository_ListPipelineRunStage2Jobs_statusFilter(t *testing.T) {
 	if err := db.Exec(`INSERT INTO pipeline_runs (id, created_at, slot_id) VALUES (1, ?, ?)`, now, slotA.String()).Error; err != nil {
 		t.Fatal(err)
 	}
-	stP := string(pipeline.RunJobPassedStage2)
-	stR := string(pipeline.RunJobRejectedStage2)
-	stU := string(pipeline.RunJobUnknownStage2)
-	st3 := string(pipeline.RunJobPassedStage3)
+	stP := string(pipelineschema.RunJobPassedStage2)
+	stR := string(pipelineschema.RunJobRejectedStage2)
+	stU := string(pipelineschema.RunJobUnknownStage2)
+	st3 := string(pipelineschema.RunJobPassedStage3)
 	if err := db.Exec(`INSERT INTO pipeline_run_jobs (pipeline_run_id, job_id, stage2_status) VALUES (1, 'jp', ?), (1, 'jr', ?), (1, 'ju', ?)`, stP, stR, stU).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -382,7 +382,7 @@ func TestRepository_ListPipelineRunStage2Jobs_statusFilter(t *testing.T) {
 	if totalF != 1 || len(failedOnly) != 1 || failedOnly[0].Job.ID != "jr" || failedOnly[0].PipelineRunStatus != stR {
 		t.Fatalf("failed: %+v", failedOnly)
 	}
-	eligible, totalE, err := repo.ListPipelineRunStage2Jobs(ctx, slotA, 1, pipeline.Stage2ListFilterEligible, 0, 10)
+	eligible, totalE, err := repo.ListPipelineRunStage2Jobs(ctx, slotA, 1, pipelineschema.Stage2ListFilterEligible, 0, 10)
 	if err != nil {
 		t.Fatal(err)
 	}

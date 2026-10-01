@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/andrewmysliuk/jobhound_core/internal/pipeline"
+	pipelineschema "github.com/andrewmysliuk/jobhound_core/internal/pipeline/schema"
 	pipeutils "github.com/andrewmysliuk/jobhound_core/internal/pipeline/utils"
 	"github.com/andrewmysliuk/jobhound_core/internal/platform/pgsql"
 	"github.com/google/uuid"
@@ -65,15 +66,15 @@ func (r *Repository) SetBroadFilterKeyHash(ctx context.Context, pipelineRunID in
 // SetRunJobStatus inserts a new per-run row (stage-2 outcome) or sets terminal stage-3 on eligible stage-2 rows.
 // Allowed: (no row) → REJECTED_STAGE_2 | PASSED_STAGE_2 | UNKNOWN_STAGE_2; stage2 passed or unknown + no stage3 → PASSED_STAGE_3 | REJECTED_STAGE_3.
 // Repeating the same outcome is a no-op. When a terminal stage-3 outcome exists, stage-2 writes are ignored (Temporal retry idempotency).
-func (r *Repository) SetRunJobStatus(ctx context.Context, pipelineRunID int64, jobID string, status pipeline.RunJobStatus) error {
+func (r *Repository) SetRunJobStatus(ctx context.Context, pipelineRunID int64, jobID string, status pipelineschema.RunJobStatus) error {
 	if jobID == "" {
 		return fmt.Errorf("job id is required")
 	}
 	if !status.Valid() {
 		return ErrInvalidRunJobStatus
 	}
-	isStage2 := status == pipeline.RunJobRejectedStage2 || status == pipeline.RunJobPassedStage2 || status == pipeline.RunJobUnknownStage2
-	isStage3 := status == pipeline.RunJobPassedStage3 || status == pipeline.RunJobRejectedStage3
+	isStage2 := status == pipelineschema.RunJobRejectedStage2 || status == pipelineschema.RunJobPassedStage2 || status == pipelineschema.RunJobUnknownStage2
+	isStage3 := status == pipelineschema.RunJobPassedStage3 || status == pipelineschema.RunJobRejectedStage3
 	if !isStage2 && !isStage3 {
 		return ErrInvalidRunJobStatus
 	}
@@ -98,7 +99,7 @@ func (r *Repository) SetRunJobStatus(ctx context.Context, pipelineRunID int64, j
 	}
 
 	if isStage3 {
-		if row.Stage2Status != string(pipeline.RunJobPassedStage2) && row.Stage2Status != string(pipeline.RunJobUnknownStage2) {
+		if row.Stage2Status != string(pipelineschema.RunJobPassedStage2) && row.Stage2Status != string(pipelineschema.RunJobUnknownStage2) {
 			return ErrInvalidRunJobTransition
 		}
 		if row.Stage3Status != nil && *row.Stage3Status == string(status) {
@@ -126,14 +127,14 @@ func (r *Repository) SetRunJobStatus(ctx context.Context, pipelineRunID int64, j
 }
 
 // UpsertRunJobStage2 implements [pipeline.PipelineRunRepository.UpsertRunJobStage2].
-func (r *Repository) UpsertRunJobStage2(ctx context.Context, pipelineRunID int64, jobID string, status pipeline.RunJobStatus, hits []pipeline.Stage2Hit, boost int) error {
+func (r *Repository) UpsertRunJobStage2(ctx context.Context, pipelineRunID int64, jobID string, status pipelineschema.RunJobStatus, hits []pipeline.Stage2Hit, boost int) error {
 	if pipelineRunID <= 0 {
 		return fmt.Errorf("pipeline run id is required")
 	}
 	if jobID == "" {
 		return fmt.Errorf("job id is required")
 	}
-	if status != pipeline.RunJobRejectedStage2 && status != pipeline.RunJobPassedStage2 && status != pipeline.RunJobUnknownStage2 {
+	if status != pipelineschema.RunJobRejectedStage2 && status != pipelineschema.RunJobPassedStage2 && status != pipelineschema.RunJobUnknownStage2 {
 		return ErrInvalidRunJobStatus
 	}
 	hitsJSON, err := marshalStage2Hits(hits)
@@ -210,7 +211,7 @@ func (r *Repository) SetRunJobStage3Rationale(ctx context.Context, pipelineRunID
 }
 
 // GetRunJobStatus implements [pipeline.PipelineRunRepository.GetRunJobStatus].
-func (r *Repository) GetRunJobStatus(ctx context.Context, pipelineRunID int64, jobID string) (pipeline.RunJobStatus, bool, error) {
+func (r *Repository) GetRunJobStatus(ctx context.Context, pipelineRunID int64, jobID string) (pipelineschema.RunJobStatus, bool, error) {
 	if jobID == "" {
 		return "", false, fmt.Errorf("job id is required")
 	}
@@ -245,8 +246,8 @@ func (r *Repository) ListPassedStage2JobIDs(ctx context.Context, pipelineRunID i
 	var ids []string
 	err := r.get().WithContext(ctx).Raw(sqlListPassedStage2JobIDs,
 		pipelineRunID,
-		string(pipeline.RunJobPassedStage2),
-		string(pipeline.RunJobUnknownStage2),
+		string(pipelineschema.RunJobPassedStage2),
+		string(pipelineschema.RunJobUnknownStage2),
 	).Scan(&ids).Error
 	if err != nil {
 		return nil, err
@@ -265,8 +266,8 @@ func (r *Repository) InvalidateStage3SnapshotsForSlot(ctx context.Context, slotI
 	res := db.Model(&PipelineRunJob{}).
 		Where("pipeline_run_id IN (?)", sub).
 		Where("stage3_status IN ?", []string{
-			string(pipeline.RunJobPassedStage3),
-			string(pipeline.RunJobRejectedStage3),
+			string(pipelineschema.RunJobPassedStage3),
+			string(pipelineschema.RunJobRejectedStage3),
 		}).
 		Updates(map[string]any{
 			"stage3_status":    gorm.Expr("NULL"),
@@ -314,15 +315,15 @@ func (r *Repository) ManualPatchStage2Bucket(ctx context.Context, pipelineRunID 
 	if pipelineRunID <= 0 || jobID == "" {
 		return fmt.Errorf("pipeline run id and job id are required")
 	}
-	want := pipeline.RunJobRejectedStage2
+	want := pipelineschema.RunJobRejectedStage2
 	if passed {
-		want = pipeline.RunJobPassedStage2
+		want = pipelineschema.RunJobPassedStage2
 	}
 	res := r.get().WithContext(ctx).Model(&PipelineRunJob{}).
 		Where("pipeline_run_id = ? AND job_id = ?", pipelineRunID, jobID).
 		Where("stage2_status IN ?", []string{
-			string(pipeline.RunJobRejectedStage2),
-			string(pipeline.RunJobPassedStage2),
+			string(pipelineschema.RunJobRejectedStage2),
+			string(pipelineschema.RunJobPassedStage2),
 		}).
 		Updates(map[string]any{
 			"stage2_status":    string(want),
@@ -343,15 +344,15 @@ func (r *Repository) ManualPatchStage3Bucket(ctx context.Context, pipelineRunID 
 	if pipelineRunID <= 0 || jobID == "" {
 		return fmt.Errorf("pipeline run id and job id are required")
 	}
-	want := pipeline.RunJobRejectedStage3
+	want := pipelineschema.RunJobRejectedStage3
 	if passed {
-		want = pipeline.RunJobPassedStage3
+		want = pipelineschema.RunJobPassedStage3
 	}
 	res := r.get().WithContext(ctx).Model(&PipelineRunJob{}).
 		Where("pipeline_run_id = ? AND job_id = ?", pipelineRunID, jobID).
 		Where("stage3_status IN ?", []string{
-			string(pipeline.RunJobPassedStage3),
-			string(pipeline.RunJobRejectedStage3),
+			string(pipelineschema.RunJobPassedStage3),
+			string(pipelineschema.RunJobRejectedStage3),
 		}).
 		Updates(map[string]any{
 			"stage3_status":    string(want),

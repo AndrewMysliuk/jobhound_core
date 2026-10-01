@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -73,7 +74,7 @@ func TestRepository_slotCRUD(t *testing.T) {
 	if err := repo.Delete(ctx, id.String()); err != nil {
 		t.Fatal(err)
 	}
-	if err := repo.Delete(ctx, id.String()); err != slots.ErrNotFound {
+	if err := repo.Delete(ctx, id.String()); !errors.Is(err, slots.ErrNotFound) {
 		t.Fatalf("second delete: %v", err)
 	}
 }
@@ -83,7 +84,7 @@ func TestRepository_GetByID_notFound(t *testing.T) {
 	db := testSlotsDB(t)
 	repo := NewRepository(pgsql.NewGetter(db))
 	_, err := repo.GetByID(ctx, uuid.MustParse("22222222-2222-4222-8222-222222222222").String())
-	if err != slots.ErrNotFound {
+	if !errors.Is(err, slots.ErrNotFound) {
 		t.Fatalf("got %v", err)
 	}
 }
@@ -136,7 +137,7 @@ func TestRepository_CreateWithIdempotency_nameConflict(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, _, err := repo.CreateWithIdempotency(ctx, key, "second")
-	if err != slots.ErrIdempotencyKeyConflict {
+	if !errors.Is(err, slots.ErrIdempotencyKeyConflict) {
 		t.Fatalf("want ErrIdempotencyKeyConflict, got %v", err)
 	}
 }

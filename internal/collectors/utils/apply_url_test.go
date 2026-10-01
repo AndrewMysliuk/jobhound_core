@@ -30,4 +30,3 @@ func TestRecruiteeNotFoundBody(t *testing.T) {
 	require.True(t, recruiteeNotFoundBody(`<h1>We couldn't find this job</h1><p>This job doesn't exist or was removed.</p>`))
 	require.False(t, recruiteeNotFoundBody(`<h1>Clean Energy Business Development Manager</h1>`))
 }
-

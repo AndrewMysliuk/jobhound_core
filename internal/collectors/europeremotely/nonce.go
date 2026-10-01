@@ -32,7 +32,7 @@ func DiscoverNonceFromURL(ctx context.Context, client *http.Client, homeURL stri
 	if err != nil {
 		return "", fmt.Errorf("europe remotely: homepage: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	b, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", err

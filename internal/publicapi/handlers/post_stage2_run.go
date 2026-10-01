@@ -1,14 +1,12 @@
 package handlers
 
 import (
-	"errors"
 	"net/http"
 
 	pipeutils "github.com/andrewmysliuk/jobhound_core/internal/pipeline/utils"
 	"github.com/andrewmysliuk/jobhound_core/internal/platform/logging"
 	"github.com/andrewmysliuk/jobhound_core/internal/publicapi/schema"
 	apputils "github.com/andrewmysliuk/jobhound_core/internal/publicapi/utils"
-	"github.com/andrewmysliuk/jobhound_core/internal/slots"
 	slotschema "github.com/andrewmysliuk/jobhound_core/internal/slots/schema"
 )
 
@@ -21,21 +19,12 @@ func (h *HTTPHandler) postStage2Run(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := pipeutils.ValidateStage2Rules(body.Rules); err != nil {
-		apputils.WriteAPIError(w, http.StatusBadRequest, "invalid_body", err.Error())
+		apputils.WriteError(w, schema.APIError{Code: schema.APIErrorCodeValidationFailed, Cause: err})
 		return
 	}
 	out, err := h.deps.Slots.RunStage2(ctx, slotschema.RunStage2Params{SlotID: slotID, Rules: body.Rules})
-	if errors.Is(err, slots.ErrNotFound) {
-		apputils.WriteAPIError(w, http.StatusNotFound, "not_found", "slot not found")
-		return
-	}
-	if errors.Is(err, slots.ErrStageAlreadyRunning) {
-		apputils.WriteAPIError(w, http.StatusConflict, "stage_already_running", "stage 2 is already running for this slot")
-		return
-	}
 	if err != nil {
-		logH.Error().Err(err).Msg("run stage 2")
-		apputils.WriteAPIError(w, http.StatusInternalServerError, "internal_error", err.Error())
+		apputils.WriteError(w, err)
 		return
 	}
 	apputils.WriteJSON(w, http.StatusAccepted, out)

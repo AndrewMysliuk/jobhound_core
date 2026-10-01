@@ -78,6 +78,10 @@ Other feature modules: typed request/response (and other wire) structs in **`sch
 
 **Forbidden**: `map[string]json.RawMessage` with per-field existence checks (`if _, has := raw["field"]; !has`). Never in handler code.
 
+### Product API errors
+
+Registry in `internal/publicapi/schema`. Writer is `WriteError` in `internal/publicapi/utils`. Envelope is `{ "error": { "code", "message" } }`; slot cap adds `"limit"`. Handlers do not pick status or message. `impl/` does not import the registry.
+
 ## Anti-Pattern Reference
 
 | Anti-pattern | Correct approach |
@@ -105,7 +109,8 @@ Other feature modules: typed request/response (and other wire) structs in **`sch
 - `make run-worker` — build and run Temporal worker (`JOBHOUND_TEMPORAL_ADDRESS` required)
 - `make test` — `go test ./...` (excludes `integration`-tagged tests)
 - `make test-integration` — `go test -tags=integration ./...`
-- `make fmt` / `make vet` / `make tidy`
+- `make fmt` / `make vet` / `make lint` / `make tidy`
+- Lint gate: `make lint` (golangci-lint v2) plus `make fmt` / `make vet`. CI runs those and `make test`.
 
 ## Code Style
 
@@ -117,6 +122,7 @@ Other feature modules: typed request/response (and other wire) structs in **`sch
 
 ## Recent Changes
 
+- 2026-10-01: Lint gate is `make lint` (golangci-lint v2) plus `make fmt` / `make vet`; CI runs those and `make test`. Product API errors use the registry in `internal/publicapi/schema` and `WriteError`; handlers do not pick status or message; `impl/` does not import the registry.
 - 2026-09-20: Collectors keep-set `europe_remotely` / `working_nomads` / `himalayas` / `builtin`; rod stays for Built In; LinkedIn cancelled (no session cookies).
 - 2026-09-20: Replaced Spec Kit (`.specify` + `/speckit.*` + `specs/`) with `.cursor/templates/` + `audit-feature-tasks`. Engineering rules stay in this file.
 - 2026-04-07: **Constitution v1.8.3** — principle IV persistence wording tightened (Postgres via GORM + migrations).

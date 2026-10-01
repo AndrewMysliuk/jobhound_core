@@ -12,7 +12,7 @@ import (
 func LoggerWithActivity(ctx context.Context, base zerolog.Logger, activityName string) zerolog.Logger {
 	var wid, rid string
 	func() {
-		defer func() { recover() }()
+		defer func() { _ = recover() }()
 		info := activity.GetInfo(ctx)
 		wid = info.WorkflowExecution.ID
 		rid = info.WorkflowExecution.RunID

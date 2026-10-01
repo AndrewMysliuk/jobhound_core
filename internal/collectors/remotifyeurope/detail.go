@@ -326,7 +326,7 @@ func listingIDsFromHTML(ctx context.Context, client *http.Client, listingURL str
 	if err != nil {
 		return nil, fmt.Errorf("remotify europe: fallback listing page: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	b, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err

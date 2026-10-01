@@ -6,6 +6,7 @@ import (
 
 	"github.com/andrewmysliuk/jobhound_core/internal/platform/logging"
 	"github.com/andrewmysliuk/jobhound_core/internal/profile"
+	"github.com/andrewmysliuk/jobhound_core/internal/publicapi/schema"
 	apputils "github.com/andrewmysliuk/jobhound_core/internal/publicapi/utils"
 	"github.com/andrewmysliuk/jobhound_core/internal/slots"
 	"github.com/rs/zerolog"
@@ -32,7 +33,7 @@ func NewHTTPHandler(corsAllowedOrigins []string, deps Deps) *HTTPHandler {
 		deps: deps,
 	}
 	h.registerRoutes()
-	h.chain = logging.RequestIDMiddleware(apputils.WithCORS(corsAllowedOrigins, h.mux))
+	h.chain = logging.RequestIDMiddleware(apputils.WithCORS(corsAllowedOrigins, apiMux{mux: h.mux}))
 	return h
 }
 
@@ -58,3 +59,47 @@ func (h *HTTPHandler) registerRoutes() {
 func (h *HTTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.chain.ServeHTTP(w, r)
 }
+
+// apiMux replaces ServeMux's plain-text 405. Method-specific patterns never
+// call the route handler, so the registry write has to happen here.
+type apiMux struct {
+	mux *http.ServeMux
+}
+
+func (m apiMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	guard := &statusGuard{ResponseWriter: w}
+	m.mux.ServeHTTP(guard, r)
+	if guard.status == http.StatusMethodNotAllowed {
+		apputils.WriteError(w, schema.APIError{Code: schema.APIErrorCodeMethodNotAllowed})
+	}
+}
+
+// statusGuard drops a 405 body so WriteError can write the registry envelope.
+// Other statuses pass through.
+type statusGuard struct {
+	http.ResponseWriter
+	status int
+}
+
+func (g *statusGuard) WriteHeader(code int) {
+	if g.status != 0 {
+		return
+	}
+	g.status = code
+	if code == http.StatusMethodNotAllowed {
+		return
+	}
+	g.ResponseWriter.WriteHeader(code)
+}
+
+func (g *statusGuard) Write(p []byte) (int, error) {
+	if g.status == http.StatusMethodNotAllowed {
+		return len(p), nil
+	}
+	if g.status == 0 {
+		g.status = http.StatusOK
+	}
+	return g.ResponseWriter.Write(p)
+}
+
+func (g *statusGuard) Unwrap() http.ResponseWriter { return g.ResponseWriter }

@@ -2,7 +2,7 @@
 
 Collects and processes job listings (pipeline, PostgreSQL, Temporal, HTTP API). Go 1.24.
 
-Env names and loaders: `internal/config`.
+Env names and loaders: `internal/config`. Key list: [`.env.example`](.env.example).
 
 ## Docker
 

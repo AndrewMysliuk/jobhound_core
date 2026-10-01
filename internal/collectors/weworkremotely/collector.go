@@ -20,7 +20,7 @@ const DefaultFeedURL = "https://weworkremotely.com/remote-jobs.rss"
 type WeWorkRemotely struct {
 	HTTPClient *http.Client
 	// FeedURL defaults to DefaultFeedURL.
-	FeedURL string
+	FeedURL   string
 	Countries *utils.CountryResolver
 }
 

@@ -100,10 +100,7 @@ func matchesEuropeRemoteCatalog(p jobPost) bool {
 	case "DE", "UA", "NL", "GB", "UK", "FR", "PL", "ES", "IT", "SE", "NO", "DK", "FI", "IE", "BE", "AT", "CH", "CZ", "RO", "PT", "GR", "HU":
 		return true
 	}
-	if strings.EqualFold(strings.TrimSpace(p.Location), "Remote") {
-		return true
-	}
-	return false
+	return strings.EqualFold(strings.TrimSpace(p.Location), "Remote")
 }
 
 func remoteFromPost(p jobPost) *bool {

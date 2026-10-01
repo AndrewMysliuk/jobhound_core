@@ -18,13 +18,12 @@ import (
 	"github.com/stretchr/testify/require"
 	enumspb "go.temporal.io/api/enums/v1"
 	historypb "go.temporal.io/api/history/v1"
-	"go.temporal.io/sdk/client"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
 
 type fakeTemporal struct {
-	describe *client.WorkflowExecutionDescription
+	describe *slots.WorkflowExecutionDescription
 	descErr  error
 
 	gotWorkflow interface{}
@@ -38,18 +37,18 @@ func (emptyHistoryIter) HasNext() bool { return false }
 
 func (emptyHistoryIter) Next() (*historypb.HistoryEvent, error) { return nil, nil }
 
-func (f *fakeTemporal) GetWorkflowHistory(context.Context, string, string, bool, enumspb.HistoryEventFilterType) client.HistoryEventIterator {
+func (f *fakeTemporal) GetWorkflowHistory(context.Context, string, string, bool, enumspb.HistoryEventFilterType) slots.HistoryEventIterator {
 	return emptyHistoryIter{}
 }
 
-func (f *fakeTemporal) DescribeWorkflow(context.Context, string, string) (*client.WorkflowExecutionDescription, error) {
+func (f *fakeTemporal) DescribeWorkflow(context.Context, string, string) (*slots.WorkflowExecutionDescription, error) {
 	if f.descErr != nil {
 		return nil, f.descErr
 	}
 	return f.describe, nil
 }
 
-func (f *fakeTemporal) ExecuteWorkflow(_ context.Context, _ client.StartWorkflowOptions, workflow interface{}, args ...interface{}) (client.WorkflowRun, error) {
+func (f *fakeTemporal) ExecuteWorkflow(_ context.Context, _ slots.StartWorkflowOptions, workflow interface{}, args ...interface{}) (slots.WorkflowRun, error) {
 	f.gotWorkflow = workflow
 	f.gotArgs = args
 	return nil, f.execErr
@@ -106,8 +105,8 @@ func TestRunStage2_startsWorkflowWithRules(t *testing.T) {
 	now := time.Now().UTC()
 	require.NoError(t, db.Exec(`INSERT INTO slots (id, name, created_at) VALUES (?, 's', ?)`, slotID.String(), now).Error)
 
-	ft := &fakeTemporal{describe: &client.WorkflowExecutionDescription{
-		WorkflowExecutionMetadata: client.WorkflowExecutionMetadata{
+	ft := &fakeTemporal{describe: &slots.WorkflowExecutionDescription{
+		WorkflowExecutionMetadata: slots.WorkflowExecutionMetadata{
 			Status: enumspb.WORKFLOW_EXECUTION_STATUS_COMPLETED,
 		},
 	}}
@@ -146,8 +145,8 @@ func TestRunStage2_stageAlreadyRunning(t *testing.T) {
 	now := time.Now().UTC()
 	require.NoError(t, db.Exec(`INSERT INTO slots (id, name, created_at) VALUES (?, 's', ?)`, slotID.String(), now).Error)
 
-	ft := &fakeTemporal{describe: &client.WorkflowExecutionDescription{
-		WorkflowExecutionMetadata: client.WorkflowExecutionMetadata{
+	ft := &fakeTemporal{describe: &slots.WorkflowExecutionDescription{
+		WorkflowExecutionMetadata: slots.WorkflowExecutionMetadata{
 			Status: enumspb.WORKFLOW_EXECUTION_STATUS_RUNNING,
 		},
 	}}
@@ -174,8 +173,8 @@ func TestRunStage3_startsWorkflowWithRunKindAndMaxJobs(t *testing.T) {
 	require.NoError(t, db.Exec(`INSERT INTO slots (id, name, created_at) VALUES (?, 's', ?)`, slotID.String(), now).Error)
 	require.NoError(t, db.Exec(`INSERT INTO pipeline_runs (created_at, slot_id) VALUES (?, ?)`, now, slotID.String()).Error)
 
-	ft := &fakeTemporal{describe: &client.WorkflowExecutionDescription{
-		WorkflowExecutionMetadata: client.WorkflowExecutionMetadata{
+	ft := &fakeTemporal{describe: &slots.WorkflowExecutionDescription{
+		WorkflowExecutionMetadata: slots.WorkflowExecutionMetadata{
 			Status: enumspb.WORKFLOW_EXECUTION_STATUS_COMPLETED,
 		},
 	}}
@@ -209,8 +208,8 @@ func TestRunStage3_profileRequired(t *testing.T) {
 	require.NoError(t, db.Exec(`INSERT INTO slots (id, name, created_at) VALUES (?, 's', ?)`, slotID.String(), now).Error)
 	require.NoError(t, db.Exec(`INSERT INTO pipeline_runs (created_at, slot_id) VALUES (?, ?)`, now, slotID.String()).Error)
 
-	ft := &fakeTemporal{describe: &client.WorkflowExecutionDescription{
-		WorkflowExecutionMetadata: client.WorkflowExecutionMetadata{
+	ft := &fakeTemporal{describe: &slots.WorkflowExecutionDescription{
+		WorkflowExecutionMetadata: slots.WorkflowExecutionMetadata{
 			Status: enumspb.WORKFLOW_EXECUTION_STATUS_COMPLETED,
 		},
 	}}
@@ -235,8 +234,8 @@ func TestRunStage3_noPipelineRun(t *testing.T) {
 	now := time.Now().UTC()
 	require.NoError(t, db.Exec(`INSERT INTO slots (id, name, created_at) VALUES (?, 's', ?)`, slotID.String(), now).Error)
 
-	ft := &fakeTemporal{describe: &client.WorkflowExecutionDescription{
-		WorkflowExecutionMetadata: client.WorkflowExecutionMetadata{
+	ft := &fakeTemporal{describe: &slots.WorkflowExecutionDescription{
+		WorkflowExecutionMetadata: slots.WorkflowExecutionMetadata{
 			Status: enumspb.WORKFLOW_EXECUTION_STATUS_COMPLETED,
 		},
 	}}

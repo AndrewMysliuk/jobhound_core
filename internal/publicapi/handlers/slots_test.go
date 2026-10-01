@@ -136,9 +136,7 @@ func TestSlotsRoutes_tableDriven(t *testing.T) {
 				if err := json.Unmarshal(body, &got); err != nil {
 					t.Fatal(err)
 				}
-				if got.Error.Code != "idempotency_key_required" {
-					t.Fatalf("code %q", got.Error.Code)
-				}
+				assertAPIError(t, got.Error, schema.APIErrorCodeIdempotencyKeyRequired)
 			},
 		},
 		{
@@ -154,9 +152,7 @@ func TestSlotsRoutes_tableDriven(t *testing.T) {
 				if err := json.Unmarshal(body, &got); err != nil {
 					t.Fatal(err)
 				}
-				if got.Error.Code != "invalid_idempotency_key" {
-					t.Fatalf("code %q", got.Error.Code)
-				}
+				assertAPIError(t, got.Error, schema.APIErrorCodeInvalidIdempotencyKey)
 			},
 		},
 		{
@@ -202,9 +198,7 @@ func TestSlotsRoutes_tableDriven(t *testing.T) {
 				if err := json.Unmarshal(body, &got); err != nil {
 					t.Fatal(err)
 				}
-				if got.Error.Code != "idempotency_key_conflict" {
-					t.Fatalf("code %q", got.Error.Code)
-				}
+				assertAPIError(t, got.Error, schema.APIErrorCodeIdempotencyKeyConflict)
 			},
 		},
 		{
@@ -218,8 +212,9 @@ func TestSlotsRoutes_tableDriven(t *testing.T) {
 				if err := json.Unmarshal(body, &got); err != nil {
 					t.Fatal(err)
 				}
-				if got.Error.Code != "slot_limit_reached" || got.Limit != 3 {
-					t.Fatalf("body: %+v", got)
+				assertAPIError(t, got.Error, schema.APIErrorCodeSlotLimitReached)
+				if got.Limit != 3 {
+					t.Fatalf("limit %d", got.Limit)
 				}
 			},
 		},
@@ -249,9 +244,7 @@ func TestSlotsRoutes_tableDriven(t *testing.T) {
 				if err := json.Unmarshal(body, &got); err != nil {
 					t.Fatal(err)
 				}
-				if got.Error.Code != "not_found" {
-					t.Fatalf("code %q", got.Error.Code)
-				}
+				assertAPIError(t, got.Error, schema.APIErrorCodeSlotNotFound)
 			},
 		},
 		{
@@ -273,9 +266,7 @@ func TestSlotsRoutes_tableDriven(t *testing.T) {
 				if err := json.Unmarshal(body, &got); err != nil {
 					t.Fatal(err)
 				}
-				if got.Error.Code != "not_found" {
-					t.Fatalf("code %q", got.Error.Code)
-				}
+				assertAPIError(t, got.Error, schema.APIErrorCodeSlotNotFound)
 			},
 		},
 	}
@@ -309,5 +300,16 @@ func TestSlotsRoutes_tableDriven(t *testing.T) {
 				tt.checkBody(t, rec.Body.Bytes())
 			}
 		})
+	}
+}
+
+func assertAPIError(t *testing.T, got schema.APIErrorDetail, code schema.APIErrorCode) {
+	t.Helper()
+	spec, ok := schema.Lookup(code)
+	if !ok {
+		t.Fatalf("code %s is not registered", code)
+	}
+	if got.Code != spec.Code.String() || got.Message != spec.Message {
+		t.Fatalf("error: got %+v want %s %q", got, spec.Code, spec.Message)
 	}
 }

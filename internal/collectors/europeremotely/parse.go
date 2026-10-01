@@ -217,8 +217,7 @@ func parseRelativePosted(now time.Time, display string) (time.Time, bool) {
 		return time.Time{}, false
 	}
 	var n int
-	fmt.Sscanf(am[1], "%d", &n)
-	if n <= 0 {
+	if _, err := fmt.Sscanf(am[1], "%d", &n); err != nil || n <= 0 {
 		return time.Time{}, false
 	}
 	unit := strings.ToLower(am[2])

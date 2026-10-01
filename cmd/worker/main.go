@@ -11,8 +11,8 @@ import (
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/bootstrap"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/builtin"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/europeremotely"
-	"github.com/andrewmysliuk/jobhound_core/internal/collectors/himalayas"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/golangcafe"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/himalayas"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/remotifyeurope"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/vuejobs"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/wellfound"
@@ -155,14 +155,14 @@ func ingestCollectorMap(
 	reColl, wwrColl, wfColl, vjColl, gcColl collectors.Collector,
 ) map[string]collectors.Collector {
 	m := map[string]collectors.Collector{
-		ingest.NormalizeSourceID(europeremotely.SourceName):  er,
-		ingest.NormalizeSourceID(workingnomads.SourceName):   wn,
-		ingest.NormalizeSourceID(builtin.SourceName):         builtinColl,
-		ingest.NormalizeSourceID(remotifyeurope.SourceName):   reColl,
-		ingest.NormalizeSourceID(weworkremotely.SourceName):   wwrColl,
-		ingest.NormalizeSourceID(wellfound.SourceName):       wfColl,
-		ingest.NormalizeSourceID(vuejobs.SourceName):         vjColl,
-		ingest.NormalizeSourceID(golangcafe.SourceName):       gcColl,
+		ingest.NormalizeSourceID(europeremotely.SourceName): er,
+		ingest.NormalizeSourceID(workingnomads.SourceName):  wn,
+		ingest.NormalizeSourceID(builtin.SourceName):        builtinColl,
+		ingest.NormalizeSourceID(remotifyeurope.SourceName): reColl,
+		ingest.NormalizeSourceID(weworkremotely.SourceName): wwrColl,
+		ingest.NormalizeSourceID(wellfound.SourceName):      wfColl,
+		ingest.NormalizeSourceID(vuejobs.SourceName):        vjColl,
+		ingest.NormalizeSourceID(golangcafe.SourceName):     gcColl,
 	}
 	if himColl != nil {
 		m[ingest.NormalizeSourceID(himalayas.SourceName)] = himColl

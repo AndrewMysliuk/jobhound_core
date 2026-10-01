@@ -128,7 +128,7 @@ Sources: `go.mod` / `go.sum`, `Dockerfile`, `Dockerfile.migrate`, `docker-compos
 | JSON Schema | `github.com/santhosh-tekuri/jsonschema/v6` **v6.0.2** (public API bodies + LLM scoring schema) |
 | IDs | `github.com/google/uuid` **v1.6.0** |
 | Tests | `github.com/stretchr/testify` **v1.11.1**; `miniredis/v2` **v2.37.0**; `gorm.io/driver/sqlite` **v1.6.0** for storage unit tests |
-| Lint / format | `gofmt` / `go vet` via Makefile. No golangci-lint config. No Prettier/ESLint. |
+| Lint / format | golangci-lint **v2** (`.golangci.yml`: `errcheck`, `govet`, `staticcheck`, `unused`, `errorlint`, `depguard`; formatter `gofmt`). `make lint` / `make fmt` / `make vet`. CI installs **v2.13.2**. No Prettier/ESLint. |
 
 ### direct `require` (`go.mod`)
 
@@ -158,6 +158,7 @@ Notable **indirect** used in app code: `github.com/go-rod/rod v0.116.2`.
 ```
 jobhound_core/
 ├── .cursor/                 # rules, feature templates, audit-feature-tasks skill
+├── .github/workflows/       # ci.yml: gofmt, vet, lint, unit tests
 ├── cmd/
 │   ├── agent/               # debug HTTP + leftover in-process pipeline + Temporal CLI
 │   ├── api/                 # product HTTP (composition only)
@@ -166,7 +167,7 @@ jobhound_core/
 │   └── retention/           # one-shot job hard-delete
 ├── data/                    # countries.json (ISO lookup for collectors)
 ├── docker/temporal/         # Temporal dynamic config for Compose
-├── docs/                    # REPO_SNAPSHOT.md (feature slices only while in flight)
+├── docs/                    # REPO_SNAPSHOT.md; slices repo-baseline/, ingest-quality/
 ├── internal/
 │   ├── config/              # JOBHOUND_* names + typed loaders only
 │   ├── domain/              # shared kernel: schema.Job / ScoredJob, identity utils
@@ -186,6 +187,9 @@ jobhound_core/
 ├── Dockerfile.migrate
 ├── docker-compose.yml
 ├── Makefile
+├── .editorconfig
+├── .env.example             # JOBHOUND_* names; secrets empty
+├── .golangci.yml
 └── go.mod / go.sum
 ```
 
@@ -198,7 +202,7 @@ Modules under `internal/`: `collectors`, `config`, `domain`, `ingest`, `jobs`, `
 | File | What is configured |
 |------|----------------|
 | `go.mod` | module path, Go 1.24.0, direct deps, `replace` pins |
-| `Makefile` | `build` all five binaries to `bin/`; `run` / `run-debug` / `run-worker`; `test` / `test-integration`; `fmt` / `vet` / `tidy`; migrate; `docker-up` (build --no-cache + up -d --force-recreate --pull always) |
+| `Makefile` | `build` all five binaries to `bin/`; `run` / `run-debug` / `run-worker`; `test` / `test-integration`; `fmt` / `vet` / `lint` (`golangci-lint run`) / `tidy`; migrate; `docker-up` (build --no-cache + up -d --force-recreate --pull always) |
 | `docker-compose.yml` | postgres 16, migrate one-shot, redis 7, temporal + UI + temporal-ready, agent :3001, worker, api :3000 |
 | `Dockerfile` | multi-stage; CGO_ENABLED=0; debian-slim + chromium + `data/` |
 | `Dockerfile.migrate` | migrate binary + `migrations/` |
@@ -207,10 +211,11 @@ Modules under `internal/`: `collectors`, `config`, `domain`, `ingest`, `jobs`, `
 | `.cursor/rules/specify-rules.mdc` | always-applied stack + module layout, Canonical Enum, schema-first HTTP, Temporal separation |
 | `.cursor/templates/` | concept / schemas-contracts / tasks for new `docs/<feature_slug>/` slices |
 | `.cursor/skills/audit-feature-tasks/` | audit `*-tasks.md` against code |
-| CI | **none** (no `.github/workflows`) |
-| `.env.example` | **none** (local `.env` gitignored) |
+| CI | `.github/workflows/ci.yml` on push and pull request: `gofmt -l` empty, `make vet`, `make lint`, `make test`. No integration tag. No deploy |
+| `.env.example` | every key `internal/config` loads; secrets empty; default in a comment. README links it and does not paste the table |
 | `commitlint` / OpenAPI / CSS | none |
-| `.editorconfig` / LICENSE | none |
+| `.editorconfig` | `utf-8`, `lf`, final newline, trim trailing space. `*.go` tabs. `*.{yml,yaml,json,md}` indent 2. `*.md` does not trim trailing space |
+| LICENSE | **none** |
 
 Non-standard: env names live only in `internal/config`. Feature packages must not `os.Getenv` shared knobs. Temporal **connection** is config; workflow **code** is per-module `workflows/`.
 
@@ -219,20 +224,21 @@ Non-standard: env names live only in `internal/config`. Feature packages must no
 - **Language:** Go. No TypeScript / OpenAPI codegen.
 - **Shared kernel:** `internal/domain/schema.Job` / `ScoredJob`. Identity: `domain/utils.StableJobID`, `NormalizeListingURL`, `AssignStableID`. No GORM and no Temporal SDK under `internal/domain/**`.
 - **Module data model:** each feature’s `schema/` holds structs, enums, payloads, exported errors. HTTP request/response types for the product API live in `internal/publicapi/schema/`.
-- **Canonical Enum Pattern** (constitution): exported string enums must have `String` / `Equals` / `Pointer` / `FromValue` / `ValuesT` / `FromStringT`. A bare `Valid() bool` is not enough — `pipeline.RunJobStatus` currently has **only** `Valid()` (debt).
+- **Canonical Enum Pattern** (constitution): exported string enums must have `String` / `Equals` / `Pointer` / `FromValue` / `ValuesT` / `FromStringT`. `RunJobStatus` lives in `internal/pipeline/schema` (`String` / `Equals` / `Pointer` / `FromValue` / `ValuesRunJobStatus` / `FromStringRunJobStatus`). `FromValue` accepts all six statuses. `Valid()` still rejects `PASSED_STAGE_1` (stage 2–3 row check). `APIErrorCode` and `APIErrorClass` follow the same pattern.
 - **HTTP input:** embed JSON Schema (`//go:embed handlers/json_schema/*.schema.json`) → `publicapi/utils.ValidateJSONInstance` → decode with `DisallowUnknownFields()`. Schemas: `create_slot`, `profile_put`, `stage2_run`, `stage3_run`, `patch_job_bucket`. Forbidden: `map[string]json.RawMessage` existence checks in handlers.
 - **LLM output:** `internal/llm/schema/json_schema/job_scoring.schema.json` (`score` int, `rationale` string). Anthropic structured outputs; parsed in `llm/utils`.
-- **Error contract (product API):** `{ "error": { "code": "snake_case", "message": "..." } }`. 500 message is always `"internal server error"`. Slot cap 409 also has top-level `"limit": 3`. No `ok` discriminator envelope (unlike Saynest backend-api-core).
-- **Success bodies:** typed structs in `publicapi/schema` (slot card, job list, profile, stage-run accepted). `GET /api/v1/health` → `{ "status": "ok" }`. `DELETE` slot → **204** empty.
+- **Error contract (product API):** registry in `internal/publicapi/schema` (`APIErrorCode`, `APIErrorSpec`, `Lookup`). Writer is `WriteError` in `internal/publicapi/utils`. Envelope `{ "error": { "code": "DOMAIN.CODE", "message": "..." } }`. Slot cap 409 also has top-level `"limit": 3` (`SLOTS.LIMIT_REACHED`). No `ok`, `class`, `fields`, `meta`, or `correlation_id` on the wire. `500` message is always `Internal server error.` (`INTERNAL.UNEXPECTED`); the cause is logged, not copied into the body. Handlers do not pick status or message. `impl/` does not import the registry. Debug HTTP (`cmd/agent`) stays plain-text `http.Error`.
+- **Success bodies:** typed structs in `publicapi/schema` (slot card, job list, profile, stage-run accepted). `GET /api/v1/health` → `{ "status": "ok" }`. `DELETE` slot → **204** empty. Success is not wrapped in `{ "ok": true, "result" }`.
 
-Error `code` strings in handlers: `method_not_allowed`, `idempotency_key_required`, `invalid_idempotency_key`, `validation_error`, `idempotency_key_conflict`, `slot_limit_reached`, `invalid_json`, `not_found`, `stage_already_running`, `no_pipeline_run`, `profile_required`, `invalid_stage`, `invalid_query`, `internal_error`.
+Wire `code` values (registry order; generated copy `internal/publicapi/schema/generated/api-error-registry.json`): `HTTP.METHOD_NOT_ALLOWED`, `HTTP.INVALID_JSON`, `HTTP.VALIDATION_FAILED`, `HTTP.INVALID_STAGE`, `HTTP.INVALID_QUERY`, `SLOTS.IDEMPOTENCY_KEY_REQUIRED`, `SLOTS.INVALID_IDEMPOTENCY_KEY`, `SLOTS.IDEMPOTENCY_KEY_CONFLICT`, `SLOTS.LIMIT_REACHED`, `SLOTS.NOT_FOUND`, `PIPELINE.JOB_NOT_IN_SCOPE`, `SLOTS.STAGE_ALREADY_RUNNING`, `SLOTS.NO_PIPELINE_RUN`, `SLOTS.PROFILE_REQUIRED`, `INTERNAL.UNEXPECTED`. Old snake_case codes are not written. Wire structs stay in `publicapi/schema/errors.go` (`APIErrorBody`, `APIErrorDetail`, `SlotLimitReachedBody`).
 
 ## 7. Code conventions
 
 Facts from constitution v1.8.3 and `.cursor/rules/specify-rules.mdc`:
 
 - **Naming:** Go defaults (`PascalCase` exported, `camelCase` unexported). Package directories match module names (`publicapi`, `debughttp`, `browserfetch`).
-- **Module layers:** contract → impl → storage; Temporal mapping in `workflows/` (not `impl/`). Handlers: `handler.go` + `registerRoutes()` + one file per route; **no** package-level helpers in a route file (`publicapi` helpers live in `publicapi/utils/`).
+- **Module layers:** contract → impl → storage; Temporal mapping in `workflows/` (not `impl/`). Handlers: `handler.go` + `registerRoutes()` + one file per route; **no** package-level helpers in a route file (`publicapi` helpers live in `publicapi/utils/`). Product failures go through `WriteError`; the handler does not pass a status, a code string, or `err.Error()` into the body.
+- **Lint:** `make lint` (golangci-lint v2) plus `make fmt` / `make vet`. `depguard` denies `go.temporal.io/sdk` under `impl/` and GORM under `internal/domain`.
 - **Composition:** `cmd/*` is thin — open DB, dial Temporal, construct repos/services, `ListenAndServe` / `worker.Run`.
 - **State:** PostgreSQL is system of record; Redis is **only** ingest lock/cooldown (no search-result cache); Temporal holds workflow execution state.
 - **Logging:** `platform/logging.NewRoot`; `RequestIDMiddleware` (`X-Request-ID`); field keys `handler` / `method` / `workflow` / `service` / `request_id` / `workflow_id` / `run_id` / `slot_id` / `user_id` / `pipeline_run_id` / `source_id`. Default format **console**; `JOBHOUND_LOG_FORMAT=json` for GCP-style stdout.
@@ -275,13 +281,13 @@ No Stripe/Paddle/billing modules.
 | `run-worker` | Temporal worker |
 | `test` | `go test ./...` (excludes `integration` tag) |
 | `test-integration` | `go test -tags=integration ./...` |
-| `fmt` / `vet` / `tidy` | gofmt, vet, mod tidy |
+| `fmt` / `vet` / `lint` / `tidy` | `go fmt`, `go vet`, `golangci-lint run`, mod tidy |
 | `migrate-up` / `down` / `version` | `bin/migrate` |
 | `docker-up` / `docker-down` / `docker-ps` / `docker-logs` / `docker-migrate` | Compose |
 
 ### Tests
 
-- **Runner:** `go test`. **36** `*_test.go` files.
+- **Runner:** `go test`. **41** `*_test.go` files.
 - **Unit (default):** handlers (`httptest`), `impl`, `storage` (often sqlite), collector parse fixtures, pipeline activities, ingest coordinator (miniredis), Temporal workflow tests via SDK test env (`manual_slot_run_test.go`).
 - **Integration (`//go:build integration`):** `internal/platform/pgsql/migrations_integration_test.go`; `internal/ingest/coordinator_integration_test.go`; `internal/manual/workflows/client_integration_test.go`; `internal/collectors/browserfetch/rod_integration_test.go`. Need env / Compose (`JOBHOUND_DATABASE_URL`, Temporal, Chromium as applicable).
 - **`tests/`:** empty directory (constitution allows optional `tests/integration/`).
@@ -289,7 +295,7 @@ No Stripe/Paddle/billing modules.
 
 ### CI
 
-**None.** No GitHub Actions under `.github/`.
+`.github/workflows/ci.yml` on push and pull request (`ubuntu-latest`, Go from `go.mod`): `gofmt -l` must be empty, then `make vet`, `make lint` (golangci-lint **v2.13.2**), `make test`. No `integration` tag. No deploy job.
 
 ## 11. Deploy
 
@@ -337,7 +343,7 @@ From `internal/config` (single source). Values not listed.
 | `JOBHOUND_COLLECTOR_BUILTIN_INTER_REQUEST_DELAY_MS` | default 1000 |
 | `JOBHOUND_COLLECTOR_BUILTIN_USE_BROWSER` | default true; `0` forces net/http for Built In |
 
-`.env.example`: **absent**. Compose interpolates `JOBHOUND_ANTHROPIC_API_KEY` / `JOBHOUND_ANTHROPIC_MODEL` / `JOBHOUND_API_CORS_ORIGINS` from host env.
+`.env.example`: present. Lists every key in the table above; secrets empty; default in a comment. `README.md` links that file and does not paste a second list. Compose interpolates `JOBHOUND_ANTHROPIC_API_KEY` / `JOBHOUND_ANTHROPIC_MODEL` / `JOBHOUND_API_CORS_ORIGINS` from host env. Unloaded `config.Config` fields (Telegram, `HTTPUserAgent`, keyword slices) are not documented there.
 
 ## 12. AI setup
 
@@ -345,17 +351,17 @@ From `internal/config` (single source). Values not listed.
 |----------|----------|------------------------------------------------------------------|
 | `.cursorrules` | no | — |
 | `AGENTS.md` / `CLAUDE.md` | no | — |
-| `.cursor/rules/specify-rules.mdc` | yes | Always-applied: stack, `cmd/` vs `internal/`, collectors `schema/`, debughttp layout, Canonical Enum, publicapi JSON Schema, anti-patterns, testing, make targets |
+| `.cursor/rules/specify-rules.mdc` | yes | Always-applied: stack, `cmd/` vs `internal/`, collectors `schema/`, debughttp layout, Canonical Enum, publicapi JSON Schema, lint gate (`make lint` + fmt/vet; CI), product error registry (`WriteError`, handlers do not pick status or message), anti-patterns, testing, make targets |
 | `.cursor/templates/` | yes | `concept.md`, `schemas-contracts.md`, `tasks.md`, README |
 | `.cursor/skills/audit-feature-tasks/` | yes | audit `*-tasks.md` vs code |
-| `docs/` | `REPO_SNAPSHOT.md` only (no in-flight feature slice) | — |
+| `docs/` | `REPO_SNAPSHOT.md`; `repo-baseline/` (concept, schemas-contracts, tasks — done); `ingest-quality/ingest-quality-concept.md` | — |
 
 ## 13. Documentation
 
 | File | Contents | Currency (factual mismatches) |
 |------|----------|-------------------------------|
-| `README.md` | One paragraph + Docker two-liner + migrate hint | Does not list binaries, env vars, API routes, or Compose ports (those are in `docker-compose.yml` comments) |
-| `.cursor/rules/specify-rules.mdc` | Engineering constitution | Mentions `cmd/api/` as future in one paragraph and as implemented elsewhere; `cmd/api` exists. Mentions “scheduled events”; listing cron is backlog, **job retention** schedule exists |
+| `README.md` | One paragraph + pointer to `.env.example` + Docker two-liner + migrate hint | Does not list binaries, API routes, or Compose ports (those are in `docker-compose.yml` comments). Env key table lives in `.env.example`, not a second copy in the README |
+| `.cursor/rules/specify-rules.mdc` | Engineering constitution | Lint gate and product error registry recorded (2026-10-01). Tree comment still says add `cmd/api/` when the product HTTP API exists; `cmd/api` exists. Mentions “scheduled events”; listing cron is backlog, **job retention** schedule exists |
 | `LICENSE` | — | **Missing** |
 
 ## 14. Scaffold vs business logic
@@ -367,7 +373,8 @@ From `internal/config` (single source). Values not listed.
 - `internal/platform/pgsql` + `golang-migrate` SQL
 - `internal/platform/logging` (zerolog, request id, field names)
 - Temporal: per-module `workflows/` + `RegisterWorkflow` in `New`/`Register`; no SDK in `impl/`
-- Product HTTP: `net/http` mux, CORS, embedded JSON Schema + typed decode
+- Product HTTP: `net/http` mux, CORS, embedded JSON Schema + typed decode, error registry + `WriteError`
+- golangci-lint v2 (`.golangci.yml`) and GitHub Actions (`gofmt`, vet, lint, unit tests)
 - Docker Compose Postgres + Temporal + worker + API
 - Feature docs: `.cursor/templates/` → `docs/<feature_slug>/`; audit via `.cursor/skills/audit-feature-tasks`
 
@@ -389,12 +396,11 @@ From `internal/config` (single source). Values not listed.
 - **`cmd/agent` noop path:** without `JOBHOUND_DEBUG_HTTP_ADDR`, runs `pipeline/impl.Pipeline` with mock scorer/dedup/notify and prints `noop pipeline run ok`. Not the product path.
 - **`config.Config` dead fields:** `TelegramBotToken`, `TelegramChatID`, `HTTPUserAgent`, `IncludeKeywords`, `ExcludeKeywords` — declared, **not** filled by `Load()`.
 - **`go-rod`:** used in production code but `// indirect` in `go.mod` (should be a direct require).
-- **Canonical Enum:** `pipeline.RunJobStatus` only has `Valid()`.
-- **`pipeline/stage_rules.go`:** still at module root; constitution says move to `pipeline/schema/` when touched.
+- **`pipeline/stage_rules.go`:** still at module root; constitution says move to `pipeline/schema/` when touched. `RunJobStatus` is already in `internal/pipeline/schema`.
 - **Empty `JOBHOUND_ANTHROPIC_API_KEY`:** worker scores with mock **0** → all stage-3 rows `REJECTED_STAGE_3` (threshold 60). Easy to miss operationally.
 - **Worker without Redis URL:** ingest workflows register with nil coordinator; ingest activities cannot take locks (fail closed / incomplete ingest).
-- **No `.env.example`**, no LICENSE, no CI, no OpenAPI.
-- **README** is thinner than Compose.
+- **No LICENSE**, no OpenAPI. CI and `.env.example` exist (`.github/workflows/ci.yml`, repo-baseline).
+- **README** points at `.env.example` and stays thinner than Compose (no routes, no ports).
 - **Scheduled vacancy auto-refresh:** explicit backlog. Retention cron is unrelated (delete old `jobs` rows).
 - **Auth / multi-user / Telegram push:** out of MVP; `user_id` column unused.
 - **`tests/`:** empty placeholder.
@@ -417,5 +423,5 @@ From `internal/config` (single source). Values not listed.
 | Docker Compose Postgres + migrate | `docker-compose.yml` | don’t know |
 | GORM + golang-migrate SQL | `platform/pgsql`, `migrations/` | no (Saynest is Mongoose) |
 | Collector / rod / Anthropic | `internal/collectors`, `internal/llm/anthropic` | no |
-| API error envelope `{error:{code,message}}` | `publicapi/schema/errors.go` | related but **different** from Saynest `{ok, result\|error}` registry |
+| API error envelope `{error:{code,message}}` | `publicapi/schema/api_error.go` (registry) + `errors.go` (wire structs); writer `publicapi/utils.WriteError` | related but **different** from Saynest `{ok, result\|error}` registry. Codes are `DOMAIN.CODE`. Slot cap adds top-level `limit` |
 | CORS + Idempotency-Key | `publicapi/utils/cors.go` | no |

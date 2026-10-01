@@ -12,7 +12,6 @@ import (
 	ingestschema "github.com/andrewmysliuk/jobhound_core/internal/ingest/schema"
 	ingest_workflows "github.com/andrewmysliuk/jobhound_core/internal/ingest/workflows"
 	manualschema "github.com/andrewmysliuk/jobhound_core/internal/manual/schema"
-	"github.com/andrewmysliuk/jobhound_core/internal/pipeline"
 	pipelineschema "github.com/andrewmysliuk/jobhound_core/internal/pipeline/schema"
 	pipeutils "github.com/andrewmysliuk/jobhound_core/internal/pipeline/utils"
 	"github.com/andrewmysliuk/jobhound_core/internal/platform/logging"
@@ -120,7 +119,7 @@ func ManualSlotRunWorkflow(ctx workflow.Context, in manualschema.ManualSlotRunWo
 		capN := pipeutils.MaxStage3JobsPerPipelineRunExecution
 		var passedN, rejectedN int
 		for _, sj := range s3out.Scored {
-			if pipeutils.TerminalRunJobStatusFromScoredJob(sj) == pipeline.RunJobPassedStage3 {
+			if pipeutils.TerminalRunJobStatusFromScoredJob(sj) == pipelineschema.RunJobPassedStage3 {
 				passedN++
 			} else {
 				rejectedN++

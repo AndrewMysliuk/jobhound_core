@@ -14,8 +14,6 @@ import (
 	slotworkflows "github.com/andrewmysliuk/jobhound_core/internal/slots/workflows"
 	"github.com/google/uuid"
 	enumspb "go.temporal.io/api/enums/v1"
-	"go.temporal.io/sdk/client"
-	"go.temporal.io/sdk/temporal"
 )
 
 func stage2WorkflowID(slotID uuid.UUID) string {
@@ -61,14 +59,14 @@ func (s *Service) RunStage2(ctx context.Context, p slotschema.RunStage2Params) (
 	if err := in.Validate(); err != nil {
 		return nil, err
 	}
-	_, err = s.Temporal.ExecuteWorkflow(ctx, client.StartWorkflowOptions{
+	_, err = s.Temporal.ExecuteWorkflow(ctx, slots.StartWorkflowOptions{
 		ID:                    wid,
 		TaskQueue:             s.TaskQueue,
 		WorkflowRunTimeout:    manualworkflows.DefaultManualSlotRunWorkflowTimeout,
 		WorkflowIDReusePolicy: enumspb.WORKFLOW_ID_REUSE_POLICY_ALLOW_DUPLICATE,
 	}, manualschema.ManualSlotRunWorkflowName, in)
 	if err != nil {
-		if temporal.IsWorkflowExecutionAlreadyStartedError(err) {
+		if slotworkflows.ExecutionAlreadyStarted(err) {
 			return nil, slots.ErrStageAlreadyRunning
 		}
 		return nil, err
@@ -126,14 +124,14 @@ func (s *Service) RunStage3(ctx context.Context, p slotschema.RunStage3Params) (
 	if err := in.Validate(); err != nil {
 		return nil, err
 	}
-	_, err = s.Temporal.ExecuteWorkflow(ctx, client.StartWorkflowOptions{
+	_, err = s.Temporal.ExecuteWorkflow(ctx, slots.StartWorkflowOptions{
 		ID:                    wid,
 		TaskQueue:             s.TaskQueue,
 		WorkflowRunTimeout:    manualworkflows.DefaultManualSlotRunWorkflowTimeout,
 		WorkflowIDReusePolicy: enumspb.WORKFLOW_ID_REUSE_POLICY_ALLOW_DUPLICATE,
 	}, manualschema.ManualSlotRunWorkflowName, in)
 	if err != nil {
-		if temporal.IsWorkflowExecutionAlreadyStartedError(err) {
+		if slotworkflows.ExecutionAlreadyStarted(err) {
 			return nil, slots.ErrStageAlreadyRunning
 		}
 		return nil, err

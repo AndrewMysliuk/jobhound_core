@@ -188,9 +188,9 @@ func TestBuiltIn_FetchWithSlotSearch_httptest(t *testing.T) {
 			require.Equal(t, "true", r.URL.Query().Get("allLocations"))
 			require.Equal(t, "go", r.URL.Query().Get("search"))
 			require.Equal(t, "1", r.URL.Query().Get("page"))
-			_, _ = w.Write([]byte(fmt.Sprintf(listingHTML, base)))
+			_, _ = fmt.Fprintf(w, listingHTML, base)
 		case strings.HasPrefix(r.URL.Path, "/job/"):
-			_, _ = w.Write([]byte(fmt.Sprintf(detailHTML, base, base)))
+			_, _ = fmt.Fprintf(w, detailHTML, base, base)
 		default:
 			http.NotFound(w, r)
 		}
@@ -296,7 +296,7 @@ func TestBuiltIn_FetchWithSlotSearch_challengeRetry_httptest(t *testing.T) {
 				return
 			}
 			require.Equal(t, int32(2), n)
-			_, _ = w.Write([]byte(fmt.Sprintf(listingHTML, base)))
+			_, _ = fmt.Fprintf(w, listingHTML, base)
 		case strings.HasPrefix(r.URL.Path, "/job/"):
 			n := detailCalls.Add(1)
 			if n == 1 {
@@ -304,7 +304,7 @@ func TestBuiltIn_FetchWithSlotSearch_challengeRetry_httptest(t *testing.T) {
 				return
 			}
 			require.Equal(t, int32(2), n)
-			_, _ = w.Write([]byte(fmt.Sprintf(detailHTML, base, base)))
+			_, _ = fmt.Fprintf(w, detailHTML, base, base)
 		default:
 			http.NotFound(w, r)
 		}

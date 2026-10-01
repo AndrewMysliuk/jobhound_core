@@ -12,7 +12,7 @@ const stage2DuplicateRuleID = "duplicate"
 
 // Stage2Evaluation is the outcome of evaluating all rules on one job.
 type Stage2Evaluation struct {
-	Status pipeline.RunJobStatus
+	Status pipelineschema.RunJobStatus
 	Hits   []pipeline.Stage2Hit
 	Boost  int
 }
@@ -22,7 +22,7 @@ func EvaluateStage2(j schema.Job, rules []pipelineschema.Stage2Rule, duplicateOf
 	if duplicateOf != nil {
 		if survivorID, dup := duplicateOf[j.ID]; dup {
 			return Stage2Evaluation{
-				Status: pipeline.RunJobRejectedStage2,
+				Status: pipelineschema.RunJobRejectedStage2,
 				Hits: []pipeline.Stage2Hit{{
 					RuleID:  stage2DuplicateRuleID,
 					Action:  string(pipelineschema.RuleActionReject),
@@ -36,7 +36,7 @@ func EvaluateStage2(j schema.Job, rules []pipelineschema.Stage2Rule, duplicateOf
 		return Stage2Evaluation{}, err
 	}
 	if len(rules) == 0 {
-		return Stage2Evaluation{Status: pipeline.RunJobUnknownStage2}, nil
+		return Stage2Evaluation{Status: pipelineschema.RunJobUnknownStage2}, nil
 	}
 	var hits []pipeline.Stage2Hit
 	boost := 0
@@ -65,23 +65,23 @@ func EvaluateStage2(j schema.Job, rules []pipelineschema.Stage2Rule, duplicateOf
 			}
 		}
 	}
-	var st pipeline.RunJobStatus
+	var st pipelineschema.RunJobStatus
 	switch {
 	case reject:
-		st = pipeline.RunJobRejectedStage2
+		st = pipelineschema.RunJobRejectedStage2
 	case passBoost:
-		st = pipeline.RunJobPassedStage2
+		st = pipelineschema.RunJobPassedStage2
 	default:
-		st = pipeline.RunJobUnknownStage2
+		st = pipelineschema.RunJobUnknownStage2
 	}
 	return Stage2Evaluation{Status: st, Hits: hits, Boost: boost}, nil
 }
 
 // Stage2StatusForJob returns only the status from [EvaluateStage2].
-func Stage2StatusForJob(j schema.Job, rules []pipelineschema.Stage2Rule, duplicateOf map[string]string) pipeline.RunJobStatus {
+func Stage2StatusForJob(j schema.Job, rules []pipelineschema.Stage2Rule, duplicateOf map[string]string) pipelineschema.RunJobStatus {
 	ev, err := EvaluateStage2(j, rules, duplicateOf)
 	if err != nil {
-		return pipeline.RunJobUnknownStage2
+		return pipelineschema.RunJobUnknownStage2
 	}
 	return ev.Status
 }
@@ -94,7 +94,7 @@ func JobsAfterStage2(jobs []schema.Job, rules []pipelineschema.Stage2Rule, dupli
 	}
 	out := make([]schema.Job, 0, len(jobs))
 	for _, j := range jobs {
-		if Stage2StatusForJob(j, rules, duplicateOf) != pipeline.RunJobRejectedStage2 {
+		if Stage2StatusForJob(j, rules, duplicateOf) != pipelineschema.RunJobRejectedStage2 {
 			out = append(out, j)
 		}
 	}

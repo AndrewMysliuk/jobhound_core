@@ -8,6 +8,7 @@ import (
 
 	jobschema "github.com/andrewmysliuk/jobhound_core/internal/jobs/schema"
 	"github.com/andrewmysliuk/jobhound_core/internal/pipeline"
+	pipelineschema "github.com/andrewmysliuk/jobhound_core/internal/pipeline/schema"
 	"github.com/andrewmysliuk/jobhound_core/internal/publicapi/schema"
 	"github.com/andrewmysliuk/jobhound_core/internal/slots"
 	slotschema "github.com/andrewmysliuk/jobhound_core/internal/slots/schema"
@@ -20,20 +21,20 @@ func normalizeListStatusFilter(stage int, raw string) (string, error) {
 	if s == "" {
 		return "", nil
 	}
-	if stage == 2 && s == pipeline.Stage2ListFilterEligible {
-		return pipeline.Stage2ListFilterEligible, nil
+	if stage == 2 && s == pipelineschema.Stage2ListFilterEligible {
+		return pipelineschema.Stage2ListFilterEligible, nil
 	}
-	st := pipeline.RunJobStatus(s)
+	st := pipelineschema.RunJobStatus(s)
 	if !st.Valid() {
 		return "", fmt.Errorf("invalid status")
 	}
 	switch stage {
 	case 2:
-		if st != pipeline.RunJobPassedStage2 && st != pipeline.RunJobRejectedStage2 && st != pipeline.RunJobUnknownStage2 {
+		if st != pipelineschema.RunJobPassedStage2 && st != pipelineschema.RunJobRejectedStage2 && st != pipelineschema.RunJobUnknownStage2 {
 			return "", fmt.Errorf("status not valid for stage 2 list")
 		}
 	case 3:
-		if st != pipeline.RunJobPassedStage3 && st != pipeline.RunJobRejectedStage3 {
+		if st != pipelineschema.RunJobPassedStage3 && st != pipelineschema.RunJobRejectedStage3 {
 			return "", fmt.Errorf("status not valid for stage 3 list")
 		}
 	default:

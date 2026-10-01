@@ -131,9 +131,7 @@ func TestPostStage2Run_validationAnd409(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
 		t.Fatal(err)
 	}
-	if body.Error.Code != "stage_already_running" {
-		t.Fatalf("code %q", body.Error.Code)
-	}
+	assertAPIError(t, body.Error, schema.APIErrorCodeStageAlreadyRunning)
 }
 
 func TestPostStage3Run_404_and_422(t *testing.T) {

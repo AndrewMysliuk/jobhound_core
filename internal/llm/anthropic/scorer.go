@@ -124,7 +124,7 @@ func (s *Scorer) Score(ctx context.Context, profile string, job schema.Job) (sch
 	if err != nil {
 		return schema.ScoredJob{}, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return schema.ScoredJob{}, err

@@ -10,6 +10,7 @@ import (
 	jobdata "github.com/andrewmysliuk/jobhound_core/internal/domain/schema"
 	jobsschema "github.com/andrewmysliuk/jobhound_core/internal/jobs/schema"
 	"github.com/andrewmysliuk/jobhound_core/internal/pipeline"
+	pipelineschema "github.com/andrewmysliuk/jobhound_core/internal/pipeline/schema"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -66,7 +67,7 @@ func (r *Repository) ListPassedStage2JobsForRun(ctx context.Context, pipelineRun
 	if pipelineRunID <= 0 {
 		return nil, fmt.Errorf("pipeline run id is required")
 	}
-	st := string(pipeline.RunJobPassedStage2)
+	st := string(pipelineschema.RunJobPassedStage2)
 	var models []Job
 	err := r.get().WithContext(ctx).Raw(sqlListPassedStage2JobsForRun, pipelineRunID, st).Scan(&models).Error
 	if err != nil {
@@ -108,10 +109,10 @@ func (r *Repository) stage2JobListBase(ctx context.Context, slotID uuid.UUID, ru
 	switch strings.TrimSpace(statusFilter) {
 	case "":
 		return q.Where("prj.pipeline_run_id = ?", runID)
-	case pipeline.Stage2ListFilterEligible:
+	case pipelineschema.Stage2ListFilterEligible:
 		return q.Where("prj.pipeline_run_id = ? AND prj.stage2_status IN ?", runID, []string{
-			string(pipeline.RunJobPassedStage2),
-			string(pipeline.RunJobUnknownStage2),
+			string(pipelineschema.RunJobPassedStage2),
+			string(pipelineschema.RunJobUnknownStage2),
 		})
 	default:
 		return q.Where("prj.pipeline_run_id = ? AND prj.stage2_status = ?", runID, statusFilter)
@@ -125,8 +126,8 @@ func (r *Repository) stage3JobListBase(ctx context.Context, slotID uuid.UUID, ru
 		Joins("INNER JOIN pipeline_run_jobs prj ON prj.job_id = " + jt + ".id")
 	if strings.TrimSpace(statusFilter) == "" {
 		return q.Where("prj.pipeline_run_id = ? AND prj.stage3_status IN ?", runID, []string{
-			string(pipeline.RunJobPassedStage3),
-			string(pipeline.RunJobRejectedStage3),
+			string(pipelineschema.RunJobPassedStage3),
+			string(pipelineschema.RunJobRejectedStage3),
 		})
 	}
 	return q.Where("prj.pipeline_run_id = ? AND prj.stage3_status = ?", runID, statusFilter)

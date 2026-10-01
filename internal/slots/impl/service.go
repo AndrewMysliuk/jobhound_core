@@ -17,7 +17,6 @@ import (
 	slotworkflows "github.com/andrewmysliuk/jobhound_core/internal/slots/workflows"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
-	"go.temporal.io/sdk/client"
 )
 
 var _ slots.API = (*Service)(nil)
@@ -123,7 +122,7 @@ func (s *Service) Create(ctx context.Context, p slotschema.CreateSlotParams) (sl
 		_ = s.Repo.Delete(ctx, id.String())
 		return slotschema.CreateSlotResult{}, err
 	}
-	_, err = s.Temporal.ExecuteWorkflow(ctx, client.StartWorkflowOptions{
+	_, err = s.Temporal.ExecuteWorkflow(ctx, slots.StartWorkflowOptions{
 		ID:                 ingestWorkflowID(id),
 		TaskQueue:          s.TaskQueue,
 		WorkflowRunTimeout: manualworkflows.DefaultManualSlotRunWorkflowTimeout,

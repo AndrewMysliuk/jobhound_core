@@ -15,15 +15,15 @@ const warmupOrigin = siteOrigin + "/"
 
 // jobPost is one element from GET /api/jobPosts/search.
 type jobPost struct {
-	ID          string   `json:"id"`
-	Title       string   `json:"title"`
-	Company     string   `json:"company"`
-	Description string   `json:"description"`
-	Link        string   `json:"link"`
-	Date        int64    `json:"date"`
-	Location    string   `json:"location"`
-	Country     string   `json:"country"`
-	Remote      string   `json:"remote"`
+	ID          string       `json:"id"`
+	Title       string       `json:"title"`
+	Company     string       `json:"company"`
+	Description string       `json:"description"`
+	Link        string       `json:"link"`
+	Date        int64        `json:"date"`
+	Location    string       `json:"location"`
+	Country     string       `json:"country"`
+	Remote      string       `json:"remote"`
 	SalaryFrom  salaryAmount `json:"salaryFrom"`
 	SalaryTo    salaryAmount `json:"salaryTo"`
 	Currency    string       `json:"currency"`

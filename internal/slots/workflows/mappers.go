@@ -8,7 +8,13 @@ import (
 	enumspb "go.temporal.io/api/enums/v1"
 	"go.temporal.io/api/serviceerror"
 	"go.temporal.io/sdk/client"
+	"go.temporal.io/sdk/temporal"
 )
+
+// ExecutionAlreadyStarted reports a Temporal workflow-id collision on ExecuteWorkflow.
+func ExecutionAlreadyStarted(err error) bool {
+	return temporal.IsWorkflowExecutionAlreadyStartedError(err)
+}
 
 // WorkflowExecutionRunning reports whether DescribeWorkflow shows a RUNNING execution.
 // A NotFound error is treated as "not running" (no active workflow with that ID).
