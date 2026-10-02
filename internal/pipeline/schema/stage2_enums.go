@@ -56,6 +56,7 @@ const (
 	RuleFieldTitle            RuleField = "title"
 	RuleFieldBody             RuleField = "body"
 	RuleFieldTitleBody        RuleField = "title_body"
+	RuleFieldListing          RuleField = "listing"
 )
 
 func (f RuleField) String() string { return string(f) }
@@ -76,6 +77,8 @@ func (f RuleField) FromValue(s string) (RuleField, error) {
 		return RuleFieldBody, nil
 	case string(RuleFieldTitleBody):
 		return RuleFieldTitleBody, nil
+	case string(RuleFieldListing):
+		return RuleFieldListing, nil
 	default:
 		return "", fmt.Errorf("unknown RuleField %q: valid values are %v", s, ValuesRuleField())
 	}
@@ -84,7 +87,7 @@ func (f RuleField) FromValue(s string) (RuleField, error) {
 func ValuesRuleField() []RuleField {
 	return []RuleField{
 		RuleFieldCountriesAllowed, RuleFieldPosition,
-		RuleFieldTitle, RuleFieldBody, RuleFieldTitleBody,
+		RuleFieldTitle, RuleFieldBody, RuleFieldTitleBody, RuleFieldListing,
 	}
 }
 

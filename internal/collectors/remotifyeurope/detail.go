@@ -4,13 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/andrewmysliuk/jobhound_core/internal/collectors/utils"
+	"html"
 	"io"
 	"net/http"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/utils"
 )
 
 const fallbackListingIDCap = 24
@@ -31,6 +33,7 @@ type ListingDetail struct {
 	Remote        *bool
 	RemoteKnown   bool
 	LocationTexts []string
+	HeaderPin     string
 }
 
 // ParseListingDetailHTML extracts JSON-LD JobPosting fields and job_link from listing HTML.
@@ -59,7 +62,36 @@ func ParseListingDetailHTML(html string) (ListingDetail, error) {
 	locStrings := append([]string(nil), locationStringsFromJSONLD(jp.ApplicantLocationRequirements)...)
 	locStrings = append(locStrings, locationStringsFromJSONLD(jp.JobLocation)...)
 	out.LocationTexts = locStrings
+	out.HeaderPin = headerLocationPin(html)
 	return out, nil
+}
+
+const headerLocationPinPath = "M12 2C8.13 2 5 5.13 5 9"
+
+var headerPinTextRE = regexp.MustCompile(`<p class="text-sm">([^<]*)</p>`)
+
+func headerLocationPin(page string) string {
+	idx := strings.Index(page, headerLocationPinPath)
+	if idx < 0 {
+		return ""
+	}
+	rest := page[idx:]
+	svgEnd := strings.Index(rest, "</svg>")
+	if svgEnd < 0 {
+		return ""
+	}
+	window := rest[svgEnd+len("</svg>"):]
+	if next := strings.Index(window, "<svg"); next >= 0 {
+		window = window[:next]
+	}
+	var parts []string
+	for _, m := range headerPinTextRE.FindAllStringSubmatch(window, -1) {
+		t := strings.TrimSpace(html.UnescapeString(m[1]))
+		if t != "" {
+			parts = append(parts, t)
+		}
+	}
+	return strings.Join(parts, ", ")
 }
 
 type jobPostingWire struct {

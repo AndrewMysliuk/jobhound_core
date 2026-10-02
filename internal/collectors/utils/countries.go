@@ -9,20 +9,22 @@ import (
 
 // ISO aliases and common shorthands (specs/005-job-collectors/contracts/domain-mapping-mvp.md).
 var countryAliases = map[string]string{
-	"uk":              "GB",
-	"u.k.":            "GB",
-	"great britain":   "GB",
-	"britain":         "GB",
-	"usa":             "US",
-	"u.s.a.":          "US",
-	"u.s.":            "US",
-	"united states":   "US",
-	"america":         "US",
-	"the netherlands": "NL",
-	"holland":         "NL",
-	"czechia":         "CZ",
-	"czech republic":  "CZ",
-	"україна":         "UA",
+	"uk":                "GB",
+	"u.k.":              "GB",
+	"great britain":     "GB",
+	"britain":           "GB",
+	"usa":               "US",
+	"u.s.a.":            "US",
+	"u.s.":              "US",
+	"united states":     "US",
+	"america":           "US",
+	"the netherlands":   "NL",
+	"holland":           "NL",
+	"czechia":           "CZ",
+	"czech republic":    "CZ",
+	"україна":           "UA",
+	"bolivia":           "BO",
+	"republic of korea": "KR",
 }
 
 type countryRecord struct {
@@ -78,4 +80,28 @@ func (r *CountryResolver) Alpha2ForName(fragment string) string {
 		return code
 	}
 	return ""
+}
+
+// LongestAlpha2InText returns the alpha-2 for the longest catalog name or alias
+// that appears in text on whole words, or "" when none does.
+func (r *CountryResolver) LongestAlpha2InText(text string) string {
+	if r == nil {
+		return ""
+	}
+	lower := strings.ToLower(text)
+	bestKey := ""
+	bestCode := ""
+	bestIdx := -1
+	for key, code := range r.byLowerName {
+		idx := wholeWordPhraseIndex(lower, key)
+		if idx < 0 {
+			continue
+		}
+		if bestIdx < 0 || len(key) > len(bestKey) || (len(key) == len(bestKey) && (idx < bestIdx || (idx == bestIdx && key < bestKey))) {
+			bestKey = key
+			bestCode = code
+			bestIdx = idx
+		}
+	}
+	return bestCode
 }

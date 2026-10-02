@@ -67,7 +67,7 @@ func validateStage2FieldOp(i int, field pipelineschema.RuleField, op pipelinesch
 		if op != pipelineschema.RuleOpAny && op != pipelineschema.RuleOpExcludes {
 			return fmt.Errorf("rules[%d]: field %q requires op any or excludes", i, field)
 		}
-	case pipelineschema.RuleFieldTitle, pipelineschema.RuleFieldBody, pipelineschema.RuleFieldTitleBody:
+	case pipelineschema.RuleFieldTitle, pipelineschema.RuleFieldBody, pipelineschema.RuleFieldTitleBody, pipelineschema.RuleFieldListing:
 		if op != pipelineschema.RuleOpPhrase {
 			return fmt.Errorf("rules[%d]: field %q requires op %q", i, field, pipelineschema.RuleOpPhrase)
 		}

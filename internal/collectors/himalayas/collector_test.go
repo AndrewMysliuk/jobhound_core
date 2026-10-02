@@ -176,6 +176,46 @@ func TestHTTP429_error(t *testing.T) {
 	require.Contains(t, err.Error(), "429")
 }
 
+func TestHiringScope_locationRestrictions(t *testing.T) {
+	cr := testCountriesResolver(t)
+	job := func(locs []string, tz []float64, desc string) (countries, regions []string, raw string, offsets []float64) {
+		t.Helper()
+		w := jobWire{
+			Title:                "Engineer",
+			CompanyName:          "Acme",
+			GUID:                 "https://himalayas.app/companies/acme/jobs/engineer",
+			Description:          desc,
+			LocationRestrictions: locs,
+			TimezoneRestrictions: tz,
+		}
+		j, err := jobFromWire(cr, w, nil)
+		require.NoError(t, err)
+		return j.HiringCountries, j.HiringRegions, j.HiringRaw, j.TimezoneOffsets
+	}
+
+	t.Run("bolivia", func(t *testing.T) {
+		countries, regions, raw, _ := job([]string{"Bolivia"}, nil, "")
+		require.Equal(t, []string{"BO"}, countries)
+		require.Empty(t, regions)
+		require.Equal(t, "Bolivia", raw)
+	})
+
+	t.Run("bosnia and herzegovina", func(t *testing.T) {
+		countries, regions, raw, _ := job([]string{"Bosnia and Herzegovina"}, nil, "")
+		require.Equal(t, []string{"BA"}, countries)
+		require.Empty(t, regions)
+		require.Equal(t, "Bosnia and Herzegovina", raw)
+	})
+
+	t.Run("empty restrictions ignore timezone", func(t *testing.T) {
+		countries, regions, raw, tz := job(nil, []float64{5.5}, "<p>Bolivia office</p>")
+		require.Empty(t, countries)
+		require.Empty(t, regions)
+		require.Empty(t, raw)
+		require.Equal(t, []float64{5.5}, tz)
+	})
+}
+
 func makeJob(i int) jobWire {
 	u := fmt.Sprintf("https://h.test/jobs/%d", i)
 	return jobWire{

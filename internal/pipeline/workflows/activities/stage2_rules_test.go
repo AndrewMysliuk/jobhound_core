@@ -50,6 +50,45 @@ func TestStage2Rules_phraseCSharpAndNegation(t *testing.T) {
 	require.Empty(t, ev.Hits)
 }
 
+func TestStage2Rules_listingPhrase(t *testing.T) {
+	t.Parallel()
+	rule := func(field pipelineschema.RuleField) pipelineschema.Stage2Rule {
+		return pipelineschema.Stage2Rule{
+			ID: "p", Field: field, Op: pipelineschema.RuleOpPhrase,
+			Values: []string{"acme corp"}, Action: pipelineschema.RuleActionReject,
+		}
+	}
+	listing := pipelineschema.Stage2Rule{
+		ID: "p", Field: pipelineschema.RuleFieldListing, Op: pipelineschema.RuleOpPhrase,
+		Values: []string{"onlyhere"}, Action: pipelineschema.RuleActionReject,
+	}
+
+	ev := evalStage2(t, schema.Job{Company: "onlyhere"}, []pipelineschema.Stage2Rule{listing})
+	require.Equal(t, pipelineschema.RunJobRejectedStage2, ev.Status)
+
+	ev = evalStage2(t, schema.Job{Tags: []string{"other", "onlyhere"}}, []pipelineschema.Stage2Rule{listing})
+	require.Equal(t, pipelineschema.RunJobRejectedStage2, ev.Status)
+
+	ev = evalStage2(t, schema.Job{HiringRaw: "onlyhere"}, []pipelineschema.Stage2Rule{listing})
+	require.Equal(t, pipelineschema.RunJobRejectedStage2, ev.Status)
+
+	ev = evalStage2(t, schema.Job{SalaryRaw: "onlyhere"}, []pipelineschema.Stage2Rule{listing})
+	require.Equal(t, pipelineschema.RunJobRejectedStage2, ev.Status)
+
+	ev = evalStage2(t, schema.Job{URL: "https://example.com/onlyhere", CountryCode: "onlyhere"}, []pipelineschema.Stage2Rule{listing})
+	require.Equal(t, pipelineschema.RunJobUnknownStage2, ev.Status)
+	require.Empty(t, ev.Hits)
+
+	ev = evalStage2(t, schema.Job{Title: "acme", Company: "corp"}, []pipelineschema.Stage2Rule{rule(pipelineschema.RuleFieldListing)})
+	require.Equal(t, pipelineschema.RunJobUnknownStage2, ev.Status)
+
+	ev = evalStage2(t, schema.Job{Title: "PM", Company: "onlyhere"}, []pipelineschema.Stage2Rule{{
+		ID: "t", Field: pipelineschema.RuleFieldTitle, Op: pipelineschema.RuleOpPhrase,
+		Values: []string{"onlyhere"}, Action: pipelineschema.RuleActionReject,
+	}})
+	require.Equal(t, pipelineschema.RunJobUnknownStage2, ev.Status)
+}
+
 func TestStage2Rules_titlePhraseDoesNotSeeBody(t *testing.T) {
 	t.Parallel()
 	j := schema.Job{Title: "PM", Description: "must know backend systems"}

@@ -165,18 +165,7 @@ func (c *RemotifyEurope) fetchJobDetail(ctx context.Context, client *http.Client
 	if detail.RemoteKnown {
 		j.Remote = detail.Remote
 	}
-	telecommute := detail.RemoteKnown && detail.Remote != nil && *detail.Remote
-	hiringCountries, hiringRegions, hiringRaw := utils.ParseHiringScope(c.Countries, detail.LocationTexts...)
-	if telecommute && len(hiringCountries) == 0 && len(hiringRegions) == 0 {
-		hiringRegions = []string{schema.RegionCodeWorldwide.String()}
-	}
-	if len(hiringCountries) == 0 && len(hiringRegions) == 0 {
-		hiringRegions = []string{schema.RegionCodeEurope.String()}
-	}
-	countryCode := ""
-	if len(hiringCountries) > 0 {
-		countryCode = hiringCountries[0]
-	}
+	countryCode, hiringCountries, hiringRegions, hiringRaw := hiringScopeFromDetail(c.Countries, detail)
 	j.CountryCode = countryCode
 	j.HiringCountries = hiringCountries
 	j.HiringRegions = hiringRegions
@@ -185,6 +174,27 @@ func (c *RemotifyEurope) fetchJobDetail(ctx context.Context, client *http.Client
 		return schema.Job{}, err
 	}
 	return j, nil
+}
+
+func hiringScopeFromDetail(countries *utils.CountryResolver, detail ListingDetail) (countryCode string, hiringCountries, hiringRegions []string, hiringRaw string) {
+	texts := append([]string(nil), detail.LocationTexts...)
+	if len(texts) == 0 {
+		if pin := strings.TrimSpace(detail.HeaderPin); pin != "" {
+			texts = []string{pin}
+		}
+	}
+	hiringCountries, hiringRegions, hiringRaw = utils.ParseHiringScope(countries, texts...)
+	telecommute := detail.RemoteKnown && detail.Remote != nil && *detail.Remote
+	if telecommute && len(hiringCountries) == 0 && len(hiringRegions) == 0 {
+		hiringRegions = []string{schema.RegionCodeWorldwide.String()}
+	}
+	if len(hiringCountries) == 0 && len(hiringRegions) == 0 {
+		hiringRegions = []string{schema.RegionCodeEurope.String()}
+	}
+	if len(hiringCountries) > 0 {
+		countryCode = hiringCountries[0]
+	}
+	return countryCode, hiringCountries, hiringRegions, hiringRaw
 }
 
 func (c *RemotifyEurope) postFlight(ctx context.Context, client *http.Client, listingURL, action, searchQuery, cursor string) ([]byte, error) {

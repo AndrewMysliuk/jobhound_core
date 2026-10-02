@@ -10,7 +10,7 @@ import (
 	jobschema "github.com/andrewmysliuk/jobhound_core/internal/domain/schema"
 )
 
-var hiringScopePartSplit = regexp.MustCompile(`(?i)\s+and\s+|[,/;|]`)
+var hiringScopePartSplit = regexp.MustCompile(`(?i)\s+and\s+|\s+-\s+|[,/;|]`)
 
 type hiringScopePhrase struct {
 	phrase  string
@@ -65,11 +65,7 @@ func ParseHiringScope(r *CountryResolver, raw ...string) (countries []string, re
 			rawSeen[s] = struct{}{}
 			joinParts = append(joinParts, s)
 		}
-		for _, p := range hiringScopePartSplit.Split(s, -1) {
-			if p = strings.TrimSpace(p); p != "" {
-				parts = append(parts, p)
-			}
-		}
+		parts = append(parts, hiringScopeParts(r, s)...)
 	}
 	joined = strings.TrimSpace(strings.Join(joinParts, " "))
 
@@ -102,18 +98,41 @@ func ParseHiringScope(r *CountryResolver, raw ...string) (countries []string, re
 			continue
 		}
 		lower := strings.ToLower(part)
+		matchedPhrase := false
 		for _, entry := range regionPhrases {
 			if !containsWholeWordPhrase(lower, entry.phrase) {
 				continue
 			}
+			matchedPhrase = true
 			if entry.country != "" {
 				addCountry(entry.country)
 				continue
 			}
 			addRegion(entry.region)
 		}
+		if matchedPhrase {
+			continue
+		}
+		if code := r.LongestAlpha2InText(part); code != "" {
+			addCountry(code)
+		}
 	}
 	return countries, regions, joined
+}
+
+// hiringScopeParts keeps a raw input intact when the whole string is a country name.
+// Otherwise it splits on " and ", " - ", and , / ; |.
+func hiringScopeParts(r *CountryResolver, s string) []string {
+	if r != nil && r.Alpha2ForName(s) != "" {
+		return []string{s}
+	}
+	var parts []string
+	for _, p := range hiringScopePartSplit.Split(s, -1) {
+		if p = strings.TrimSpace(p); p != "" {
+			parts = append(parts, p)
+		}
+	}
+	return parts
 }
 
 // resolveCountryFragment tries the fragment as-is (keeps aliases like "u.s."), then without
@@ -130,21 +149,25 @@ func resolveCountryFragment(r *CountryResolver, part string) string {
 }
 
 func containsWholeWordPhrase(text, phrase string) bool {
+	return wholeWordPhraseIndex(text, phrase) >= 0
+}
+
+func wholeWordPhraseIndex(text, phrase string) int {
 	if phrase == "" {
-		return false
+		return -1
 	}
 	for start := 0; start <= len(text)-len(phrase); {
 		idx := strings.Index(text[start:], phrase)
 		if idx < 0 {
-			return false
+			return -1
 		}
 		abs := start + idx
 		if wholeWordBoundary(text, abs, len(phrase)) {
-			return true
+			return abs
 		}
 		start = abs + 1
 	}
-	return false
+	return -1
 }
 
 func wholeWordBoundary(text string, start, length int) bool {

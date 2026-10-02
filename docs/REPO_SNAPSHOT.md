@@ -12,7 +12,7 @@ The user does not crawl the whole web. They run a few **slots**. Each slot is:
 
 1. A **name** (display label, e.g. `golang backend`). Immutable after the first successful ingest. The name is **not** sent to job boards.
 2. A **stage-1 pool**: vacancies fetched from **all backend-configured sources** using a **fixed query matrix** (`collectors/schema.Queries`), upserted into `jobs`, linked via `slot_jobs`.
-3. **Stage 2**: local include/exclude keywords on that pool only (no re-crawl).
+3. **Stage 2**: rules on that stored pool only (no re-crawl). Phrase field `listing` searches title, company, description, tags, hiring raw, and salary. Geo reads hiring countries and regions.
 4. **Stage 3**: Claude scores rows that passed stage 2 against a global **profile** (CV-style free text). Cap + deterministic ordering.
 
 Manual corrections reuse the same passed/failed buckets (`PATCH` stage 2 or 3). Changing stage-2 filters wipes stage-2 and stage-3 outcomes for the slot; changing profile text wipes stage-3 only. Filter edits do **not** re-hit external sites.
@@ -59,18 +59,18 @@ browser / jobhound_frontend
 6. `jobs.SaveIngest` upserts into `jobs` with `stage1_status = PASSED_STAGE_1`, then `slot_jobs` links the vacancy to the slot. Watermark cursor stored in `ingest_watermarks` when the source is incremental.
 7. On success, cooldown key is set. Slot card `stage_1.state` is derived from the Temporal workflow (`idle` / `running` / `succeeded` / `failed`).
 
-**Stage 2 (local keywords)**
+**Stage 2 (rules on the stored listing)**
 
-1. `POST /api/v1/slots/{id}/stages/2/run` body `{ "include": [...], "exclude": [...] }` → **202**.
+1. `POST /api/v1/slots/{id}/stages/2/run` body `{ "rules": [ ... ] }` → **202**. Each rule has `id`, `field`, `op`, `values`, `action`. Phrase rules use `field: "listing"` (`op: "phrase"`). Geo uses `field: "countries_allowed"`.
 2. Service **deletes** existing `pipeline_runs` for the slot (CASCADE `pipeline_run_jobs`) — reset rule when stage-2 filters change.
 3. Starts `ManualSlotRunWorkflow` kind `PIPELINE_STAGE2`, id `pubapi-slot-stage2-{slot_id}` (reuse policy `ALLOW_DUPLICATE` after close; 409 if still running).
-4. Activities: create `pipeline_runs` row → list slot jobs with `PASSED_STAGE_1` → in-memory broad + keyword filters → persist `REJECTED_STAGE_2` / `PASSED_STAGE_2` per job. Stage-1 drops get **no** `pipeline_run_jobs` row.
+4. Activities: create `pipeline_runs` row → list slot jobs with `PASSED_STAGE_1` → evaluate rules in memory → persist `REJECTED_STAGE_2`, `PASSED_STAGE_2`, or `UNKNOWN_STAGE_2` per job. A reject wins. A boost with no reject is passed. Neither is unknown. `listing` text is title, company, description, each tag, hiring raw, and salary, joined so a phrase cannot cross two fields. URLs and country codes are not searched. Geo rejects only when a hiring country or region was stored and it misses the rule values. Stage-1 drops get **no** `pipeline_run_jobs` row.
 
 **Profile + stage 3 (LLM)**
 
 1. `PUT /api/v1/profile` `{ "text": "..." }` stores the single `user_profile` row (`id = 1`) and **clears** `stage3_status` / `stage3_rationale` on all slots.
 2. `POST /api/v1/slots/{id}/stages/3/run` `{ "max_jobs": 1–100 }` → **202**. Requires a prior pipeline run and non-empty profile (else 422).
-3. Workflow kind `PIPELINE_STAGE3` uses the latest `pipeline_runs.id`. Eligible pool: `PASSED_STAGE_2` without a current terminal stage-3 outcome, ordered `posted_at DESC`, `job_id ASC`.
+3. Workflow kind `PIPELINE_STAGE3` uses the latest `pipeline_runs.id`. Eligible pool: `PASSED_STAGE_2` or `UNKNOWN_STAGE_2` without a current terminal stage-3 outcome, ordered `posted_at DESC`, `job_id ASC`.
 4. Effective batch = `min(request max_jobs, JOBHOUND_PIPELINE_STAGE3_MAX_JOBS_PER_RUN default 20)`. Worker `llm.Scorer`: Anthropic if `JOBHOUND_ANTHROPIC_API_KEY` is set, else `llm/mock` (score **0**).
 5. Score ≥ **60** → `PASSED_STAGE_3`, else `REJECTED_STAGE_3`. Rationale stored on the row. Jobs beyond the cap stay eligible for a later stage-3 POST.
 
@@ -167,7 +167,7 @@ jobhound_core/
 │   └── retention/           # one-shot job hard-delete
 ├── data/                    # countries.json (ISO lookup for collectors)
 ├── docker/temporal/         # Temporal dynamic config for Compose
-├── docs/                    # REPO_SNAPSHOT.md; slices repo-baseline/, ingest-quality/
+├── docs/                    # REPO_SNAPSHOT.md
 ├── internal/
 │   ├── config/              # JOBHOUND_* names + typed loaders only
 │   ├── domain/              # shared kernel: schema.Job / ScoredJob, identity utils
@@ -264,7 +264,7 @@ No Stripe/Paddle/billing modules.
 - **Migrate:** `github.com/golang-migrate/migrate/v4` file source. Single revision `000001_initial_schema` (consolidated former 000001–000005).
 - **Tables:** `jobs`, `slots`, `slot_idempotency_keys`, `pipeline_runs`, `pipeline_run_jobs`, `ingest_watermarks`, `slot_jobs`, `user_profile` (singleton `id = 1`).
 - **Job identity:** `jobs.id` TEXT = `StableJobID(source, listingURL)`.
-- **Statuses:** `jobs.stage1_status` is `PASSED_STAGE_1` or NULL. `pipeline_run_jobs.stage2_status` ∈ `REJECTED_STAGE_2` \| `PASSED_STAGE_2`; `stage3_status` nullable `PASSED_STAGE_3` \| `REJECTED_STAGE_3` (only if stage 2 passed).
+- **Statuses:** `jobs.stage1_status` is `PASSED_STAGE_1` or NULL. `pipeline_run_jobs.stage2_status` ∈ `REJECTED_STAGE_2` \| `PASSED_STAGE_2` \| `UNKNOWN_STAGE_2`; `stage3_status` nullable `PASSED_STAGE_3` \| `REJECTED_STAGE_3` (only if stage 2 passed or is unknown).
 - **Seeds:** `INSERT INTO user_profile (id, text) VALUES (1, '')` in the up migration. No other seed package.
 - **Retention:** hard-delete `jobs` where `created_at` older than 7 days; dependents via `ON DELETE CASCADE`.
 - **SQLite:** test-only GORM driver for storage unit tests — not a runtime target.
@@ -354,7 +354,7 @@ From `internal/config` (single source). Values not listed.
 | `.cursor/rules/specify-rules.mdc` | yes | Always-applied: stack, `cmd/` vs `internal/`, collectors `schema/`, debughttp layout, Canonical Enum, publicapi JSON Schema, lint gate (`make lint` + fmt/vet; CI), product error registry (`WriteError`, handlers do not pick status or message), anti-patterns, testing, make targets |
 | `.cursor/templates/` | yes | `concept.md`, `schemas-contracts.md`, `tasks.md`, README |
 | `.cursor/skills/audit-feature-tasks/` | yes | audit `*-tasks.md` vs code |
-| `docs/` | `REPO_SNAPSHOT.md`; `repo-baseline/` (concept, schemas-contracts, tasks — done); `ingest-quality/ingest-quality-concept.md` | — |
+| `docs/` | `REPO_SNAPSHOT.md` | — |
 
 ## 13. Documentation
 

@@ -104,10 +104,10 @@ func MVPCollectors(ctx context.Context, httpClient *http.Client, dataDir string,
 	re := &remotifyeurope.RemotifyEurope{HTTPClient: httpClient, Countries: cr}
 	wwr := &weworkremotely.WeWorkRemotely{HTTPClient: httpClient, Countries: cr}
 	wf := &wellfound.Wellfound{HTTPClient: httpClient, Countries: cr}
-	vj := &vuejobs.VueJobs{HTTPClient: httpClient, Countries: cr}
+	vj := &vuejobs.VueJobs{HTTPClient: httpClient}
 	var gc collectors.Collector
 	if htmlFetch != nil {
-		gc = &golangcafe.GolangCafe{HTMLDocumentFetcher: htmlFetch}
+		gc = &golangcafe.GolangCafe{HTMLDocumentFetcher: htmlFetch, Countries: cr}
 	}
 	return er, wn, builtinColl, him, re, wwr, wf, vj, gc, nil
 }

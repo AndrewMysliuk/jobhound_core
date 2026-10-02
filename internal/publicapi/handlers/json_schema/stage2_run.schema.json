@@ -22,6 +22,7 @@
             "title",
             "body",
             "title_body",
+            "listing",
             "countries_allowed",
             "position"
           ]
@@ -85,7 +86,7 @@
         {
           "if": {
             "properties": {
-              "field": { "enum": ["title", "body", "title_body"] }
+              "field": { "enum": ["title", "body", "title_body", "listing"] }
             },
             "required": ["field"]
           },

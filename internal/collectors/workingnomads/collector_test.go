@@ -94,6 +94,53 @@ func TestDecodeSearchJSON_toJob(t *testing.T) {
 	require.Equal(t, wantID, j.ID)
 }
 
+func TestHiringScope_locations(t *testing.T) {
+	cr := testCountriesResolver(t)
+	job := func(locations []string, base, desc string) schema.Job {
+		t.Helper()
+		j, err := jobFromSource(cr, jobSource{
+			Title:        "Role",
+			Slug:         "role-1",
+			Company:      "Co",
+			Description:  desc,
+			PubDate:      "2026-01-01T00:00:00Z",
+			ApplyOption:  "with_your_ats",
+			Locations:    locations,
+			LocationBase: base,
+		})
+		require.NoError(t, err)
+		return j
+	}
+
+	t.Run("usa east", func(t *testing.T) {
+		j := job([]string{"USA - East"}, "", "<p>Germany</p>")
+		require.Equal(t, []string{"US"}, j.HiringCountries)
+		require.Empty(t, j.HiringRegions)
+		require.Equal(t, "USA - East", j.HiringRaw)
+	})
+
+	t.Run("korea republic", func(t *testing.T) {
+		const raw = "Korea Republic of Korea, Republic of"
+		j := job([]string{raw}, "", "<p>Germany</p>")
+		require.Equal(t, []string{"KR"}, j.HiringCountries)
+		require.NotContains(t, j.HiringCountries, "DE")
+		require.Equal(t, raw, j.HiringRaw)
+	})
+
+	t.Run("bare korea is not a country", func(t *testing.T) {
+		j := job([]string{"Korea"}, "", "")
+		require.Empty(t, j.HiringCountries)
+		require.Empty(t, j.HiringRegions)
+	})
+
+	t.Run("description is not hiring scope", func(t *testing.T) {
+		j := job(nil, "", "<p>We hire in Germany and France.</p>")
+		require.Empty(t, j.HiringCountries)
+		require.Empty(t, j.HiringRegions)
+		require.Empty(t, j.HiringRaw)
+	})
+}
+
 func TestDecodeSearchJSON_skipsExpired(t *testing.T) {
 	const both = `{
   "hits": {

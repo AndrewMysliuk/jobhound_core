@@ -21,16 +21,17 @@ type ListingPager struct {
 
 // ListingJob is one job row from __NUXT_DATA__ (not mapped to domain.Job).
 type ListingJob struct {
-	ID          string
-	Slug        string
-	Title       string
-	Description string
-	ApplyURL    string
-	SourceURL   string
-	Company     string
-	PublishedAt string
-	WorkPlace   []string
-	PROLocked   bool
+	ID              string
+	Slug            string
+	Title           string
+	Description     string
+	ApplyURL        string
+	SourceURL       string
+	Company         string
+	PublishedAt     string
+	WorkPlace       []string
+	RemoteCountries []string
+	PROLocked       bool
 }
 
 // ParseListingHTML extracts job rows and pager from a VueJobs SSR listing page.
@@ -146,17 +147,26 @@ func listingJobFromRow(p payload, row map[string]any) (ListingJob, bool) {
 			}
 		}
 	}
+	var remoteCountries []string
+	if rc, ok := p.resolve(row["remote_countries"], nil).([]any); ok {
+		for _, c := range rc {
+			if s := strings.TrimSpace(stringFromAny(c)); s != "" {
+				remoteCountries = append(remoteCountries, s)
+			}
+		}
+	}
 
 	return ListingJob{
-		ID:          stringFromAny(p.resolve(row["id"], nil)),
-		Slug:        slug,
-		Title:       title,
-		Description: desc,
-		ApplyURL:    apply,
-		SourceURL:   source,
-		Company:     company,
-		PublishedAt: published,
-		WorkPlace:   workPlace,
+		ID:              stringFromAny(p.resolve(row["id"], nil)),
+		Slug:            slug,
+		Title:           title,
+		Description:     desc,
+		ApplyURL:        apply,
+		SourceURL:       source,
+		Company:         company,
+		PublishedAt:     published,
+		WorkPlace:       workPlace,
+		RemoteCountries: remoteCountries,
 	}, true
 }
 

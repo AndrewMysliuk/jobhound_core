@@ -117,9 +117,31 @@ func stage2RuleFires(parsed pipelineschema.ParsedListing, j schema.Job, r pipeli
 			return m, true
 		}
 		return phraseFieldMatch(j.Description, r)
+	case pipelineschema.RuleFieldListing:
+		return phraseFieldMatch(listingMatchText(j), r)
 	default:
 		return "", false
 	}
+}
+
+// listingMatchText joins the searchable listing segments. Empty segments are dropped
+// so a phrase cannot cross two fields.
+func listingMatchText(j schema.Job) string {
+	var segs []string
+	add := func(s string) {
+		if s = strings.TrimSpace(s); s != "" {
+			segs = append(segs, s)
+		}
+	}
+	add(j.Title)
+	add(j.Company)
+	add(j.Description)
+	for _, tag := range j.Tags {
+		add(tag)
+	}
+	add(j.HiringRaw)
+	add(j.SalaryRaw)
+	return strings.Join(segs, "\n")
 }
 
 func positionAnyMatch(position string, values []string) (string, bool) {

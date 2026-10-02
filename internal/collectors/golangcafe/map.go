@@ -10,7 +10,7 @@ import (
 	domainutils "github.com/andrewmysliuk/jobhound_core/internal/domain/utils"
 )
 
-func jobsFromPosts(posts []jobPost, maxJobs int) ([]schema.Job, error) {
+func jobsFromPosts(posts []jobPost, maxJobs int, countries *utils.CountryResolver) ([]schema.Job, error) {
 	var out []schema.Job
 	seen := make(map[string]struct{})
 	for _, p := range posts {
@@ -20,7 +20,7 @@ func jobsFromPosts(posts []jobPost, maxJobs int) ([]schema.Job, error) {
 		if !matchesEuropeRemoteCatalog(p) {
 			continue
 		}
-		j, ok, err := jobFromPost(p)
+		j, ok, err := jobFromPost(p, countries)
 		if err != nil || !ok {
 			continue
 		}
@@ -33,7 +33,7 @@ func jobsFromPosts(posts []jobPost, maxJobs int) ([]schema.Job, error) {
 	return out, nil
 }
 
-func jobFromPost(p jobPost) (schema.Job, bool, error) {
+func jobFromPost(p jobPost, countries *utils.CountryResolver) (schema.Job, bool, error) {
 	title := strings.TrimSpace(p.Title)
 	company := strings.TrimSpace(p.Company)
 	id := strings.TrimSpace(p.ID)
@@ -61,10 +61,7 @@ func jobFromPost(p jobPost) (schema.Job, bool, error) {
 	postedAt := postedAtFromEpochMs(p.Date)
 
 	countryCode := countryCodeFromPost(p)
-	var hiringCountries []string
-	if countryCode != "" {
-		hiringCountries = []string{countryCode}
-	}
+	hiringCountries, hiringRegions, hiringRaw := utils.ParseHiringScope(countries, p.Location)
 	j := schema.Job{
 		Source:          SourceName,
 		Title:           title,
@@ -76,7 +73,8 @@ func jobFromPost(p jobPost) (schema.Job, bool, error) {
 		Remote:          remoteFromPost(p),
 		CountryCode:     countryCode,
 		HiringCountries: hiringCountries,
-		HiringRaw:       strings.TrimSpace(p.Location),
+		HiringRegions:   hiringRegions,
+		HiringRaw:       hiringRaw,
 		SalaryRaw:       formatSalaryRaw(p),
 		Tags:            tags,
 		Position:        utils.InferPosition(title, descPlain, tags),
@@ -89,18 +87,7 @@ func jobFromPost(p jobPost) (schema.Job, bool, error) {
 
 func matchesEuropeRemoteCatalog(p jobPost) bool {
 	r := strings.ToLower(strings.TrimSpace(p.Remote))
-	if r == "remote" || r == "partially_remote" {
-		return true
-	}
-	c := strings.ToUpper(strings.TrimSpace(p.Country))
-	if c == "EU" {
-		return true
-	}
-	switch c {
-	case "DE", "UA", "NL", "GB", "UK", "FR", "PL", "ES", "IT", "SE", "NO", "DK", "FI", "IE", "BE", "AT", "CH", "CZ", "RO", "PT", "GR", "HU":
-		return true
-	}
-	return strings.EqualFold(strings.TrimSpace(p.Location), "Remote")
+	return r == "remote" || r == "partially_remote"
 }
 
 func remoteFromPost(p jobPost) *bool {

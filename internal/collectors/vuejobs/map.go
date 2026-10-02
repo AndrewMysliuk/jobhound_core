@@ -9,13 +9,13 @@ import (
 	domainutils "github.com/andrewmysliuk/jobhound_core/internal/domain/utils"
 )
 
-func jobsFromListing(rows []ListingJob, countries *utils.CountryResolver) ([]schema.Job, error) {
+func jobsFromListing(rows []ListingJob) ([]schema.Job, error) {
 	var out []schema.Job
 	for _, row := range rows {
 		if row.PROLocked {
 			continue
 		}
-		j, ok, err := jobFromListing(row, countries)
+		j, ok, err := jobFromListing(row)
 		if err != nil {
 			return nil, err
 		}
@@ -26,7 +26,7 @@ func jobsFromListing(rows []ListingJob, countries *utils.CountryResolver) ([]sch
 	return out, nil
 }
 
-func jobFromListing(row ListingJob, countries *utils.CountryResolver) (schema.Job, bool, error) {
+func jobFromListing(row ListingJob) (schema.Job, bool, error) {
 	title := strings.TrimSpace(row.Title)
 	company := strings.TrimSpace(row.Company)
 	if title == "" || company == "" {
@@ -57,13 +57,7 @@ func jobFromListing(row ListingJob, countries *utils.CountryResolver) (schema.Jo
 	descPlain := utils.StripHTMLToPlainText(row.Description)
 	postedAt, _ := parsePublishedAt(row.PublishedAt)
 
-	workPlaceInputs := make([]string, 0, len(row.WorkPlace))
-	for _, w := range row.WorkPlace {
-		if s := strings.TrimSpace(w); s != "" {
-			workPlaceInputs = append(workPlaceInputs, s)
-		}
-	}
-	hiringCountries, hiringRegions, hiringRaw := utils.ParseHiringScope(countries, workPlaceInputs...)
+	hiringCountries := alpha2HiringCountries(row.RemoteCountries)
 	countryCode := ""
 	if len(hiringCountries) > 0 {
 		countryCode = hiringCountries[0]
@@ -79,8 +73,6 @@ func jobFromListing(row ListingJob, countries *utils.CountryResolver) (schema.Jo
 		Remote:          remoteFromWorkPlace(row.WorkPlace, title, descPlain),
 		CountryCode:     countryCode,
 		HiringCountries: hiringCountries,
-		HiringRegions:   hiringRegions,
-		HiringRaw:       hiringRaw,
 	}
 	if err := domainutils.AssignStableID(&j); err != nil {
 		return schema.Job{}, false, err
@@ -104,6 +96,35 @@ func parsePublishedAt(s string) (time.Time, error) {
 		}
 	}
 	return time.Time{}, nil
+}
+
+func alpha2HiringCountries(codes []string) []string {
+	var out []string
+	seen := make(map[string]struct{})
+	for _, c := range codes {
+		c = strings.ToUpper(strings.TrimSpace(c))
+		if !isAlpha2(c) {
+			continue
+		}
+		if _, dup := seen[c]; dup {
+			continue
+		}
+		seen[c] = struct{}{}
+		out = append(out, c)
+	}
+	return out
+}
+
+func isAlpha2(s string) bool {
+	if len(s) != 2 {
+		return false
+	}
+	for _, r := range s {
+		if r < 'A' || r > 'Z' {
+			return false
+		}
+	}
+	return true
 }
 
 func remoteFromWorkPlace(workPlace []string, title, desc string) *bool {

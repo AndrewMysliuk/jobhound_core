@@ -22,7 +22,6 @@ const listingPageSizeHint = 25
 // VueJobs fetches remote catalog pages and parses __NUXT_DATA__.
 type VueJobs struct {
 	HTTPClient *http.Client
-	Countries  *utils.CountryResolver
 	// MaxPages: 0 → DefaultMaxPages; -1 → no cap; >0 → explicit cap.
 	MaxPages int
 	// MaxJobs stops after this many jobs (0 = unlimited).
@@ -48,7 +47,7 @@ func (c *VueJobs) Fetch(ctx context.Context) ([]schema.Job, error) {
 		if err != nil {
 			return nil, fmt.Errorf("vuejobs: page %d: %w", page, err)
 		}
-		pageJobs, err := jobsFromListing(rows, c.Countries)
+		pageJobs, err := jobsFromListing(rows)
 		if err != nil {
 			return nil, fmt.Errorf("vuejobs: page %d: %w", page, err)
 		}

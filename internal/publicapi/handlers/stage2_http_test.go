@@ -48,6 +48,13 @@ func TestPostStage2Run_rulesBody(t *testing.T) {
 		}
 	})
 
+	t.Run("listing_phrase_202", func(t *testing.T) {
+		rec := postStage2(h, sid, `{"rules":[{"id":"java_listing","field":"listing","op":"phrase","values":["java"],"action":"reject"}]}`)
+		if rec.Code != http.StatusAccepted {
+			t.Fatalf("status %d %s", rec.Code, rec.Body.String())
+		}
+	})
+
 	t.Run("include_exclude_400", func(t *testing.T) {
 		rec := postStage2(h, sid, `{"include":["x"],"exclude":["y"]}`)
 		if rec.Code != http.StatusBadRequest {
@@ -67,6 +74,7 @@ func TestPostStage2Run_rulesBody(t *testing.T) {
 		{"penalty_missing_weight", `{"rules":[{"id":"r","field":"position","op":"any","values":["frontend"],"action":"penalty"}]}`},
 		{"penalty_weight_positive", `{"rules":[{"id":"r","field":"position","op":"any","values":["frontend"],"action":"penalty","weight":1}]}`},
 		{"phrase_on_position_field", `{"rules":[{"id":"r","field":"position","op":"phrase","values":["java"],"action":"reject"}]}`},
+		{"listing_op_any", `{"rules":[{"id":"r","field":"listing","op":"any","values":["java"],"action":"reject"}]}`},
 		{"negation_on_any", `{"rules":[{"id":"r","field":"position","op":"any","values":["frontend"],"action":"reject","negation_window":2}]}`},
 		{"unknown_position", `{"rules":[{"id":"r","field":"position","op":"any","values":["not-a-position"],"action":"reject"}]}`},
 	}
@@ -76,7 +84,7 @@ func TestPostStage2Run_rulesBody(t *testing.T) {
 			if rec.Code != http.StatusBadRequest {
 				t.Fatalf("status %d %s", rec.Code, rec.Body.String())
 			}
-			if tc.name == "unknown_position" {
+			if tc.name == "unknown_position" || tc.name == "listing_op_any" {
 				var errBody schema.APIErrorBody
 				if err := json.Unmarshal(rec.Body.Bytes(), &errBody); err != nil {
 					t.Fatal(err)

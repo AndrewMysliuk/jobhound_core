@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/browserfetch"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/utils"
 	"github.com/andrewmysliuk/jobhound_core/internal/domain/schema"
 )
 
@@ -18,6 +19,7 @@ const DefaultMaxSearchRounds = 5
 // GolangCafe fetches the Europe/remote catalog via rod-backed JSON API calls.
 type GolangCafe struct {
 	HTMLDocumentFetcher browserfetch.HTMLDocumentFetcher
+	Countries           *utils.CountryResolver
 	// MaxSearchRounds: 0 → DefaultMaxSearchRounds; -1 → no cap; >0 → explicit cap.
 	MaxSearchRounds int
 	// MaxJobs stops after this many jobs (0 = unlimited).
@@ -36,7 +38,7 @@ func (c *GolangCafe) Fetch(ctx context.Context) ([]schema.Job, error) {
 	if err != nil {
 		return nil, err
 	}
-	return jobsFromPosts(posts, c.maxJobsEffective())
+	return jobsFromPosts(posts, c.maxJobsEffective(), c.Countries)
 }
 
 func (c *GolangCafe) maxSearchRoundsEffective() int {
