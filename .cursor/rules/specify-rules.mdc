@@ -25,6 +25,7 @@ cmd/agent/               # agent binary (composition + long-running agent; not t
 cmd/worker/              # Temporal worker: config dial, register each module's workflows
 cmd/migrate/             # SQL migrations CLI
 cmd/retention/           # retention CLI (when used)
+cmd/ipv6proxy/           # host CONNECT proxy (IPv6-first) for Europe Remotely from Docker; started by make docker-up
 # cmd/api/               # add when product HTTP API exists; thin composition (Group -> NewHTTPHandler)
 internal/domain/schema/  # shared kernel types: Job, ScoredJob (import path often aliased e.g. `jobdata` when `package schema` collides)
 internal/domain/utils/   # shared kernel: StableJobID, NormalizeListingURL, AssignStableID (alias e.g. `domainutils` inside `package utils`)
@@ -122,6 +123,7 @@ Registry in `internal/publicapi/schema`. Writer is `WriteError` in `internal/pub
 
 ## Recent Changes
 
+- 2026-10-05: Europe Remotely from Docker uses a host IPv6 CONNECT proxy (`cmd/ipv6proxy`, `JOBHOUND_EUROPE_REMOTELY_PROXY`). `make docker-up` starts it. The container has no IPv6, and SiteGround challenges that IPv4.
 - 2026-10-01: Lint gate is `make lint` (golangci-lint v2) plus `make fmt` / `make vet`; CI runs those and `make test`. Product API errors use the registry in `internal/publicapi/schema` and `WriteError`; handlers do not pick status or message; `impl/` does not import the registry.
 - 2026-09-20: Collectors keep-set `europe_remotely` / `working_nomads` / `himalayas` / `builtin`; rod stays for Built In; LinkedIn cancelled (no session cookies).
 - 2026-09-20: Replaced Spec Kit (`.specify` + `/speckit.*` + `specs/`) with `.cursor/templates/` + `audit-feature-tasks`. Engineering rules stay in this file.

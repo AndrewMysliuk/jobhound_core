@@ -22,6 +22,8 @@ type Config struct {
 	BuiltinCollector BuiltinCollectorConfig
 	// Browser configures Tier-3 headless document fetch (005-job-collectors / browserfetch); Enabled defaults true (JOBHOUND_BROWSER_ENABLED=0 to opt out).
 	Browser BrowserConfig
+	// EuropeRemotely configures the euremotejobs.com collector (optional outbound proxy).
+	EuropeRemotely EuropeRemotelyConfig
 
 	AnthropicAPIKey  string
 	AnthropicModel   string
@@ -50,6 +52,7 @@ func Load() Config {
 		HimalayasCollector: LoadHimalayasCollectorFromEnv(),
 		BuiltinCollector:   LoadBuiltinCollectorFromEnv(),
 		Browser:            LoadBrowserFromEnv(),
+		EuropeRemotely:     LoadEuropeRemotelyFromEnv(),
 		AnthropicAPIKey:    LoadAnthropicAPIKeyFromEnv(),
 		AnthropicModel:     model,
 	}

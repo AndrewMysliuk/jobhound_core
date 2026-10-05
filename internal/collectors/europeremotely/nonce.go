@@ -37,7 +37,7 @@ func DiscoverNonceFromURL(ctx context.Context, client *http.Client, homeURL stri
 	if err != nil {
 		return "", err
 	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("europe remotely: homepage: HTTP %s", resp.Status)
 	}
 	m := erjNonceRE.FindSubmatch(b)

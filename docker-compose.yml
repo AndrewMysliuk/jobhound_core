@@ -8,6 +8,8 @@
 # Built In T3: image includes chromium; agent/worker set JOBHOUND_BROWSER_* so rod can run (no-sandbox required as root in container).
 #
 # In-container URLs (not localhost): postgres, redis, temporal — see service env below.
+# Europe Remotely: container has no IPv6. make docker-up runs cmd/ipv6proxy on the host
+# (127.0.0.1:18080); worker and agent use JOBHOUND_EUROPE_REMOTELY_PROXY.
 # Compose loads .env for variable substitution only; ${JOBHOUND_ANTHROPIC_API_KEY:-} passes the key into worker.
 
 x-build-app: &build-app
@@ -133,6 +135,7 @@ services:
       JOBHOUND_BROWSER_ENABLED: "1"
       JOBHOUND_BROWSER_BIN: /usr/bin/chromium
       JOBHOUND_BROWSER_NO_SANDBOX: "1"
+      JOBHOUND_EUROPE_REMOTELY_PROXY: http://host.docker.internal:18080
     ports:
       - "3001:3001"
     depends_on:
@@ -154,6 +157,7 @@ services:
       JOBHOUND_BROWSER_NO_SANDBOX: "1"
       JOBHOUND_ANTHROPIC_API_KEY: ${JOBHOUND_ANTHROPIC_API_KEY:-}
       JOBHOUND_ANTHROPIC_MODEL: ${JOBHOUND_ANTHROPIC_MODEL:-}
+      JOBHOUND_EUROPE_REMOTELY_PROXY: http://host.docker.internal:18080
     depends_on:
       postgres:
         condition: service_healthy

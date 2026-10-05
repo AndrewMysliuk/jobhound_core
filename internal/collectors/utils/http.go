@@ -1,9 +1,12 @@
 package utils
 
 import (
+	"fmt"
 	"net"
 	"net/http"
 	"net/http/cookiejar"
+	"net/url"
+	"strings"
 	"time"
 )
 
@@ -36,6 +39,25 @@ func NewHTTPClient() *http.Client {
 		Timeout:   DefaultHTTPTimeout,
 		Transport: collectorTransport(),
 	}
+}
+
+// HTTPClientWithProxy returns a collector client that sends HTTPS via an HTTP CONNECT proxy.
+// The proxy URL must be http://host:port. The shared base transport is not modified.
+func HTTPClientWithProxy(base *http.Client, proxyRaw string) (*http.Client, error) {
+	u, err := url.Parse(strings.TrimSpace(proxyRaw))
+	if err != nil {
+		return nil, fmt.Errorf("proxy url: %w", err)
+	}
+	if u.Scheme != "http" || u.Host == "" {
+		return nil, fmt.Errorf("proxy url must be http://host:port")
+	}
+	timeout := DefaultHTTPTimeout
+	if base != nil && base.Timeout > 0 {
+		timeout = base.Timeout
+	}
+	tr := collectorTransport()
+	tr.Proxy = http.ProxyURL(u)
+	return &http.Client{Timeout: timeout, Transport: tr}, nil
 }
 
 // NewHTTPClientWithJar returns an *http.Client like NewHTTPClient but with an in-memory cookie jar (e.g. DOU CSRF cookie).

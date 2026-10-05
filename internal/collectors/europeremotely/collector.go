@@ -53,6 +53,9 @@ type EuropeRemotely struct {
 	Now func() time.Time
 	// OnDateWarn is called when posted_display cannot be parsed (soft failure per domain-mapping-mvp.md).
 	OnDateWarn func(raw string)
+	// StartErr is returned by Fetch when homepage nonce discovery failed at process start.
+	// Other collectors still run; this source fails on its own ingest.
+	StartErr error
 }
 
 // Name implements collectors.Collector.
@@ -60,6 +63,9 @@ func (*EuropeRemotely) Name() string { return SourceName }
 
 // Fetch implements collectors.Collector.
 func (c *EuropeRemotely) Fetch(ctx context.Context) ([]schema.Job, error) {
+	if c.StartErr != nil {
+		return nil, c.StartErr
+	}
 	if strings.TrimSpace(c.FeedURL) == "" {
 		return nil, fmt.Errorf("europe remotely: empty FeedURL")
 	}

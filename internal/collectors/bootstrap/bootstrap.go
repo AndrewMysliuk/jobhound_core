@@ -4,6 +4,7 @@ package bootstrap
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
@@ -36,7 +37,7 @@ import (
 // builtinCfg from config.Load().BuiltinCollector (JOBHOUND_COLLECTOR_BUILTIN_*).
 // browserCfg from config.Load().Browser (JOBHOUND_BROWSER_*); Enabled defaults true unless JOBHOUND_BROWSER_ENABLED=0.
 // When Enabled and builtinCfg.UseBrowserForHTML, a rod-backed fetcher is shared by Built In and Golang Cafe.
-func MVPCollectors(ctx context.Context, httpClient *http.Client, dataDir string, builtinCfg config.BuiltinCollectorConfig, himCfg config.HimalayasCollectorConfig, browserCfg config.BrowserConfig) (europeRemotely, workingNomads, builtIn, himal, remotifyEurope, weWorkRemotely, wellfoundColl, vueJobs, golangCafe collectors.Collector, err error) {
+func MVPCollectors(ctx context.Context, httpClient *http.Client, dataDir string, builtinCfg config.BuiltinCollectorConfig, himCfg config.HimalayasCollectorConfig, browserCfg config.BrowserConfig, erCfg config.EuropeRemotelyConfig) (europeRemotely, workingNomads, builtIn, himal, remotifyEurope, weWorkRemotely, wellfoundColl, vueJobs, golangCafe collectors.Collector, err error) {
 	if httpClient == nil {
 		httpClient = utils.NewHTTPClient()
 	}
@@ -44,24 +45,36 @@ func MVPCollectors(ctx context.Context, httpClient *http.Client, dataDir string,
 	if err != nil {
 		return nil, nil, nil, nil, nil, nil, nil, nil, nil, err
 	}
-	nonce, err := europeremotely.DiscoverNonce(ctx, httpClient)
-	if err != nil {
-		return nil, nil, nil, nil, nil, nil, nil, nil, nil, err
+	erHTTP := httpClient
+	if proxy := strings.TrimSpace(erCfg.ProxyURL); proxy != "" {
+		c, perr := utils.HTTPClientWithProxy(httpClient, proxy)
+		if perr != nil {
+			return nil, nil, nil, nil, nil, nil, nil, nil, nil, fmt.Errorf("collectors bootstrap: europe remotely proxy: %w", perr)
+		}
+		erHTTP = c
+	}
+	nonce, nonceErr := europeremotely.DiscoverNonce(ctx, erHTTP)
+	if nonceErr != nil {
+		slog.Warn("europe remotely nonce discovery failed; that source will error on fetch", "error", nonceErr)
 	}
 	siteBase, err := europeremotely.DefaultSiteBase()
 	if err != nil {
 		return nil, nil, nil, nil, nil, nil, nil, nil, nil, err
 	}
+	feedForm := url.Values{
+		"action":  {"erj_ajax_search"},
+		"website": {""},
+	}
+	if nonceErr == nil {
+		feedForm.Set("nonce", nonce)
+	}
 	er := &europeremotely.EuropeRemotely{
-		HTTPClient: httpClient,
+		HTTPClient: erHTTP,
 		FeedURL:    europeremotely.DefaultFeedURL,
-		FeedForm: url.Values{
-			"action":  {"erj_ajax_search"},
-			"nonce":   {nonce},
-			"website": {""},
-		},
-		SiteBase:  siteBase,
-		Countries: cr,
+		FeedForm:   feedForm,
+		SiteBase:   siteBase,
+		Countries:  cr,
+		StartErr:   nonceErr,
 	}
 	wn := &workingnomads.WorkingNomads{
 		HTTPClient: httpClient,
@@ -132,8 +145,8 @@ func MVPMulti(
 }
 
 // MVPCollector returns a single collectors.Collector that runs all MVP sources.
-func MVPCollector(ctx context.Context, httpClient *http.Client, dataDir string, builtinCfg config.BuiltinCollectorConfig, himCfg config.HimalayasCollectorConfig, browserCfg config.BrowserConfig, log *zerolog.Logger) (collectors.Collector, error) {
-	er, wn, bi, h, re, wwr, wf, vj, gc, err := MVPCollectors(ctx, httpClient, dataDir, builtinCfg, himCfg, browserCfg)
+func MVPCollector(ctx context.Context, httpClient *http.Client, dataDir string, builtinCfg config.BuiltinCollectorConfig, himCfg config.HimalayasCollectorConfig, browserCfg config.BrowserConfig, erCfg config.EuropeRemotelyConfig, log *zerolog.Logger) (collectors.Collector, error) {
+	er, wn, bi, h, re, wwr, wf, vj, gc, err := MVPCollectors(ctx, httpClient, dataDir, builtinCfg, himCfg, browserCfg, erCfg)
 	if err != nil {
 		return nil, err
 	}
