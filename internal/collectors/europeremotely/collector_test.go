@@ -16,6 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/utils"
+	"github.com/andrewmysliuk/jobhound_core/internal/domain/schema"
 )
 
 const feedFixtureJSON = `{
@@ -37,7 +38,8 @@ const detailFixtureHTML = `<div class="page-header">
 </div>
 <div class="job_listing-description"><p>Build distributed systems.</p></div>
 <p class="job_tags">Tagged as: golang, backend, remote</p>
-<a class="application_button_link" href="https://ats.example.com/apply/1">Apply for job</a>`
+<a class="application_button_link" href="https://ats.example.com/apply/1">Apply for job</a>
+<a class="job_listing-website" href="https://acme.example">https://acme.example</a>`
 
 func testCountriesResolver(t *testing.T) *utils.CountryResolver {
 	t.Helper()
@@ -97,6 +99,7 @@ func TestParseDetailHTML(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "Senior Go Engineer", d.title)
 	require.Equal(t, "https://ats.example.com/apply/1", d.applyURL)
+	require.Equal(t, "https://acme.example", d.companyWebsite)
 	require.Equal(t, "Build distributed systems.", d.description)
 	require.Equal(t, []string{"golang", "backend", "remote"}, d.tags)
 }
@@ -144,13 +147,14 @@ func TestFetch_httptest(t *testing.T) {
 	require.Equal(t, "Acme EU", j.Company)
 	require.Contains(t, j.URL, "/job/example-slug")
 	require.Equal(t, "https://ats.example.com/apply/1", j.ApplyURL)
+	require.Equal(t, "https://acme.example", j.CompanyWebsite)
 	require.Equal(t, "Build distributed systems.", j.Description)
 	wantPosted, err := time.Parse("January 2, 2006", "March 28, 2026")
 	require.NoError(t, err)
 	require.True(t, j.PostedAt.Equal(wantPosted.UTC()))
-	require.Equal(t, "DE", j.CountryCode)
-	require.NotNil(t, j.Remote)
-	require.True(t, *j.Remote)
+	require.NotEmpty(t, j.Location.Countries)
+	require.Equal(t, "DE", j.Location.Countries[0])
+	require.Equal(t, schema.LocationRemote, j.Location.Type)
 	require.Contains(t, j.SalaryRaw, "90,000")
 	require.Equal(t, []string{"golang", "backend", "remote"}, j.Tags)
 	require.NotNil(t, j.Position)

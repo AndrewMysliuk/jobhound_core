@@ -5,18 +5,18 @@ import (
 	"net/http"
 
 	"github.com/andrewmysliuk/jobhound_core/internal/platform/logging"
-	"github.com/andrewmysliuk/jobhound_core/internal/profile"
+	"github.com/andrewmysliuk/jobhound_core/internal/profiles"
 	"github.com/andrewmysliuk/jobhound_core/internal/publicapi/schema"
 	apputils "github.com/andrewmysliuk/jobhound_core/internal/publicapi/utils"
-	"github.com/andrewmysliuk/jobhound_core/internal/slots"
+	"github.com/andrewmysliuk/jobhound_core/internal/scoring"
 	"github.com/rs/zerolog"
 )
 
 // Deps are shared dependencies for route handlers (wired from cmd/api).
 type Deps struct {
-	Slots   slots.API
-	Profile profile.API
-	Logger  zerolog.Logger
+	Logger   zerolog.Logger
+	Profiles profiles.Store
+	Scoring  scoring.API
 }
 
 // HTTPHandler serves /api/v1 routes behind CORS middleware.
@@ -43,16 +43,11 @@ func (h *HTTPHandler) routeLog(r *http.Request, handlerName string) zerolog.Logg
 
 func (h *HTTPHandler) registerRoutes() {
 	h.mux.HandleFunc("GET /api/v1/health", h.getHealth)
-	h.mux.HandleFunc("GET /api/v1/profile", h.getProfile)
-	h.mux.HandleFunc("PUT /api/v1/profile", h.putProfile)
-	h.mux.HandleFunc("GET /api/v1/slots", h.getSlots)
-	h.mux.HandleFunc("POST /api/v1/slots", h.postSlots)
-	h.mux.HandleFunc("GET /api/v1/slots/{slot_id}", h.getSlot)
-	h.mux.HandleFunc("DELETE /api/v1/slots/{slot_id}", h.deleteSlot)
-	h.mux.HandleFunc("POST /api/v1/slots/{slot_id}/stages/2/run", h.postStage2Run)
-	h.mux.HandleFunc("POST /api/v1/slots/{slot_id}/stages/3/run", h.postStage3Run)
-	h.mux.HandleFunc("GET /api/v1/slots/{slot_id}/stages/{stage}/jobs", h.getStageJobs)
-	h.mux.HandleFunc("PATCH /api/v1/slots/{slot_id}/stages/{stage}/jobs/{job_id}", h.patchStageJobBucket)
+	h.mux.HandleFunc("GET /api/v1/profiles", h.getProfiles)
+	h.mux.HandleFunc("PATCH /api/v1/profiles/{profile_id}/jobs/{job_id}", h.patchProfileJob)
+	h.mux.HandleFunc("GET /api/v1/profiles/{profile_id}/runs/latest", h.getProfileRunLatest)
+	h.mux.HandleFunc("GET /api/v1/profiles/{profile_id}/jobs", h.getProfileJobs)
+	h.mux.HandleFunc("POST /api/v1/profiles/{profile_id}/runs", h.postProfileRun)
 }
 
 // ServeHTTP applies request-id and CORS then dispatches to registered routes.

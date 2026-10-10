@@ -17,6 +17,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/utils"
+	"github.com/andrewmysliuk/jobhound_core/internal/domain/schema"
 	domainutils "github.com/andrewmysliuk/jobhound_core/internal/domain/utils"
 )
 
@@ -52,11 +53,12 @@ func TestMap_searchMinimalFixture(t *testing.T) {
 	wantURL, err := domainutils.NormalizeListingURL("https://himalayas.app/companies/photon-interactive-uk-limited/jobs/software-engineer-vue-js-offshore")
 	require.NoError(t, err)
 	require.Equal(t, wantURL, j.URL)
+	require.Equal(t, wantURL, j.ApplyURL)
 	require.Equal(t, time.Unix(1774053663, 0).UTC(), j.PostedAt)
-	require.Equal(t, []float64{5.5}, j.TimezoneOffsets)
-	require.Equal(t, "IN", j.CountryCode)
-	require.NotNil(t, j.Remote)
-	require.True(t, *j.Remote)
+	require.Equal(t, "5.5", j.Location.Timezone)
+	require.NotEmpty(t, j.Location.Countries)
+	require.Equal(t, "IN", j.Location.Countries[0])
+	require.Equal(t, schema.LocationRemote, j.Location.Type)
 	require.NotEmpty(t, j.ID)
 }
 
@@ -178,7 +180,7 @@ func TestHTTP429_error(t *testing.T) {
 
 func TestHiringScope_locationRestrictions(t *testing.T) {
 	cr := testCountriesResolver(t)
-	job := func(locs []string, tz []float64, desc string) (countries, regions []string, raw string, offsets []float64) {
+	job := func(locs []string, tz []float64, desc string) (countries, regions []string, raw, timezone string) {
 		t.Helper()
 		w := jobWire{
 			Title:                "Engineer",
@@ -190,7 +192,7 @@ func TestHiringScope_locationRestrictions(t *testing.T) {
 		}
 		j, err := jobFromWire(cr, w, nil)
 		require.NoError(t, err)
-		return j.HiringCountries, j.HiringRegions, j.HiringRaw, j.TimezoneOffsets
+		return j.Location.Countries, j.Location.Regions, j.Location.Raw, j.Location.Timezone
 	}
 
 	t.Run("bolivia", func(t *testing.T) {
@@ -212,7 +214,7 @@ func TestHiringScope_locationRestrictions(t *testing.T) {
 		require.Empty(t, countries)
 		require.Empty(t, regions)
 		require.Empty(t, raw)
-		require.Equal(t, []float64{5.5}, tz)
+		require.Equal(t, "5.5", tz)
 	})
 }
 

@@ -28,7 +28,7 @@ func testCountriesResolver(t *testing.T) *utils.CountryResolver {
 
 func TestJobsFromPosts_locationAndRemoteKeep(t *testing.T) {
 	posts := []jobPost{
-		{ID: "1", Title: "Europe role", Company: "Acme", Remote: "remote", Country: "EU", Location: "Remote - Europe"},
+		{ID: "1", Title: "Europe role", Company: "Acme", Remote: "remote", Country: "EU", Location: "Remote - Europe", Link: "https://boards.greenhouse.io/acme/jobs/1"},
 		{ID: "2", Title: "On site Berlin", Company: "Acme", Remote: "on_site", Country: "DE", Location: "Berlin, Germany"},
 		{ID: "3", Title: "Partial", Company: "Acme", Remote: "partially_remote", Country: "DE", Location: "Germany"},
 		{ID: "4", Title: "On site remote word", Company: "Acme", Remote: "on_site", Country: "EU", Location: "Remote"},
@@ -38,12 +38,12 @@ func TestJobsFromPosts_locationAndRemoteKeep(t *testing.T) {
 	require.Len(t, jobs, 2)
 
 	require.Equal(t, "Europe role", jobs[0].Title)
-	require.Empty(t, jobs[0].CountryCode)
-	require.Empty(t, jobs[0].HiringCountries)
-	require.Equal(t, []string{schema.RegionCodeEurope.String()}, jobs[0].HiringRegions)
-	require.Equal(t, "Remote - Europe", jobs[0].HiringRaw)
+	require.Equal(t, "https://boards.greenhouse.io/acme/jobs/1", jobs[0].ApplyURL)
+	require.Empty(t, jobs[0].CompanyWebsite)
+	require.Empty(t, jobs[0].Location.Countries)
+	require.Equal(t, []string{schema.RegionCodeEurope.String()}, jobs[0].Location.Regions)
+	require.Equal(t, "Remote - Europe", jobs[0].Location.Raw)
 
 	require.Equal(t, "Partial", jobs[1].Title)
-	require.Equal(t, "DE", jobs[1].CountryCode)
-	require.Equal(t, []string{"DE"}, jobs[1].HiringCountries)
+	require.Equal(t, []string{"DE"}, jobs[1].Location.Countries)
 }

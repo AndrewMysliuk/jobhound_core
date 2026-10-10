@@ -85,24 +85,26 @@ func jobFromWire(cr *utils.CountryResolver, w jobWire, onPubDateWarn func(raw fl
 		tz = append([]float64(nil), w.TimezoneRestrictions...)
 	}
 
+	var applyURL string
+	if link := strings.TrimSpace(w.ApplicationLink); link != "" {
+		if u, err := utils.CanonicalListingURL(link); err == nil {
+			applyURL = u
+		}
+	}
+
 	hiringCountries, hiringRegions, hiringRaw := utils.ParseHiringScope(cr, w.LocationRestrictions...)
 	j := schema.Job{
-		Source:          SourceName,
-		Title:           title,
-		Company:         company,
-		URL:             listingURL,
-		ApplyURL:        "",
-		Description:     descPlain,
-		PostedAt:        postedAt,
-		Remote:          remote,
-		CountryCode:     countryFromRestrictions(cr, w.LocationRestrictions),
-		HiringCountries: hiringCountries,
-		HiringRegions:   hiringRegions,
-		HiringRaw:       hiringRaw,
-		SalaryRaw:       formatSalaryRaw(w.MinSalary, w.MaxSalary, w.Currency),
-		Tags:            tags,
-		TimezoneOffsets: tz,
-		Position:        utils.InferPosition(title, descPlain, tags),
+		Source:      SourceName,
+		Title:       title,
+		Company:     company,
+		URL:         listingURL,
+		ApplyURL:    applyURL,
+		Description: descPlain,
+		PostedAt:    postedAt,
+		Location:    utils.LocationFromParsed(remote, "", hiringCountries, hiringRegions, hiringRaw, tz),
+		SalaryRaw:   formatSalaryRaw(w.MinSalary, w.MaxSalary, w.Currency),
+		Tags:        tags,
+		Position:    utils.InferPosition(title, descPlain, tags),
 	}
 	if err := domainutils.AssignStableID(&j); err != nil {
 		return schema.Job{}, err
@@ -139,14 +141,6 @@ func trimStringSlice(in []string) []string {
 		}
 	}
 	return out
-}
-
-func countryFromRestrictions(cr *utils.CountryResolver, restrictions []string) string {
-	countries, _, _ := utils.ParseHiringScope(cr, restrictions...)
-	if len(countries) > 0 {
-		return countries[0]
-	}
-	return ""
 }
 
 func formatSalaryRaw(min, max *float64, currency string) string {

@@ -13,30 +13,30 @@ Feature slices: `.cursor/templates/` → `docs/<feature_slug>/` (`*-concept.md`,
 - Go 1.24 — standard library first; `net/http` / `html` / `encoding/json` for Tier-1 API and static fetchers
 - `github.com/PuerkitoBio/goquery` for HTML sources (Tier 2)
 - `github.com/go-rod/rod` for Built In / `browserfetch` (Tier 3)
-- PostgreSQL + GORM + migrations — jobs, history, profile, dedup
-- Temporal — workflows/activities for manual runs (scheduled auto-refresh is product backlog until specced)
-- Claude API for scoring; product delivery channels (e.g. HTTP/API) per specs—third-party push notifications out of MVP scope
+- PostgreSQL + GORM + migrations — jobs, profile runs and matches, ingest watermarks
+- Temporal — `ProfileRunWorkflow`, ingest children, and job retention. Scheduled vacancy auto-refresh is backlog
+- Phrase scoring in `internal/scoring`. Product HTTP is `cmd/api`. No LLM. Third-party push notifications are out of MVP scope
 - Local: Docker Compose (Postgres + Temporal); production: GCP
 
 ## Project Structure
 
 ```text
-cmd/agent/               # agent binary (composition + long-running agent; not the future public API binary)
+cmd/agent/               # dev collector debug HTTP; not the product API
+cmd/api/                 # product HTTP; thin composition into publicapi.NewHTTPHandler
 cmd/worker/              # Temporal worker: config dial, register each module's workflows
 cmd/migrate/             # SQL migrations CLI
 cmd/retention/           # retention CLI (when used)
 cmd/ipv6proxy/           # host CONNECT proxy (IPv6-first) for Europe Remotely from Docker; started by make docker-up
-# cmd/api/               # add when product HTTP API exists; thin composition (Group -> NewHTTPHandler)
-internal/domain/schema/  # shared kernel types: Job, ScoredJob (import path often aliased e.g. `jobdata` when `package schema` collides)
+internal/domain/schema/  # shared kernel types: Job (import path often aliased e.g. `jobdata` when `package schema` collides)
 internal/domain/utils/   # shared kernel: StableJobID, NormalizeListingURL, AssignStableID (alias e.g. `domainutils` inside `package utils`)
 internal/config/         # env keys + typed loaders only; feature code must not os.Getenv shared knobs
 internal/platform/pgsql/ # GORM Postgres + pool; GormGetter; integration migration tests
 internal/collectors/     # Collector contract + sources + schema/ (module data model at collectors root, not under handlers/)
 internal/collectors/handlers/debughttp/  # dev-only HTTP handler layout
 internal/jobs/           # jobs module: contract, schema/, impl/, storage/, workflows/ as needed
-internal/llm/            # contract, providers, mock/, utils/ — no loose helpers at module root
-internal/pipeline/       # contract, stage types at root; stage impl in utils/; impl/ if needed
-internal/reference/      # optional demos
+internal/ingest/         # source ingest: Redis lock/cooldown, watermarks, IngestSourceWorkflow
+internal/profiles/       # YAML profile store (config/profiles); no HTTP of its own
+internal/scoring/        # phrase score, profile_runs / profile_matches, ProfileRunWorkflow
 internal/publicapi/      # product HTTP: handlers/, schema/, utils/ (path/query + JSON Schema validate)
 tests/integration/       # optional; `integration` build tag
 migrations/              # SQL migration files
@@ -81,7 +81,7 @@ Other feature modules: typed request/response (and other wire) structs in **`sch
 
 ### Product API errors
 
-Registry in `internal/publicapi/schema`. Writer is `WriteError` in `internal/publicapi/utils`. Envelope is `{ "error": { "code", "message" } }`; slot cap adds `"limit"`. Handlers do not pick status or message. `impl/` does not import the registry.
+Registry in `internal/publicapi/schema`. Writer is `WriteError` in `internal/publicapi/utils`. Envelope is `{ "error": { "code", "message" } }`. Handlers do not pick status or message. `impl/` does not import the registry.
 
 ## Anti-Pattern Reference
 
@@ -123,6 +123,7 @@ Registry in `internal/publicapi/schema`. Writer is `WriteError` in `internal/pub
 
 ## Recent Changes
 
+- 2026-10-10: Profiles and phrase scoring replace slots, stage 3, and Claude. Live modules are `internal/profiles`, `internal/scoring`, and `internal/ingest`. `cmd/api` is the product HTTP binary. `internal/llm` and `internal/pipeline` are gone.
 - 2026-10-05: Europe Remotely from Docker uses a host IPv6 CONNECT proxy (`cmd/ipv6proxy`, `JOBHOUND_EUROPE_REMOTELY_PROXY`). `make docker-up` starts it. The container has no IPv6, and SiteGround challenges that IPv4.
 - 2026-10-01: Lint gate is `make lint` (golangci-lint v2) plus `make fmt` / `make vet`; CI runs those and `make test`. Product API errors use the registry in `internal/publicapi/schema` and `WriteError`; handlers do not pick status or message; `impl/` does not import the registry.
 - 2026-09-20: Collectors keep-set `europe_remotely` / `working_nomads` / `himalayas` / `builtin`; rod stays for Built In; LinkedIn cancelled (no session cookies).

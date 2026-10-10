@@ -29,7 +29,11 @@ func main() {
 	}
 	switch strings.ToLower(strings.TrimSpace(os.Args[1])) {
 	case "run":
-		appCfg := config.Load()
+		appCfg, err := config.Load()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "config: %v\n", err)
+			os.Exit(1)
+		}
 		log := logging.NewRoot(appCfg.Logging.Level, appCfg.Logging.Format, "retention")
 		if err := run(log, appCfg); err != nil {
 			log.Error().Err(err).Msg("retention run failed")
@@ -43,8 +47,9 @@ func main() {
 
 func usage() {
 	fmt.Fprintf(os.Stderr, "usage: retention run\n\n")
-	fmt.Fprintf(os.Stderr, "Hard-deletes jobs where created_at < now(UTC)−%d days (same cutoff as Temporal %s).\n",
-		jobutils.Days, "JobRetentionWorkflow")
+	fmt.Fprintf(os.Stderr, "Hard-deletes jobs where last_seen_at < now(UTC)−N days (same cutoff as Temporal %s).\n",
+		"JobRetentionWorkflow")
+	fmt.Fprintf(os.Stderr, "N is %s (default %d).\n", config.EnvJobRetentionDays, config.DefaultJobRetentionDays)
 	fmt.Fprintf(os.Stderr, "Requires %s.\n", config.EnvDatabaseURL)
 }
 
@@ -67,8 +72,8 @@ func run(log zerolog.Logger, appCfg config.Config) error {
 
 	repo := jobsstorage.NewRepository(pgsql.NewGetter(gdb))
 	now := time.Now().UTC()
-	cutoff := jobutils.CutoffUTC(now)
-	n, err := repo.DeleteJobsCreatedBeforeUTC(ctx, cutoff)
+	cutoff := jobutils.CutoffUTC(now, appCfg)
+	n, err := repo.DeleteJobsLastSeenBeforeUTC(ctx, cutoff)
 	if err != nil {
 		return err
 	}

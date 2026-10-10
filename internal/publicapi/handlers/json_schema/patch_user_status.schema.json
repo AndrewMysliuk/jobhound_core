@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["user_status"],
+  "properties": {
+    "user_status": {
+      "type": "string",
+      "enum": ["NEW", "HIDDEN"]
+    }
+  }
+}

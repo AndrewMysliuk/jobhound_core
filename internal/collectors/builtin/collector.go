@@ -59,8 +59,8 @@ func (*BuiltIn) Fetch(context.Context) ([]schema.Job, error) {
 	return []schema.Job{}, nil
 }
 
-// FetchWithSlotSearch implements collectors.SlotSearchFetcher.
-func (c *BuiltIn) FetchWithSlotSearch(ctx context.Context, slotQuery string) ([]schema.Job, error) {
+// FetchWithQuery implements collectors.QueryFetcher.
+func (c *BuiltIn) FetchWithQuery(ctx context.Context, slotQuery string) ([]schema.Job, error) {
 	q := strings.TrimSpace(slotQuery)
 	if q == "" {
 		return []schema.Job{}, nil
@@ -244,20 +244,17 @@ func (c *BuiltIn) fetchRemote(ctx context.Context, search string) ([]schema.Job,
 			hiringCountries = []string{uc.alpha2}
 		}
 		j := schema.Job{
-			Source:          SourceName,
-			Title:           title,
-			Company:         strings.TrimSpace(jp.company),
-			URL:             canonURL,
-			ApplyURL:        applyURL,
-			Description:     descPlain,
-			PostedAt:        parsePostedAt(jp.datePosted, c.onDatePostedWarn()),
-			Remote:          resolveRemote(jp, tags),
-			CountryCode:     uc.alpha2,
-			HiringCountries: hiringCountries,
-			HiringRaw:       hiringRaw,
-			SalaryRaw:       formatSalaryRaw(jp.baseSalaryRaw),
-			Tags:            tags,
-			Position:        utils.InferPosition(title, descPlain, tags),
+			Source:      SourceName,
+			Title:       title,
+			Company:     strings.TrimSpace(jp.company),
+			URL:         canonURL,
+			ApplyURL:    applyURL,
+			Description: descPlain,
+			PostedAt:    parsePostedAt(jp.datePosted, c.onDatePostedWarn()),
+			Location:    utils.LocationFromParsed(resolveRemote(jp, tags), uc.alpha2, hiringCountries, nil, hiringRaw, nil),
+			SalaryRaw:   formatSalaryRaw(jp.baseSalaryRaw),
+			Tags:        tags,
+			Position:    utils.InferPosition(title, descPlain, tags),
 		}
 		if err := domainutils.AssignStableID(&j); err != nil {
 			c.collectSkip(ctx, fmt.Sprintf("stable id %s", uc.url), err)

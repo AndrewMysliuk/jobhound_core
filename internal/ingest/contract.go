@@ -14,11 +14,9 @@ const (
 )
 
 var (
-	// ErrNilSlotID is returned when slot_id is zero; lock/cooldown keys are scoped per slot.
-	ErrNilSlotID = errors.New("ingest: slot_id required for redis coordination")
-	// ErrLockHeld is returned when the per-slot ingest lock for that source is already held (SET NX failed).
+	// ErrLockHeld is returned when the ingest lock for that source and query is already held (SET NX failed).
 	ErrLockHeld = errors.New("ingest: lock already held for source")
-	// ErrCooldownActive is returned when the per-slot cooldown key exists and explicit refresh is off.
+	// ErrCooldownActive is returned when the cooldown key exists and explicit refresh is off.
 	ErrCooldownActive = errors.New("ingest: cooldown active for source")
 	// ErrEmptySourceID is returned when source_id is empty after normalization.
 	ErrEmptySourceID = errors.New("ingest: empty source_id")

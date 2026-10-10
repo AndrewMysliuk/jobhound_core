@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/andrewmysliuk/jobhound_core/internal/domain/schema"
 )
 
 type errRoundTrip struct{}
@@ -30,7 +32,7 @@ func TestBuiltIn_Fetch_noHTTP(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, jobs)
 
-	jobs, err = c.FetchWithSlotSearch(ctx, "  \t  ")
+	jobs, err = c.FetchWithQuery(ctx, "  \t  ")
 	require.NoError(t, err)
 	require.Empty(t, jobs)
 }
@@ -56,12 +58,12 @@ func TestBuiltIn_UseBrowser_withoutFetcher_errors(t *testing.T) {
 		HTTPClient: &http.Client{Transport: errRoundTrip{}},
 		UseBrowser: true,
 	}
-	_, err := c.FetchWithSlotSearch(ctx, "go")
+	_, err := c.FetchWithQuery(ctx, "go")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "HTMLDocumentFetcher")
 }
 
-func TestBuiltIn_FetchWithSlotSearch_browserFetcher(t *testing.T) {
+func TestBuiltIn_FetchWithQuery_browserFetcher(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 
@@ -123,14 +125,14 @@ func TestBuiltIn_FetchWithSlotSearch_browserFetcher(t *testing.T) {
 		HTMLDocumentFetcher:       &seqHTMLFetcher{bodies: [][]byte{[]byte(listingHTML), []byte(detailHTML)}},
 	}
 
-	jobs, err := c.FetchWithSlotSearch(ctx, "go")
+	jobs, err := c.FetchWithQuery(ctx, "go")
 	require.NoError(t, err)
 	require.Len(t, jobs, 1)
 	require.Equal(t, "Senior Magento Frontend Developer", jobs[0].Title)
 	require.Equal(t, "https://example.test/apply/8989543", jobs[0].ApplyURL)
 }
 
-func TestBuiltIn_FetchWithSlotSearch_httptest(t *testing.T) {
+func TestBuiltIn_FetchWithQuery_httptest(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 
@@ -211,18 +213,17 @@ func TestBuiltIn_FetchWithSlotSearch_httptest(t *testing.T) {
 		MaxListingPagesPerCountry: 2,
 	}
 
-	jobs, err := c.FetchWithSlotSearch(ctx, "go")
+	jobs, err := c.FetchWithQuery(ctx, "go")
 	require.NoError(t, err)
 	require.Len(t, jobs, 1)
 	j := jobs[0]
 	require.Equal(t, SourceName, j.Source)
 	require.Equal(t, "Senior Magento Frontend Developer", j.Title)
 	require.Equal(t, "Xebia", j.Company)
-	require.Equal(t, "RO", j.CountryCode)
+	require.Equal(t, []string{"RO"}, j.Location.Countries)
 	require.Contains(t, j.URL, "/job/senior-magento-frontend-developer/8989543")
 	require.Contains(t, j.URL, "8989543")
-	require.NotNil(t, j.Remote)
-	require.True(t, *j.Remote)
+	require.Equal(t, schema.LocationRemote, j.Location.Type)
 	require.Equal(t, time.Date(2026, 4, 8, 0, 0, 0, 0, time.UTC), j.PostedAt.UTC())
 	require.Contains(t, j.Description, "Responsible for developing frontend components")
 	require.Equal(t, []string{"Magento 2", "React", "GraphQL"}, j.Tags)
@@ -233,7 +234,7 @@ func TestBuiltIn_FetchWithSlotSearch_httptest(t *testing.T) {
 const minimalCloudflareInterstitial = `<html><head><title>Just a moment...</title></head><body>` +
 	`<script src="/cdn-cgi/challenge-platform/h/g/orchestrate/chl_page/v1?ray=test"></script></body></html>`
 
-func TestBuiltIn_FetchWithSlotSearch_challengeRetry_httptest(t *testing.T) {
+func TestBuiltIn_FetchWithQuery_challengeRetry_httptest(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 
@@ -326,7 +327,7 @@ func TestBuiltIn_FetchWithSlotSearch_challengeRetry_httptest(t *testing.T) {
 		challengeRetryDelays:      []time.Duration{2 * time.Millisecond},
 	}
 
-	jobs, err := c.FetchWithSlotSearch(ctx, "go")
+	jobs, err := c.FetchWithQuery(ctx, "go")
 	require.NoError(t, err)
 	require.Len(t, jobs, 1)
 	require.Equal(t, int32(2), listCalls.Load())
@@ -334,7 +335,7 @@ func TestBuiltIn_FetchWithSlotSearch_challengeRetry_httptest(t *testing.T) {
 	require.Equal(t, "Senior Magento Frontend Developer", jobs[0].Title)
 }
 
-func TestBuiltIn_FetchWithSlotSearch_challengeRetry_browserFetcher(t *testing.T) {
+func TestBuiltIn_FetchWithQuery_challengeRetry_browserFetcher(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 
@@ -401,7 +402,7 @@ func TestBuiltIn_FetchWithSlotSearch_challengeRetry_browserFetcher(t *testing.T)
 		}},
 	}
 
-	jobs, err := c.FetchWithSlotSearch(ctx, "go")
+	jobs, err := c.FetchWithQuery(ctx, "go")
 	require.NoError(t, err)
 	require.Len(t, jobs, 1)
 	require.Equal(t, "Senior Magento Frontend Developer", jobs[0].Title)

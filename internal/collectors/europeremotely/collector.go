@@ -171,21 +171,18 @@ func (c *EuropeRemotely) Fetch(ctx context.Context) ([]schema.Job, error) {
 				hiringRegions = []string{schema.RegionCodeEurope.String()}
 			}
 			j := schema.Job{
-				Source:          SourceName,
-				Title:           title,
-				Company:         company,
-				URL:             listingURL,
-				ApplyURL:        applyURL,
-				Description:     detail.description,
-				PostedAt:        postedAt,
-				Remote:          utils.RemoteMVPRule(title, detail.description, detail.tags),
-				CountryCode:     c.countryCode(card.locationRaw, detail.locationRaw),
-				HiringCountries: hiringCountries,
-				HiringRegions:   hiringRegions,
-				HiringRaw:       hiringRaw,
-				SalaryRaw:       salaryRaw(card.compensation, detail.compensationRaw),
-				Tags:            detail.tags,
-				Position:        utils.InferPosition(title, detail.description, detail.tags),
+				Source:         SourceName,
+				Title:          title,
+				Company:        company,
+				CompanyWebsite: strings.TrimSpace(detail.companyWebsite),
+				URL:            listingURL,
+				ApplyURL:       applyURL,
+				Description:    detail.description,
+				PostedAt:       postedAt,
+				Location:       utils.LocationFromParsed(utils.RemoteMVPRule(title, detail.description, detail.tags), "", hiringCountries, hiringRegions, hiringRaw, nil),
+				SalaryRaw:      salaryRaw(card.compensation, detail.compensationRaw),
+				Tags:           detail.tags,
+				Position:       utils.InferPosition(title, detail.description, detail.tags),
 			}
 			if err := domainutils.AssignStableID(&j); err != nil {
 				return nil, fmt.Errorf("stable id: %w", err)
@@ -202,8 +199,8 @@ func (c *EuropeRemotely) Fetch(ctx context.Context) ([]schema.Job, error) {
 	return jobs, nil
 }
 
-// FetchWithSlotSearch implements collectors.SlotSearchFetcher (admin-ajax search_keywords).
-func (c *EuropeRemotely) FetchWithSlotSearch(ctx context.Context, slotQuery string) ([]schema.Job, error) {
+// FetchWithQuery implements collectors.QueryFetcher (admin-ajax search_keywords).
+func (c *EuropeRemotely) FetchWithQuery(ctx context.Context, slotQuery string) ([]schema.Job, error) {
 	q := strings.TrimSpace(slotQuery)
 	if q == "" {
 		return c.Fetch(ctx)
@@ -231,14 +228,6 @@ func (c *EuropeRemotely) maxFeedPagesEffective() int {
 		n = maxFeedPagesHardCap
 	}
 	return n
-}
-
-func (c *EuropeRemotely) countryCode(listingLoc, detailLoc string) string {
-	countries, _, _ := utils.ParseHiringScope(c.Countries, listingLoc, detailLoc)
-	if len(countries) > 0 {
-		return countries[0]
-	}
-	return ""
 }
 
 func cloneValues(v url.Values) url.Values {

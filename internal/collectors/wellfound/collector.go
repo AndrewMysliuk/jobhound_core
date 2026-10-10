@@ -49,8 +49,8 @@ func (*Wellfound) Fetch(context.Context) ([]schema.Job, error) {
 	return []schema.Job{}, nil
 }
 
-// FetchWithSlotSearch implements collectors.SlotSearchFetcher.
-func (c *Wellfound) FetchWithSlotSearch(ctx context.Context, slotQuery string) ([]schema.Job, error) {
+// FetchWithQuery implements collectors.QueryFetcher.
+func (c *Wellfound) FetchWithQuery(ctx context.Context, slotQuery string) ([]schema.Job, error) {
 	slug := strings.TrimSpace(slotQuery)
 	if slug == "" {
 		return c.Fetch(ctx)
@@ -121,21 +121,18 @@ func (c *Wellfound) fetchRole(ctx context.Context, slug string) ([]schema.Job, e
 		if err != nil {
 			continue
 		}
-		j := schema.Job{
-			Source:          SourceName,
-			Title:           title,
-			Company:         company,
-			URL:             canonURL,
-			ApplyURL:        "",
-			Description:     detail.Description,
-			PostedAt:        detail.PostedAt,
-			Remote:          detail.Remote,
-			HiringCountries: detail.HiringCountries,
-			HiringRegions:   detail.HiringRegions,
-			HiringRaw:       detail.HiringRaw,
-		}
+		countryCode := ""
 		if len(detail.HiringCountries) > 0 {
-			j.CountryCode = detail.HiringCountries[0]
+			countryCode = detail.HiringCountries[0]
+		}
+		j := schema.Job{
+			Source:      SourceName,
+			Title:       title,
+			Company:     company,
+			URL:         canonURL,
+			Description: detail.Description,
+			PostedAt:    detail.PostedAt,
+			Location:    utils.LocationFromParsed(detail.Remote, countryCode, detail.HiringCountries, detail.HiringRegions, detail.HiringRaw, nil),
 		}
 		if err := domainutils.AssignStableID(&j); err != nil {
 			continue

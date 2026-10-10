@@ -13,12 +13,10 @@ import (
 // IngestSourceWorkflowName is the registered workflow type for per-source ingest (006 / 003 patterns).
 const IngestSourceWorkflowName = "IngestSourceWorkflow"
 
-// IngestSourceWorkflow loads jobs from one 005 source with Redis coordination (activity implements lock/cooldown/watermark).
-// Callers must set IngestSourceInput.SlotID (non-zero UUID) so watermarks stay slot-scoped (006 v2).
+// IngestSourceWorkflow loads jobs from one source with Redis coordination (activity implements lock/cooldown/watermark).
 func IngestSourceWorkflow(ctx workflow.Context, in ingestschema.IngestSourceInput) (ingestschema.IngestSourceOutput, error) {
 	workflow.GetLogger(ctx).Info("ingest source workflow start",
 		logging.FieldWorkflow, IngestSourceWorkflowName,
-		logging.FieldSlotID, in.SlotID.String(),
 		logging.FieldSourceID, in.SourceID,
 	)
 	ctx = workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
@@ -35,7 +33,6 @@ func IngestSourceWorkflow(ctx workflow.Context, in ingestschema.IngestSourceInpu
 	if err := workflow.ExecuteActivity(ctx, ingest_activities.RunIngestSourceActivityName, in).Get(ctx, &out); err != nil {
 		workflow.GetLogger(ctx).Error("RunIngestSource activity failed",
 			logging.FieldWorkflow, IngestSourceWorkflowName,
-			logging.FieldSlotID, in.SlotID.String(),
 			logging.FieldSourceID, in.SourceID,
 			"error", err,
 		)

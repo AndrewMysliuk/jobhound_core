@@ -29,65 +29,69 @@ func TestNormalizeListingURL_equivalence(t *testing.T) {
 	}
 }
 
-func TestStableJobID_sourceMatters(t *testing.T) {
-	u := "https://example.com/jobs/1"
-	a, err := utils.StableJobID("himalayas", u)
-	if err != nil {
-		t.Fatal(err)
+func TestCompanyKey_stripsLegalSuffixes(t *testing.T) {
+	cases := []struct {
+		in, want string
+	}{
+		{in: "Acme Inc", want: "acme"},
+		{in: "Acme, Inc.", want: "acme"},
+		{in: "Foo GmbH", want: "foo"},
+		{in: "Bar Ltd", want: "bar"},
+		{in: "Baz LLC", want: "baz"},
+		{in: "Quux SRL", want: "quux"},
+		{in: "  Acme   Inc  ", want: "acme"},
+		{in: "Included Labs", want: "included labs"},
 	}
-	b, err := utils.StableJobID("builtin", u)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if a == b {
-		t.Fatal("expected different ids for different sources")
-	}
-}
-
-func TestStableJobID_errors(t *testing.T) {
-	if _, err := utils.StableJobID("", "https://a.com/x"); err == nil {
-		t.Fatal("want error for empty source")
-	}
-	if _, err := utils.StableJobID("x", ""); err == nil {
-		t.Fatal("want error for empty URL")
-	}
-	if _, err := utils.StableJobID("x", "not-a-url"); err == nil {
-		t.Fatal("want error for bad URL")
+	for _, tc := range cases {
+		t.Run(tc.in, func(t *testing.T) {
+			if got := utils.CompanyKey(tc.in); got != tc.want {
+				t.Fatalf("got %q want %q", got, tc.want)
+			}
+		})
 	}
 }
 
-func TestAssignStableID_fallbackApplyURL(t *testing.T) {
-	j := &schema.Job{
-		Source:   "board",
-		URL:      "",
-		ApplyURL: "https://apply.example.com/abc",
+func TestStableJobID_normalizesTitleAndRaw(t *testing.T) {
+	got := utils.StableJobID("acme", "  Senior   Go ", " Berlin  DE ")
+	want := "acme\x1esenior go\x1eberlin de"
+	if got != want {
+		t.Fatalf("got %q want %q", got, want)
 	}
-	if err := utils.AssignStableID(j); err != nil {
-		t.Fatal(err)
-	}
-	j2 := &schema.Job{Source: "board", URL: "", ApplyURL: "https://apply.example.com/abc"}
-	if err := utils.AssignStableID(j2); err != nil {
-		t.Fatal(err)
-	}
-	if j.ID != j2.ID {
-		t.Fatalf("ids differ: %q vs %q", j.ID, j2.ID)
+	emptyRaw := utils.StableJobID("acme", "Senior Go", "")
+	if emptyRaw != "acme\x1esenior go\x1e" {
+		t.Fatalf("empty raw: got %q", emptyRaw)
 	}
 }
 
-func TestAssignStableID_prefersListingOverApply(t *testing.T) {
-	j := &schema.Job{
-		Source:   "board",
-		URL:      "https://site.com/job/1",
-		ApplyURL: "https://other.com/apply",
+func TestAssignStableID_ignoresApplyURL(t *testing.T) {
+	a := &schema.Job{
+		Company:  "Acme Inc",
+		Title:    "Engineer",
+		ApplyURL: "https://boards.greenhouse.io/acme/jobs/1",
+		Location: schema.Location{Raw: "Berlin"},
 	}
-	if err := utils.AssignStableID(j); err != nil {
+	b := &schema.Job{
+		Company:  "acme llc",
+		Title:    "  engineer ",
+		ApplyURL: "https://other.example/apply",
+		Location: schema.Location{Raw: " berlin "},
+	}
+	if err := utils.AssignStableID(a); err != nil {
 		t.Fatal(err)
 	}
-	want, err := utils.StableJobID("board", "https://site.com/job/1")
-	if err != nil {
+	if err := utils.AssignStableID(b); err != nil {
 		t.Fatal(err)
 	}
-	if j.ID != want {
-		t.Fatalf("got %q want %q", j.ID, want)
+	if a.ID != b.ID {
+		t.Fatalf("ids differ: %q vs %q", a.ID, b.ID)
+	}
+	if a.CompanyKey != "acme" || b.CompanyKey != "acme" {
+		t.Fatalf("keys %q %q", a.CompanyKey, b.CompanyKey)
+	}
+}
+
+func TestAssignStableID_nil(t *testing.T) {
+	if err := utils.AssignStableID(nil); err == nil {
+		t.Fatal("want error")
 	}
 }

@@ -6,35 +6,18 @@ import (
 	"time"
 
 	jobdata "github.com/andrewmysliuk/jobhound_core/internal/domain/schema"
-	"github.com/andrewmysliuk/jobhound_core/internal/jobs/schema"
-	"github.com/google/uuid"
 )
 
 // JobRepository persists normalized jobs (002 stub; list/search/ingest batch APIs in 006 as needed).
 type JobRepository interface {
 	Save(ctx context.Context, job jobdata.Job) error
-	// SaveIngest upserts after broad stage 1 (006): sets stage1_status to PASSED_STAGE_1, skips DB write
-	// when the row already matches on all fields except description and description is unchanged;
-	// updates description (and updated_at) only when everything else matches but description differs.
+	// SaveIngest inserts a vacancy or merges it into the row with the same id.
+	// Sources are unioned. An ATS url and apply_url replace aggregator values.
+	// first_seen_at stays; last_seen_at moves. skipped is false because the touch is written.
 	SaveIngest(ctx context.Context, job jobdata.Job) (skipped bool, err error)
 	GetByID(ctx context.Context, id string) (jobdata.Job, error)
-	// DeleteJobsCreatedBeforeUTC hard-deletes jobs with created_at strictly before cutoff (UTC).
-	// Dependent pipeline_run_jobs rows must be removed via ON DELETE CASCADE (007) or equivalent.
-	DeleteJobsCreatedBeforeUTC(ctx context.Context, cutoff time.Time) (deleted int64, err error)
-
-	// UpsertSlotJob inserts (slot_id, job_id) if absent; no-op when the pair exists (008 slot_jobs).
-	// Caller must ensure the job row exists (e.g. after SaveIngest).
-	UpsertSlotJob(ctx context.Context, slotID uuid.UUID, jobID string) error
-	// ListSlotJobsPassedStage1 returns jobs linked to the slot with stage1_status PASSED_STAGE_1 (008 stage-2 pool).
-	ListSlotJobsPassedStage1(ctx context.Context, slotID uuid.UUID) ([]jobdata.Job, error)
-	// ListPassedStage2JobsForRun returns full job rows for pipeline_run_jobs with stage2_status PASSED_STAGE_2
-	// for this run (including rows that already have a terminal stage-3 outcome), ordered by jobs.posted_at descending.
-	ListPassedStage2JobsForRun(ctx context.Context, pipelineRunID int64) ([]jobdata.Job, error)
-
-	// ListSlotStage1Jobs returns stage-1 pool jobs for the slot (PASSED_STAGE_1 + slot_jobs), sorted posted_at DESC, job_id ASC, paginated.
-	ListSlotStage1Jobs(ctx context.Context, slotID uuid.UUID, offset, limit int) ([]schema.JobListEntry, int64, error)
-	// ListPipelineRunStage2Jobs returns rows for the run scoped to the slot (join slot_jobs). statusFilter empty = all run rows; otherwise exact prj.stage2_status match (PASSED_STAGE_2 | REJECTED_STAGE_2). Response status is stage2_status.
-	ListPipelineRunStage2Jobs(ctx context.Context, slotID uuid.UUID, pipelineRunID int64, statusFilter string, offset, limit int) ([]schema.JobListEntry, int64, error)
-	// ListPipelineRunStage3Jobs returns rows with non-null terminal stage3_status. statusFilter empty = both terminals; otherwise exact prj.stage3_status match. Response status is stage3_status.
-	ListPipelineRunStage3Jobs(ctx context.Context, slotID uuid.UUID, pipelineRunID int64, statusFilter string, offset, limit int) ([]schema.JobListEntry, int64, error)
+	// ListFirstSeenSince returns jobs whose first_seen_at is at or after since (UTC).
+	ListFirstSeenSince(ctx context.Context, since time.Time) ([]jobdata.Job, error)
+	// DeleteJobsLastSeenBeforeUTC hard-deletes jobs with last_seen_at strictly before cutoff (UTC).
+	DeleteJobsLastSeenBeforeUTC(ctx context.Context, cutoff time.Time) (deleted int64, err error)
 }

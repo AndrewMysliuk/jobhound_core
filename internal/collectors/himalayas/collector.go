@@ -73,8 +73,8 @@ func (c *Himalayas) Fetch(ctx context.Context) ([]schema.Job, error) {
 	return c.fetchBrowseMode(ctx, client, maxPages)
 }
 
-// FetchWithSlotSearch implements collectors.SlotSearchFetcher (Himalayas /jobs/api/search q=).
-func (c *Himalayas) FetchWithSlotSearch(ctx context.Context, slotQuery string) ([]schema.Job, error) {
+// FetchWithQuery implements collectors.QueryFetcher (Himalayas /jobs/api/search q=).
+func (c *Himalayas) FetchWithQuery(ctx context.Context, slotQuery string) ([]schema.Job, error) {
 	q := strings.TrimSpace(slotQuery)
 	if q == "" {
 		return c.Fetch(ctx)

@@ -3,6 +3,8 @@ package weworkremotely
 import (
 	"encoding/xml"
 	"fmt"
+	"html"
+	"regexp"
 	"strings"
 	"time"
 
@@ -10,6 +12,9 @@ import (
 	"github.com/andrewmysliuk/jobhound_core/internal/domain/schema"
 	domainutils "github.com/andrewmysliuk/jobhound_core/internal/domain/utils"
 )
+
+// WWR states the company site as <strong>URL:</strong> followed by one anchor. Other links in the description are not that field.
+var companyURLRE = regexp.MustCompile(`(?i)<strong>\s*URL:\s*</strong>\s*<a\s[^>]*href="([^"]+)"`)
 
 type rssFeed struct {
 	Channel rssChannel `xml:"channel"`
@@ -65,6 +70,7 @@ func jobFromRSSItem(countries *utils.CountryResolver, item rssItem) (schema.Job,
 	}
 	descHTML := strings.TrimSpace(item.Description)
 	descPlain := utils.StripHTMLToPlainText(descHTML)
+	companyWebsite := companyWebsiteFromDescription(descHTML)
 	tags := skillsTags(item.Skills, item.Category)
 	postedAt, _ := parseRSSPubDate(strings.TrimSpace(item.PubDate))
 	// WWR states the hiring restriction in <region> ("Anywhere in the World", "USA Only", "Europe Only").
@@ -73,26 +79,30 @@ func jobFromRSSItem(countries *utils.CountryResolver, item rssItem) (schema.Job,
 	if len(hiringCountries) == 0 && len(hiringRegions) == 0 {
 		hiringCountries, hiringRegions, hiringRaw = utils.ParseHiringScope(countries, item.Country, item.State)
 	}
-	countryCode := countryFromWWR(hiringCountries)
 	j := schema.Job{
-		Source:          SourceName,
-		Title:           title,
-		Company:         company,
-		URL:             listingURL,
-		Description:     descPlain,
-		PostedAt:        postedAt,
-		Remote:          remoteFromWWR(item.Region, title, descPlain, tags),
-		CountryCode:     countryCode,
-		HiringCountries: hiringCountries,
-		HiringRegions:   hiringRegions,
-		HiringRaw:       hiringRaw,
-		Tags:            tags,
-		Position:        utils.InferPosition(title, descPlain, tags),
+		Source:         SourceName,
+		Title:          title,
+		Company:        company,
+		CompanyWebsite: companyWebsite,
+		URL:            listingURL,
+		Description:    descPlain,
+		PostedAt:       postedAt,
+		Location:       utils.LocationFromParsed(remoteFromWWR(item.Region, title, descPlain, tags), "", hiringCountries, hiringRegions, hiringRaw, nil),
+		Tags:           tags,
+		Position:       utils.InferPosition(title, descPlain, tags),
 	}
 	if err := domainutils.AssignStableID(&j); err != nil {
 		return schema.Job{}, false, fmt.Errorf("stable id: %w", err)
 	}
 	return j, true, nil
+}
+
+func companyWebsiteFromDescription(descHTML string) string {
+	m := companyURLRE.FindStringSubmatch(descHTML)
+	if len(m) < 2 {
+		return ""
+	}
+	return strings.TrimSpace(html.UnescapeString(m[1]))
 }
 
 func splitCompanyTitle(raw string) (company, title string) {
@@ -148,11 +158,4 @@ func remoteFromWWR(region, title, desc string, tags []string) *bool {
 		return &v
 	}
 	return utils.RemoteMVPRule(title, desc, tags)
-}
-
-func countryFromWWR(hiringCountries []string) string {
-	if len(hiringCountries) > 0 {
-		return hiringCountries[0]
-	}
-	return ""
 }

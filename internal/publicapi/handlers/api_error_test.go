@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -15,38 +14,18 @@ import (
 	"github.com/rs/zerolog"
 )
 
-func TestGetSlots_unmappedErrorIsInternal(t *testing.T) {
-	const raw = "postgres dial failed secret-token-9f3a"
-	h := NewHTTPHandler(nil, Deps{
-		Logger:  zerolog.Nop(),
-		Slots:   &mockSlots{listErr: errors.New(raw)},
-		Profile: stubProfile{},
-	})
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/slots", nil)
-	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
-	if rec.Code != http.StatusInternalServerError {
-		t.Fatalf("status %d %s", rec.Code, rec.Body.String())
-	}
-	if strings.Contains(rec.Body.String(), raw) {
-		t.Fatalf("body leaked raw error: %s", rec.Body.String())
-	}
-	var body schema.APIErrorBody
-	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
-		t.Fatal(err)
-	}
-	if body.Error.Code != schema.APIErrorCodeUnexpected.String() || body.Error.Message != "Internal server error." {
-		t.Fatalf("error: got %+v", body.Error)
-	}
-}
-
 func TestWrongMethodIsRegistry405(t *testing.T) {
 	h := NewHTTPHandler(nil, Deps{
-		Logger:  zerolog.Nop(),
-		Slots:   &mockSlots{},
-		Profile: stubProfile{},
+		Logger: zerolog.Nop(),
 	})
-	req := httptest.NewRequest(http.MethodDelete, "/api/v1/slots", nil)
+	health := httptest.NewRequest(http.MethodGet, "/api/v1/health", nil)
+	healthRec := httptest.NewRecorder()
+	h.ServeHTTP(healthRec, health)
+	if healthRec.Code != http.StatusOK {
+		t.Fatalf("health status %d %s", healthRec.Code, healthRec.Body.String())
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/health", nil)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusMethodNotAllowed {
@@ -69,6 +48,24 @@ func TestWrongMethodIsRegistry405(t *testing.T) {
 	}
 	if strings.Contains(missRec.Body.String(), schema.APIErrorCodeMethodNotAllowed.String()) {
 		t.Fatalf("404 rewritten: %s", missRec.Body.String())
+	}
+
+	slots := httptest.NewRequest(http.MethodGet, "/api/v1/slots", nil)
+	slotsRec := httptest.NewRecorder()
+	h.ServeHTTP(slotsRec, slots)
+	if slotsRec.Code != http.StatusNotFound {
+		t.Fatalf("slots status %d %s", slotsRec.Code, slotsRec.Body.String())
+	}
+}
+
+func assertAPIError(t *testing.T, got schema.APIErrorDetail, code schema.APIErrorCode) {
+	t.Helper()
+	spec, ok := schema.Lookup(code)
+	if !ok {
+		t.Fatalf("code %s is not registered", code)
+	}
+	if got.Code != spec.Code.String() || got.Message != spec.Message {
+		t.Fatalf("error: got %+v want %s %q", got, spec.Code, spec.Message)
 	}
 }
 

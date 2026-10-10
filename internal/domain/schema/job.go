@@ -1,45 +1,41 @@
-// Package schema holds cross-module vacancy types shared by collectors, pipeline, jobs storage, and LLM scoring.
+// Package schema holds cross-module vacancy types shared by collectors and jobs storage.
 package schema
 
 import "time"
 
-// Job is the normalized vacancy flowing through the pipeline.
-// ID is set via StableJobID / AssignStableID in domain/utils (see specs/001-agent-skeleton-and-domain/spec.md).
-type Job struct {
-	ID          string
-	Source      string // e.g. "himalayas", "builtin"
-	Title       string
-	Company     string
-	URL         string // canonical job posting (listing) page; used for stable id before ApplyURL fallback
-	ApplyURL    string // optional external apply/ATS link; empty if unknown or same as listing
-	Description string
-	PostedAt    time.Time // zero if unknown
-	// Remote is nil when the listing does not state remote status; true/false when known.
-	Remote *bool
-	// CountryCode is ISO 3166-1 alpha-2 when known; empty string means unknown.
-	CountryCode string
-	// HiringCountries lists every ISO 3166-1 alpha-2 the listing is restricted to; nil/empty = not stated.
-	HiringCountries []string
-	// HiringRegions lists RegionCode values when the board states a region instead of countries; nil/empty = none.
-	HiringRegions []string
-	// HiringRaw is the board's restriction text verbatim; "" when absent.
-	HiringRaw string
-	// SalaryRaw is opaque compensation text from the board; empty if none (005 collectors).
-	SalaryRaw string
-	// Tags are skill/topic labels; nil or empty means none (persisted as JSON []).
-	Tags []string
-	// Position is nil when no MVP keyword group matched; otherwise a canonical label (005).
-	Position *string
-	// TimezoneOffsets holds board-reported UTC offset hours (e.g. Himalayas); nil or empty = none (005).
-	TimezoneOffsets []float64
-	UserID          *string // optional; nil/empty = unset (future multi-user scope)
-	// Stage1Status is nil for legacy rows or before ingest completes broad stage 1; PASSED_STAGE_1 when stored (007).
-	Stage1Status *string
+const (
+	LocationRemote = "remote"
+	LocationHybrid = "hybrid"
+	LocationOffice = "office"
+)
+
+// Location is the display location stored as one JSON object.
+// Only Raw is copied into Job.ID.
+type Location struct {
+	Type      string
+	Regions   []string
+	Countries []string
+	Timezone  string
+	Raw       string
 }
 
-// ScoredJob is the post–stage-3 shape handed to notification.
-type ScoredJob struct {
-	Job    Job
-	Score  int // 0–100 or agreed scale
-	Reason string
+// Job is one vacancy. ID is the dedup key set by domain/utils.AssignStableID.
+type Job struct {
+	ID             string
+	Source         string // board that produced this in-memory listing
+	Sources        []string
+	Title          string
+	Company        string
+	CompanyKey     string
+	CompanyWebsite string
+	URL            string
+	ApplyURL       string
+	Description    string
+	PostedAt       time.Time // zero if unknown
+	Location       Location
+	SalaryRaw      string
+	Tags           []string
+	Position       *string
+	FirstSeenAt    time.Time
+	LastSeenAt     time.Time
 }

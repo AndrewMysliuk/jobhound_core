@@ -46,8 +46,8 @@ func (c *RemotifyEurope) Fetch(ctx context.Context) ([]schema.Job, error) {
 	return c.fetchListing(ctx, "")
 }
 
-// FetchWithSlotSearch implements collectors.SlotSearchFetcher.
-func (c *RemotifyEurope) FetchWithSlotSearch(ctx context.Context, slotQuery string) ([]schema.Job, error) {
+// FetchWithQuery implements collectors.QueryFetcher.
+func (c *RemotifyEurope) FetchWithQuery(ctx context.Context, slotQuery string) ([]schema.Job, error) {
 	q := strings.TrimSpace(slotQuery)
 	if q == "" {
 		return c.Fetch(ctx)
@@ -152,24 +152,23 @@ func (c *RemotifyEurope) fetchJobDetail(ctx context.Context, client *http.Client
 		return schema.Job{}, fmt.Errorf("remotify europe: missing title or company for %s", stub.ID)
 	}
 	j := schema.Job{
-		Source:      SourceName,
-		Title:       title,
-		Company:     company,
-		URL:         detailURL,
-		ApplyURL:    strings.TrimSpace(detail.JobLink),
-		Description: detail.Description,
+		Source:         SourceName,
+		Title:          title,
+		Company:        company,
+		CompanyWebsite: detail.CompanyWebsite,
+		URL:            detailURL,
+		ApplyURL:       strings.TrimSpace(detail.JobLink),
+		Description:    detail.Description,
 	}
 	if !detail.PostedAt.IsZero() {
 		j.PostedAt = detail.PostedAt
 	}
+	var remote *bool
 	if detail.RemoteKnown {
-		j.Remote = detail.Remote
+		remote = detail.Remote
 	}
 	countryCode, hiringCountries, hiringRegions, hiringRaw := hiringScopeFromDetail(c.Countries, detail)
-	j.CountryCode = countryCode
-	j.HiringCountries = hiringCountries
-	j.HiringRegions = hiringRegions
-	j.HiringRaw = hiringRaw
+	j.Location = utils.LocationFromParsed(remote, countryCode, hiringCountries, hiringRegions, hiringRaw, nil)
 	if err := domainutils.AssignStableID(&j); err != nil {
 		return schema.Job{}, err
 	}

@@ -23,5 +23,6 @@ const (
 	selDetailSalary      = "ul.job-listing-meta li.wpjmef-field-salary"
 	selDetailDescription = "div.job_listing-description"
 	selDetailApply       = "a.application_button_link"
+	selDetailWebsite     = "a.job_listing-website"
 	selDetailTags        = "p.job_tags"
 )

@@ -151,8 +151,8 @@ func (c *WorkingNomads) Fetch(ctx context.Context) ([]schema.Job, error) {
 	return all, nil
 }
 
-// FetchWithSlotSearch implements collectors.SlotSearchFetcher (Elasticsearch multi_match on listing fields).
-func (c *WorkingNomads) FetchWithSlotSearch(ctx context.Context, slotQuery string) ([]schema.Job, error) {
+// FetchWithQuery implements collectors.QueryFetcher (Elasticsearch multi_match on listing fields).
+func (c *WorkingNomads) FetchWithQuery(ctx context.Context, slotQuery string) ([]schema.Job, error) {
 	q := strings.TrimSpace(slotQuery)
 	if q == "" {
 		return c.Fetch(ctx)

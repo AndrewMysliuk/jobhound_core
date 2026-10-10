@@ -58,21 +58,16 @@ func jobFromListing(row ListingJob) (schema.Job, bool, error) {
 	postedAt, _ := parsePublishedAt(row.PublishedAt)
 
 	hiringCountries := alpha2HiringCountries(row.RemoteCountries)
-	countryCode := ""
-	if len(hiringCountries) > 0 {
-		countryCode = hiringCountries[0]
-	}
 	j := schema.Job{
-		Source:          SourceName,
-		Title:           title,
-		Company:         company,
-		URL:             listingURL,
-		ApplyURL:        applyURL,
-		Description:     descPlain,
-		PostedAt:        postedAt,
-		Remote:          remoteFromWorkPlace(row.WorkPlace, title, descPlain),
-		CountryCode:     countryCode,
-		HiringCountries: hiringCountries,
+		Source:         SourceName,
+		Title:          title,
+		Company:        company,
+		CompanyWebsite: strings.TrimSpace(row.CompanyWebsite),
+		URL:            listingURL,
+		ApplyURL:       applyURL,
+		Description:    descPlain,
+		PostedAt:       postedAt,
+		Location:       utils.LocationFromParsed(remoteFromWorkPlace(row.WorkPlace, title, descPlain), "", hiringCountries, nil, "", nil),
 	}
 	if err := domainutils.AssignStableID(&j); err != nil {
 		return schema.Job{}, false, err

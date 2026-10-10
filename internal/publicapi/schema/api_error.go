@@ -11,7 +11,6 @@ const (
 	APIErrorClassValidation       APIErrorClass = "validation"         // 400
 	APIErrorClassNotFound         APIErrorClass = "not_found"          // 404
 	APIErrorClassConflict         APIErrorClass = "conflict"           // 409
-	APIErrorClassUnprocessable    APIErrorClass = "unprocessable"      // 422
 	APIErrorClassMethodNotAllowed APIErrorClass = "method_not_allowed" // 405
 	APIErrorClassInternal         APIErrorClass = "internal"           // 500
 )
@@ -26,7 +25,7 @@ func (c APIErrorClass) Pointer() *APIErrorClass { return &c }
 func (c APIErrorClass) FromValue(s string) (APIErrorClass, error) {
 	switch APIErrorClass(s) {
 	case APIErrorClassValidation, APIErrorClassNotFound, APIErrorClassConflict,
-		APIErrorClassUnprocessable, APIErrorClassMethodNotAllowed, APIErrorClassInternal:
+		APIErrorClassMethodNotAllowed, APIErrorClassInternal:
 		return APIErrorClass(s), nil
 	default:
 		return "", fmt.Errorf("unknown APIErrorClass %q: valid values are %v", s, ValuesAPIErrorClass())
@@ -39,7 +38,6 @@ func ValuesAPIErrorClass() []APIErrorClass {
 		APIErrorClassValidation,
 		APIErrorClassNotFound,
 		APIErrorClassConflict,
-		APIErrorClassUnprocessable,
 		APIErrorClassMethodNotAllowed,
 		APIErrorClassInternal,
 	}
@@ -55,21 +53,20 @@ func FromStringAPIErrorClass(s string) (APIErrorClass, error) {
 type APIErrorCode string
 
 const (
-	APIErrorCodeMethodNotAllowed       APIErrorCode = "HTTP.METHOD_NOT_ALLOWED"
-	APIErrorCodeInvalidJSON            APIErrorCode = "HTTP.INVALID_JSON"
-	APIErrorCodeValidationFailed       APIErrorCode = "HTTP.VALIDATION_FAILED"
-	APIErrorCodeInvalidStage           APIErrorCode = "HTTP.INVALID_STAGE"
-	APIErrorCodeInvalidQuery           APIErrorCode = "HTTP.INVALID_QUERY"
-	APIErrorCodeIdempotencyKeyRequired APIErrorCode = "SLOTS.IDEMPOTENCY_KEY_REQUIRED"
-	APIErrorCodeInvalidIdempotencyKey  APIErrorCode = "SLOTS.INVALID_IDEMPOTENCY_KEY"
-	APIErrorCodeIdempotencyKeyConflict APIErrorCode = "SLOTS.IDEMPOTENCY_KEY_CONFLICT"
-	APIErrorCodeSlotLimitReached       APIErrorCode = "SLOTS.LIMIT_REACHED"
-	APIErrorCodeSlotNotFound           APIErrorCode = "SLOTS.NOT_FOUND"
-	APIErrorCodeJobNotInScope          APIErrorCode = "PIPELINE.JOB_NOT_IN_SCOPE"
-	APIErrorCodeStageAlreadyRunning    APIErrorCode = "SLOTS.STAGE_ALREADY_RUNNING"
-	APIErrorCodeNoPipelineRun          APIErrorCode = "SLOTS.NO_PIPELINE_RUN"
-	APIErrorCodeProfileRequired        APIErrorCode = "SLOTS.PROFILE_REQUIRED"
-	APIErrorCodeUnexpected             APIErrorCode = "INTERNAL.UNEXPECTED"
+	APIErrorCodeInvalidJSON              APIErrorCode = "HTTP.INVALID_JSON"
+	APIErrorCodeValidationFailed         APIErrorCode = "HTTP.VALIDATION_FAILED"
+	APIErrorCodeInvalidQuery             APIErrorCode = "HTTP.INVALID_QUERY"
+	APIErrorCodeIdempotencyKeyRequired   APIErrorCode = "HTTP.IDEMPOTENCY_KEY_REQUIRED"
+	APIErrorCodeInvalidIdempotencyKey    APIErrorCode = "HTTP.INVALID_IDEMPOTENCY_KEY"
+	APIErrorCodeIdempotencyKeyConflict   APIErrorCode = "HTTP.IDEMPOTENCY_KEY_CONFLICT"
+	APIErrorCodeProfileNotFound          APIErrorCode = "PROFILES.NOT_FOUND"
+	APIErrorCodeProfileInvalidDefinition APIErrorCode = "PROFILES.INVALID_DEFINITION"
+	APIErrorCodeRunAlreadyRunning        APIErrorCode = "PROFILES.RUN_ALREADY_RUNNING"
+	APIErrorCodeNoRun                    APIErrorCode = "PROFILES.NO_RUN"
+	APIErrorCodeJobNotInScope            APIErrorCode = "PROFILES.JOB_NOT_IN_SCOPE"
+	APIErrorCodeInvalidUserStatus        APIErrorCode = "PROFILES.INVALID_USER_STATUS"
+	APIErrorCodeMethodNotAllowed         APIErrorCode = "HTTP.METHOD_NOT_ALLOWED"
+	APIErrorCodeUnexpected               APIErrorCode = "INTERNAL.UNEXPECTED"
 )
 
 func (c APIErrorCode) String() string { return string(c) }
@@ -126,20 +123,19 @@ func (e APIError) Unwrap() error { return e.Cause }
 
 // errorSpecs is the source for Lookup and the generated code file. Order is the contracts table.
 var errorSpecs = []APIErrorSpec{
-	{Code: APIErrorCodeMethodNotAllowed, Class: APIErrorClassMethodNotAllowed, Status: 405, Message: "Method not allowed."},
 	{Code: APIErrorCodeInvalidJSON, Class: APIErrorClassValidation, Status: 400, Message: "Request body is not valid JSON."},
 	{Code: APIErrorCodeValidationFailed, Class: APIErrorClassValidation, Status: 400, Message: "Request body is invalid."},
-	{Code: APIErrorCodeInvalidStage, Class: APIErrorClassValidation, Status: 400, Message: "Invalid stage."},
 	{Code: APIErrorCodeInvalidQuery, Class: APIErrorClassValidation, Status: 400, Message: "Invalid query."},
 	{Code: APIErrorCodeIdempotencyKeyRequired, Class: APIErrorClassValidation, Status: 400, Message: "Header Idempotency-Key is required."},
 	{Code: APIErrorCodeInvalidIdempotencyKey, Class: APIErrorClassValidation, Status: 400, Message: "Header Idempotency-Key must be a non-nil UUID."},
-	{Code: APIErrorCodeIdempotencyKeyConflict, Class: APIErrorClassConflict, Status: 409, Message: "Idempotency key was reused with a different request body."},
-	{Code: APIErrorCodeSlotLimitReached, Class: APIErrorClassConflict, Status: 409, Message: "Slot limit reached."},
-	{Code: APIErrorCodeSlotNotFound, Class: APIErrorClassNotFound, Status: 404, Message: "Slot not found."},
-	{Code: APIErrorCodeJobNotInScope, Class: APIErrorClassNotFound, Status: 404, Message: "Slot or job not found for this stage."},
-	{Code: APIErrorCodeStageAlreadyRunning, Class: APIErrorClassConflict, Status: 409, Message: "This stage is already running for this slot."},
-	{Code: APIErrorCodeNoPipelineRun, Class: APIErrorClassUnprocessable, Status: 422, Message: "Run stage 2 before stage 3."},
-	{Code: APIErrorCodeProfileRequired, Class: APIErrorClassUnprocessable, Status: 422, Message: "Profile text is required for stage 3."},
+	{Code: APIErrorCodeIdempotencyKeyConflict, Class: APIErrorClassConflict, Status: 409, Message: "Idempotency key was reused with a different request."},
+	{Code: APIErrorCodeProfileNotFound, Class: APIErrorClassNotFound, Status: 404, Message: "Profile not found."},
+	{Code: APIErrorCodeProfileInvalidDefinition, Class: APIErrorClassValidation, Status: 400, Message: "Profile definition is invalid."},
+	{Code: APIErrorCodeRunAlreadyRunning, Class: APIErrorClassConflict, Status: 409, Message: "A run is already in progress for this profile."},
+	{Code: APIErrorCodeNoRun, Class: APIErrorClassNotFound, Status: 404, Message: "No run for this profile."},
+	{Code: APIErrorCodeJobNotInScope, Class: APIErrorClassNotFound, Status: 404, Message: "Job not scored for this profile."},
+	{Code: APIErrorCodeInvalidUserStatus, Class: APIErrorClassValidation, Status: 400, Message: "Invalid user status."},
+	{Code: APIErrorCodeMethodNotAllowed, Class: APIErrorClassMethodNotAllowed, Status: 405, Message: "Method not allowed."},
 	{Code: APIErrorCodeUnexpected, Class: APIErrorClassInternal, Status: 500, Message: "Internal server error."},
 }
 

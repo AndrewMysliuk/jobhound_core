@@ -1,44 +1,7 @@
 package schema
 
-import (
-	"time"
-
-	"github.com/andrewmysliuk/jobhound_core/internal/pipeline"
-)
-
-// DefaultJobListLimit is the default page size for GET …/stages/*/jobs (plan.md; max 100).
+// DefaultJobListLimit is the default page size for GET /api/v1/profiles/{profile_id}/jobs.
 const DefaultJobListLimit = 50
 
 // MaxJobListLimit is the maximum allowed limit query value.
 const MaxJobListLimit = 100
-
-// JobListItem is one row in paginated job lists (contracts/http-public-api.md §4.6).
-// stage_3_rationale is always JSON null when absent (plan.md D4: null, not omit).
-// Status is stage2_status for GET …/stages/2/jobs and stage3_status for GET …/stages/3/jobs; omitted for stage 1.
-type JobListItem struct {
-	JobID           string                `json:"job_id"`
-	Title           string                `json:"title"`
-	Company         string                `json:"company"`
-	Description     string                `json:"description"`
-	SourceID        string                `json:"source_id"`
-	URL             string                `json:"url"`
-	ApplyURL        string                `json:"apply_url"`
-	FirstSeenAt     time.Time             `json:"first_seen_at"`
-	PostedAt        *time.Time            `json:"posted_at"`
-	Status          *string               `json:"status,omitempty"`
-	Stage3Rationale *string               `json:"stage_3_rationale"`
-	HiringCountries []string              `json:"hiring_countries"`
-	HiringRegions   []string              `json:"hiring_regions"`
-	HiringRaw       string                `json:"hiring_raw"`
-	Position        *string               `json:"position"`
-	Hits            *[]pipeline.Stage2Hit `json:"hits,omitempty"`
-	Stage2Boost     *int                  `json:"stage2_boost,omitempty"`
-}
-
-// JobListResponse is GET …/stages/{1|2|3}/jobs 200 body.
-type JobListResponse struct {
-	Items []JobListItem `json:"items"`
-	Page  int           `json:"page"`
-	Limit int           `json:"limit"`
-	Total int           `json:"total"`
-}

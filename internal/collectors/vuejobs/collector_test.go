@@ -4,6 +4,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/andrewmysliuk/jobhound_core/internal/domain/schema"
 )
 
 func TestHiringScope_remoteCountries(t *testing.T) {
@@ -12,7 +14,8 @@ func TestHiringScope_remoteCountries(t *testing.T) {
 			"id":               "1",
 			"slug":             "go-dev",
 			"title":            "Go Dev",
-			"organization":     map[string]any{"name": "Acme"},
+			"organization":     map[string]any{"name": "Acme", "domain": "acme.example"},
+			"apply_url":        "https://ats.example/apply/1",
 			"work_place":       []any{"remote"},
 			"remote_countries": []any{"de", "NL", "Germany", "de"},
 			"locations":        []any{"Berlin", "United States"},
@@ -24,12 +27,12 @@ func TestHiringScope_remoteCountries(t *testing.T) {
 		jobs, err := jobsFromListing([]ListingJob{row})
 		require.NoError(t, err)
 		require.Len(t, jobs, 1)
-		require.Equal(t, []string{"DE", "NL"}, jobs[0].HiringCountries)
-		require.Empty(t, jobs[0].HiringRegions)
-		require.Empty(t, jobs[0].HiringRaw)
-		require.Equal(t, "DE", jobs[0].CountryCode)
-		require.NotNil(t, jobs[0].Remote)
-		require.True(t, *jobs[0].Remote)
+		require.Equal(t, []string{"DE", "NL"}, jobs[0].Location.Countries)
+		require.Empty(t, jobs[0].Location.Regions)
+		require.Empty(t, jobs[0].Location.Raw)
+		require.Equal(t, schema.LocationRemote, jobs[0].Location.Type)
+		require.Equal(t, "https://ats.example/apply/1", jobs[0].ApplyURL)
+		require.Equal(t, "https://acme.example", jobs[0].CompanyWebsite)
 	})
 
 	t.Run("empty remote countries stay not stated", func(t *testing.T) {
@@ -48,10 +51,11 @@ func TestHiringScope_remoteCountries(t *testing.T) {
 		jobs, err := jobsFromListing([]ListingJob{row})
 		require.NoError(t, err)
 		require.Len(t, jobs, 1)
-		require.Empty(t, jobs[0].HiringCountries)
-		require.Empty(t, jobs[0].HiringRegions)
-		require.Empty(t, jobs[0].HiringRaw)
-		require.NotNil(t, jobs[0].Remote)
-		require.True(t, *jobs[0].Remote)
+		require.Empty(t, jobs[0].Location.Countries)
+		require.Empty(t, jobs[0].Location.Regions)
+		require.Empty(t, jobs[0].Location.Raw)
+		require.Equal(t, schema.LocationRemote, jobs[0].Location.Type)
+		require.Empty(t, jobs[0].ApplyURL)
+		require.Empty(t, jobs[0].CompanyWebsite)
 	})
 }

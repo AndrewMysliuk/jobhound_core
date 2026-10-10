@@ -125,7 +125,7 @@ func MVPCollectors(ctx context.Context, httpClient *http.Client, dataDir string,
 	return er, wn, builtinColl, him, re, wwr, wf, vj, gc, nil
 }
 
-// MVPMulti wraps MVP collectors in one collectors.Collector (DefaultIngestSourceIDs order; Himalayas when non-nil).
+// MVPMulti wraps MVP collectors in one collectors.Collector (Himalayas and Golang Cafe when non-nil).
 // Optional log: per-source Fetch failures log at Warn on multi.All when OnSourceError is unset.
 func MVPMulti(
 	europeRemotely, workingNomads, builtIn, himalayas,

@@ -13,9 +13,10 @@ import (
 
 // RetentionWorkerDeps configures job retention workflow + activity registration.
 type RetentionWorkerDeps struct {
-	Clock func() time.Time
-	Jobs  jobs.JobRepository
-	Log   zerolog.Logger
+	Clock            func() time.Time
+	Jobs             jobs.JobRepository
+	Log              zerolog.Logger
+	JobRetentionDays int
 }
 
 // RegisterRetention registers JobRetentionWorkflow and RunJobRetention when Jobs is non-nil.
@@ -24,9 +25,10 @@ func RegisterRetention(w worker.Worker, deps RetentionWorkerDeps) {
 		return
 	}
 	acts := &jobs_activities.RetentionActivities{
-		Clock: deps.Clock,
-		Jobs:  deps.Jobs,
-		Log:   deps.Log,
+		Clock:            deps.Clock,
+		Jobs:             deps.Jobs,
+		Log:              deps.Log,
+		JobRetentionDays: deps.JobRetentionDays,
 	}
 	w.RegisterActivityWithOptions(acts.RunJobRetention, activity.RegisterOptions{
 		Name: jobs_activities.RunJobRetentionActivityName,

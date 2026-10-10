@@ -10,9 +10,3 @@ type APIErrorDetail struct {
 	Code    string `json:"code"`
 	Message string `json:"message"`
 }
-
-// SlotLimitReachedBody is POST /slots 409 when the slot cap is exceeded (top-level limit required).
-type SlotLimitReachedBody struct {
-	Error APIErrorDetail `json:"error"`
-	Limit int            `json:"limit"`
-}

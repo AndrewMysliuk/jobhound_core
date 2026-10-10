@@ -1,4 +1,4 @@
-// Command worker runs the Temporal worker: registers ingest, jobs, pipeline, and manual workflows/activities.
+// Command worker runs the Temporal worker: registers ingest, job retention, and profile runs.
 package main
 
 import (
@@ -21,21 +21,32 @@ import (
 	"github.com/andrewmysliuk/jobhound_core/internal/config"
 	"github.com/andrewmysliuk/jobhound_core/internal/ingest"
 	ingest_workflows "github.com/andrewmysliuk/jobhound_core/internal/ingest/workflows"
+	"github.com/andrewmysliuk/jobhound_core/internal/jobs"
 	jobsstorage "github.com/andrewmysliuk/jobhound_core/internal/jobs/storage"
 	jobs_workflows "github.com/andrewmysliuk/jobhound_core/internal/jobs/workflows"
-	"github.com/andrewmysliuk/jobhound_core/internal/llm"
-	"github.com/andrewmysliuk/jobhound_core/internal/llm/anthropic"
-	llmmock "github.com/andrewmysliuk/jobhound_core/internal/llm/mock"
-	manual_workflows "github.com/andrewmysliuk/jobhound_core/internal/manual/workflows"
-	pipelinestorage "github.com/andrewmysliuk/jobhound_core/internal/pipeline/storage"
-	pipeline_workflows "github.com/andrewmysliuk/jobhound_core/internal/pipeline/workflows"
 	"github.com/andrewmysliuk/jobhound_core/internal/platform/logging"
 	"github.com/andrewmysliuk/jobhound_core/internal/platform/pgsql"
 	"github.com/andrewmysliuk/jobhound_core/internal/platform/temporalopts"
+	profilesimpl "github.com/andrewmysliuk/jobhound_core/internal/profiles/impl"
+	scoringstorage "github.com/andrewmysliuk/jobhound_core/internal/scoring/storage"
+	scoring_workflows "github.com/andrewmysliuk/jobhound_core/internal/scoring/workflows"
 	"github.com/redis/go-redis/v9"
 	"go.temporal.io/sdk/client"
 	"go.temporal.io/sdk/worker"
 )
+
+// knownCollectorSourceIDs is the allow-list for profile YAML sources.
+var knownCollectorSourceIDs = []string{
+	europeremotely.SourceName,
+	workingnomads.SourceName,
+	himalayas.SourceName,
+	remotifyeurope.SourceName,
+	weworkremotely.SourceName,
+	wellfound.SourceName,
+	vuejobs.SourceName,
+	golangcafe.SourceName,
+	builtin.SourceName,
+}
 
 func main() {
 	earlyLog := logging.NewRoot(config.DefaultLogLevel, config.DefaultLogFormat, "worker")
@@ -57,24 +68,16 @@ func main() {
 
 	w := worker.New(c, cfg.TaskQueue, temporalopts.DefaultWorkerOptions())
 
-	appCfg := config.Load()
+	appCfg, err := config.Load()
+	if err != nil {
+		earlyLog.Error().Err(err).Msg("config")
+		os.Exit(1)
+	}
 	log := logging.NewRoot(appCfg.Logging.Level, appCfg.Logging.Format, "worker")
-	var scorer llm.Scorer
-	if strings.TrimSpace(appCfg.AnthropicAPIKey) != "" {
-		as := anthropic.NewScorer(appCfg.AnthropicAPIKey, appCfg.AnthropicModel)
-		sl := log.With().Str("component", "anthropic_scorer").Logger()
-		as.Log = &sl
-		scorer = as
-	} else {
-		scorer = llmmock.Scorer{}
-	}
 
-	actDeps := pipeline_workflows.ActivitiesDeps{
-		Scorer:              scorer,
-		Stage3MaxJobsPerRun: appCfg.Pipeline.Stage3MaxJobsPerRun,
-		Log:                 log,
-	}
 	var (
+		jobsRepo              jobs.JobRepository
+		scoringRuns           *scoringstorage.Repository
 		ingestRedis           *ingest.RedisCoordinator
 		ingestWatermarks      ingest.WatermarkStore
 		ingestCollectors      map[string]collectors.Collector
@@ -89,8 +92,8 @@ func main() {
 			os.Exit(1)
 		}
 		getter := pgsql.NewGetter(gdb)
-		actDeps.JobsRepo = jobsstorage.NewRepository(getter)
-		actDeps.RunRepo = pipelinestorage.NewRepository(getter)
+		jobsRepo = jobsstorage.NewRepository(getter)
+		scoringRuns = scoringstorage.NewRepository(getter)
 
 		if ru := strings.TrimSpace(appCfg.Ingest.RedisURL); ru != "" {
 			opt, err := redis.ParseURL(ru)
@@ -113,23 +116,27 @@ func main() {
 			ingestExplicitRefresh = appCfg.Ingest.ExplicitRefresh
 		}
 	}
-	pipeline_workflows.RegisterActivities(w, actDeps)
-	manual_workflows.Register(w, manual_workflows.WorkerDeps{
-		Runs: actDeps.RunRepo,
-		Jobs: actDeps.JobsRepo,
-		Log:  log,
+	jobs_workflows.RegisterRetention(w, jobs_workflows.RetentionWorkerDeps{
+		Jobs:             jobsRepo,
+		Log:              log,
+		JobRetentionDays: appCfg.JobRetentionDays,
 	})
-	jobs_workflows.RegisterRetention(w, jobs_workflows.RetentionWorkerDeps{Jobs: actDeps.JobsRepo, Log: log})
 	ingest_workflows.Register(w, ingest_workflows.WorkerDeps{
 		Redis:                  ingestRedis,
-		Jobs:                   actDeps.JobsRepo,
+		Jobs:                   jobsRepo,
 		Watermarks:             ingestWatermarks,
 		Collectors:             ingestCollectors,
 		DefaultExplicitRefresh: ingestExplicitRefresh,
 		Log:                    log,
 	})
+	scoring_workflows.New(w, scoring_workflows.Deps{
+		Profiles: profilesimpl.NewFileStore(appCfg.ProfilesDir, knownCollectorSourceIDs),
+		Runs:     scoringRuns,
+		Jobs:     jobsRepo,
+		Log:      log,
+	})
 
-	if actDeps.JobsRepo != nil && config.LoadJobRetentionScheduleUpsertFromEnv() {
+	if jobsRepo != nil && config.LoadJobRetentionScheduleUpsertFromEnv() {
 		schedCtx, scancel := context.WithTimeout(context.Background(), 30*time.Second)
 		err := jobs_workflows.EnsureJobRetentionSchedule(schedCtx, c, cfg.TaskQueue)
 		scancel()
@@ -149,7 +156,8 @@ func main() {
 	}
 }
 
-// ingestCollectorMap keys must match slotsutils.DefaultIngestSourceIDs (himalayas omitted when nil).
+// ingestCollectorMap keys are the collectors this process built.
+// himalayas is omitted when nil; golang_cafe is omitted when the rod fetcher is nil.
 func ingestCollectorMap(
 	er, wn, builtinColl, himColl,
 	reColl, wwrColl, wfColl, vjColl, gcColl collectors.Collector,
@@ -162,10 +170,12 @@ func ingestCollectorMap(
 		ingest.NormalizeSourceID(weworkremotely.SourceName): wwrColl,
 		ingest.NormalizeSourceID(wellfound.SourceName):      wfColl,
 		ingest.NormalizeSourceID(vuejobs.SourceName):        vjColl,
-		ingest.NormalizeSourceID(golangcafe.SourceName):     gcColl,
 	}
 	if himColl != nil {
 		m[ingest.NormalizeSourceID(himalayas.SourceName)] = himColl
+	}
+	if gcColl != nil {
+		m[ingest.NormalizeSourceID(golangcafe.SourceName)] = gcColl
 	}
 	return m
 }

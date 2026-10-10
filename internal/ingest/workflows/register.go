@@ -1,13 +1,10 @@
 package ingest_workflows
 
 import (
-	"time"
-
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors"
 	"github.com/andrewmysliuk/jobhound_core/internal/ingest"
 	ingest_activities "github.com/andrewmysliuk/jobhound_core/internal/ingest/workflows/activities"
 	"github.com/andrewmysliuk/jobhound_core/internal/jobs"
-	"github.com/andrewmysliuk/jobhound_core/internal/pipeline"
 	"github.com/rs/zerolog"
 	"go.temporal.io/sdk/activity"
 	"go.temporal.io/sdk/worker"
@@ -21,11 +18,7 @@ type WorkerDeps struct {
 	Watermarks             ingest.WatermarkStore
 	Collectors             map[string]collectors.Collector
 	DefaultExplicitRefresh bool
-	// BroadRules: 004 stage-1 filter before SaveIngest (zero value = default 7-day UTC window per ApplyBroadFilter).
-	BroadRules pipeline.BroadFilterRules
-	// Clock optional; passed to ApplyBroadFilter (nil → time.Now).
-	Clock func() time.Time
-	Log   zerolog.Logger
+	Log                    zerolog.Logger
 }
 
 // Register registers IngestSourceWorkflow and RunIngestSource when Redis, Jobs, Watermarks, and Collectors are configured.
@@ -39,8 +32,6 @@ func Register(w worker.Worker, deps WorkerDeps) {
 		Watermarks:             deps.Watermarks,
 		Collectors:             deps.Collectors,
 		DefaultExplicitRefresh: deps.DefaultExplicitRefresh,
-		BroadRules:             deps.BroadRules,
-		Clock:                  deps.Clock,
 		Log:                    deps.Log,
 	}
 	w.RegisterActivityWithOptions(ing.RunIngestSource, activity.RegisterOptions{

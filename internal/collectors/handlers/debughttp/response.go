@@ -15,49 +15,65 @@ type runCollectorResponse struct {
 	Jobs            []jobDebugJSON `json:"jobs,omitempty"`
 }
 
+type locationDebugJSON struct {
+	Type      string   `json:"type,omitempty"`
+	Regions   []string `json:"regions,omitempty"`
+	Countries []string `json:"countries,omitempty"`
+	Timezone  string   `json:"timezone,omitempty"`
+	Raw       string   `json:"raw,omitempty"`
+}
+
 type jobDebugJSON struct {
-	ID              string    `json:"id"`
-	Source          string    `json:"source"`
-	Title           string    `json:"title"`
-	Company         string    `json:"company"`
-	URL             string    `json:"url"`
-	ApplyURL        string    `json:"apply_url,omitempty"`
-	Description     string    `json:"description,omitempty"`
-	PostedAt        string    `json:"posted_at,omitempty"`
-	Remote          *bool     `json:"remote"`
-	CountryCode     string    `json:"country_code,omitempty"`
-	HiringCountries []string  `json:"hiring_countries,omitempty"`
-	HiringRegions   []string  `json:"hiring_regions,omitempty"`
-	HiringRaw       string    `json:"hiring_raw,omitempty"`
-	SalaryRaw       string    `json:"salary_raw,omitempty"`
-	Tags            []string  `json:"tags,omitempty"`
-	TimezoneOffsets []float64 `json:"timezone_offsets,omitempty"`
-	Position        *string   `json:"position,omitempty"`
-	UserID          *string   `json:"user_id,omitempty"`
+	ID             string            `json:"id"`
+	Source         string            `json:"source"`
+	Sources        []string          `json:"sources,omitempty"`
+	Title          string            `json:"title"`
+	Company        string            `json:"company"`
+	CompanyKey     string            `json:"company_key,omitempty"`
+	CompanyWebsite string            `json:"company_website,omitempty"`
+	URL            string            `json:"url"`
+	ApplyURL       string            `json:"apply_url,omitempty"`
+	Description    string            `json:"description,omitempty"`
+	PostedAt       string            `json:"posted_at,omitempty"`
+	Location       locationDebugJSON `json:"location"`
+	SalaryRaw      string            `json:"salary_raw,omitempty"`
+	Tags           []string          `json:"tags,omitempty"`
+	Position       *string           `json:"position,omitempty"`
+	FirstSeenAt    string            `json:"first_seen_at,omitempty"`
+	LastSeenAt     string            `json:"last_seen_at,omitempty"`
 }
 
 func jobToDebugJSON(j schema.Job) jobDebugJSON {
 	out := jobDebugJSON{
-		ID:              j.ID,
-		Source:          j.Source,
-		Title:           j.Title,
-		Company:         j.Company,
-		URL:             j.URL,
-		ApplyURL:        j.ApplyURL,
-		Description:     j.Description,
-		Remote:          j.Remote,
-		CountryCode:     j.CountryCode,
-		HiringCountries: j.HiringCountries,
-		HiringRegions:   j.HiringRegions,
-		HiringRaw:       j.HiringRaw,
-		SalaryRaw:       j.SalaryRaw,
-		Tags:            j.Tags,
-		TimezoneOffsets: j.TimezoneOffsets,
-		Position:        j.Position,
-		UserID:          j.UserID,
+		ID:             j.ID,
+		Source:         j.Source,
+		Sources:        j.Sources,
+		Title:          j.Title,
+		Company:        j.Company,
+		CompanyKey:     j.CompanyKey,
+		CompanyWebsite: j.CompanyWebsite,
+		URL:            j.URL,
+		ApplyURL:       j.ApplyURL,
+		Description:    j.Description,
+		Location: locationDebugJSON{
+			Type:      j.Location.Type,
+			Regions:   j.Location.Regions,
+			Countries: j.Location.Countries,
+			Timezone:  j.Location.Timezone,
+			Raw:       j.Location.Raw,
+		},
+		SalaryRaw: j.SalaryRaw,
+		Tags:      j.Tags,
+		Position:  j.Position,
 	}
 	if !j.PostedAt.IsZero() {
 		out.PostedAt = j.PostedAt.UTC().Format(time.RFC3339Nano)
+	}
+	if !j.FirstSeenAt.IsZero() {
+		out.FirstSeenAt = j.FirstSeenAt.UTC().Format(time.RFC3339Nano)
+	}
+	if !j.LastSeenAt.IsZero() {
+		out.LastSeenAt = j.LastSeenAt.UTC().Format(time.RFC3339Nano)
 	}
 	return out
 }

@@ -10,10 +10,13 @@ type Config struct {
 	Database Database
 	API      API
 	Ingest   Ingest
-	Pipeline Pipeline
 	Logging  Logging
 	// DataDir is the directory containing countries.json (see EnvDataDir). Empty means use "data" relative to the process working directory.
 	DataDir string
+	// ProfilesDir is the directory of search-profile YAML (see EnvProfilesDir). Empty env means DefaultProfilesDir.
+	ProfilesDir string
+	// JobRetentionDays is the retention window in days (see EnvJobRetentionDays). Default is DefaultJobRetentionDays.
+	JobRetentionDays int
 	// DebugHTTPAddr enables cmd/agent local debug HTTP when non-empty (see EnvDebugHTTPAddr); flag -debug-http-addr overrides.
 	DebugHTTPAddr string
 	// HimalayasCollector configures the Himalayas JSON collector (005-job-collectors).
@@ -24,36 +27,28 @@ type Config struct {
 	Browser BrowserConfig
 	// EuropeRemotely configures the euremotejobs.com collector (optional outbound proxy).
 	EuropeRemotely EuropeRemotelyConfig
-
-	AnthropicAPIKey  string
-	AnthropicModel   string
-	TelegramBotToken string
-	TelegramChatID   string
-	HTTPUserAgent    string
-	IncludeKeywords  []string
-	ExcludeKeywords  []string
 }
 
 // Load reads supported environment variables into Config.
 // For Temporal (worker / client), call LoadTemporalFromEnv separately — it enforces a required address.
-func Load() Config {
-	model := LoadAnthropicModelFromEnv()
-	if model == "" {
-		model = DefaultAnthropicModel
+// A non-positive JOBHOUND_JOB_RETENTION_DAYS is an error. Callers pass JobRetentionDays into the retention cutoff.
+func Load() (Config, error) {
+	days, err := loadJobRetentionDaysFromEnv()
+	if err != nil {
+		return Config{}, err
 	}
 	return Config{
 		Database:           LoadDatabaseFromEnv(),
 		API:                LoadAPIFromEnv(),
 		Ingest:             LoadIngestFromEnv(),
-		Pipeline:           LoadPipelineFromEnv(),
 		Logging:            LoadLoggingFromEnv(),
 		DataDir:            loadDataDirFromEnv(),
+		ProfilesDir:        loadProfilesDirFromEnv(),
+		JobRetentionDays:   days,
 		DebugHTTPAddr:      loadDebugHTTPAddrFromEnv(),
 		HimalayasCollector: LoadHimalayasCollectorFromEnv(),
 		BuiltinCollector:   LoadBuiltinCollectorFromEnv(),
 		Browser:            LoadBrowserFromEnv(),
 		EuropeRemotely:     LoadEuropeRemotelyFromEnv(),
-		AnthropicAPIKey:    LoadAnthropicAPIKeyFromEnv(),
-		AnthropicModel:     model,
-	}
+	}, nil
 }

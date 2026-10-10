@@ -84,14 +84,11 @@ func TestDecodeSearchJSON_toJob(t *testing.T) {
 	require.Equal(t, "Ship features end-to-end.", j.Description)
 	require.Equal(t, "€70k – €90k", j.SalaryRaw)
 	require.Equal(t, []string{"javascript", "react"}, j.Tags)
-	require.NotNil(t, j.Remote)
-	require.False(t, *j.Remote)
+	require.Equal(t, schema.LocationOffice, j.Location.Type)
 	require.NotNil(t, j.Position)
 	require.Equal(t, "full-stack", *j.Position)
 	require.NotEmpty(t, j.ID)
-	wantID, err := domainutils.StableJobID(SourceName, j.URL)
-	require.NoError(t, err)
-	require.Equal(t, wantID, j.ID)
+	require.Equal(t, domainutils.StableJobID(j.CompanyKey, j.Title, j.Location.Raw), j.ID)
 }
 
 func TestHiringScope_locations(t *testing.T) {
@@ -114,30 +111,30 @@ func TestHiringScope_locations(t *testing.T) {
 
 	t.Run("usa east", func(t *testing.T) {
 		j := job([]string{"USA - East"}, "", "<p>Germany</p>")
-		require.Equal(t, []string{"US"}, j.HiringCountries)
-		require.Empty(t, j.HiringRegions)
-		require.Equal(t, "USA - East", j.HiringRaw)
+		require.Equal(t, []string{"US"}, j.Location.Countries)
+		require.Empty(t, j.Location.Regions)
+		require.Equal(t, "USA - East", j.Location.Raw)
 	})
 
 	t.Run("korea republic", func(t *testing.T) {
 		const raw = "Korea Republic of Korea, Republic of"
 		j := job([]string{raw}, "", "<p>Germany</p>")
-		require.Equal(t, []string{"KR"}, j.HiringCountries)
-		require.NotContains(t, j.HiringCountries, "DE")
-		require.Equal(t, raw, j.HiringRaw)
+		require.Equal(t, []string{"KR"}, j.Location.Countries)
+		require.NotContains(t, j.Location.Countries, "DE")
+		require.Equal(t, raw, j.Location.Raw)
 	})
 
 	t.Run("bare korea is not a country", func(t *testing.T) {
 		j := job([]string{"Korea"}, "", "")
-		require.Empty(t, j.HiringCountries)
-		require.Empty(t, j.HiringRegions)
+		require.Empty(t, j.Location.Countries)
+		require.Empty(t, j.Location.Regions)
 	})
 
 	t.Run("description is not hiring scope", func(t *testing.T) {
 		j := job(nil, "", "<p>We hire in Germany and France.</p>")
-		require.Empty(t, j.HiringCountries)
-		require.Empty(t, j.HiringRegions)
-		require.Empty(t, j.HiringRaw)
+		require.Empty(t, j.Location.Countries)
+		require.Empty(t, j.Location.Regions)
+		require.Empty(t, j.Location.Raw)
 	})
 }
 

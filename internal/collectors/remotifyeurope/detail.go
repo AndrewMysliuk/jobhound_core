@@ -18,22 +18,26 @@ import (
 const fallbackListingIDCap = 24
 
 var (
-	listingIDRE = regexp.MustCompile(`/listing/([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})`)
-	jobLinkRE   = regexp.MustCompile(`"job_link"\s*:\s*"((?:\\.|[^"\\])*)"`)
-	ldJSONRE    = regexp.MustCompile(`(?s)<script type="application/ld\+json">(.*?)</script>`)
+	listingIDRE    = regexp.MustCompile(`/listing/([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})`)
+	jobLinkPlainRE = regexp.MustCompile(`"job_link"\s*:\s*"((?:\\.|[^"\\])*)"`)
+	jobLinkEscRE   = regexp.MustCompile(`\\"job_link\\"\s*:\s*\\"((?:\\.|[^\\])*?)\\"`)
+	sitePlainRE    = regexp.MustCompile(`"company_website"\s*:\s*"((?:\\.|[^"\\])*)"`)
+	siteEscRE      = regexp.MustCompile(`\\"company_website\\"\s*:\s*\\"((?:\\.|[^\\])*?)\\"`)
+	ldJSONRE       = regexp.MustCompile(`(?s)<script type="application/ld\+json">(.*?)</script>`)
 )
 
 // ListingDetail is parsed from a GET /listing/{id} HTML page.
 type ListingDetail struct {
-	Title         string
-	Company       string
-	Description   string
-	JobLink       string
-	PostedAt      time.Time
-	Remote        *bool
-	RemoteKnown   bool
-	LocationTexts []string
-	HeaderPin     string
+	Title          string
+	Company        string
+	Description    string
+	JobLink        string
+	CompanyWebsite string
+	PostedAt       time.Time
+	Remote         *bool
+	RemoteKnown    bool
+	LocationTexts  []string
+	HeaderPin      string
 }
 
 // ParseListingDetailHTML extracts JSON-LD JobPosting fields and job_link from listing HTML.
@@ -56,8 +60,11 @@ func ParseListingDetailHTML(html string) (ListingDetail, error) {
 		out.Remote = &v
 		out.RemoteKnown = true
 	}
-	if link, ok := jobLinkFromHTML(html); ok {
-		out.JobLink = link
+	if link, ok := embeddedJSONString(html, jobLinkPlainRE, jobLinkEscRE); ok {
+		out.JobLink = strings.TrimSpace(link)
+	}
+	if site, ok := embeddedJSONString(html, sitePlainRE, siteEscRE); ok {
+		out.CompanyWebsite = httpWebsite(site)
 	}
 	locStrings := append([]string(nil), locationStringsFromJSONLD(jp.ApplicantLocationRequirements)...)
 	locStrings = append(locStrings, locationStringsFromJSONLD(jp.JobLocation)...)
@@ -294,12 +301,23 @@ func wireIsJobPosting(atType json.RawMessage) bool {
 	return false
 }
 
-func jobLinkFromHTML(html string) (string, bool) {
-	m := jobLinkRE.FindStringSubmatch(html)
-	if len(m) < 2 {
-		return "", false
+func embeddedJSONString(html string, plain, escaped *regexp.Regexp) (string, bool) {
+	if m := plain.FindStringSubmatch(html); len(m) >= 2 {
+		return unescapeJSONString(m[1]), true
 	}
-	return unescapeJSONString(m[1]), true
+	if m := escaped.FindStringSubmatch(html); len(m) >= 2 {
+		return unescapeJSONString(m[1]), true
+	}
+	return "", false
+}
+
+func httpWebsite(raw string) string {
+	s := strings.TrimSpace(raw)
+	lower := strings.ToLower(s)
+	if strings.HasPrefix(lower, "https://") || strings.HasPrefix(lower, "http://") {
+		return s
+	}
+	return ""
 }
 
 func unescapeJSONString(s string) string {

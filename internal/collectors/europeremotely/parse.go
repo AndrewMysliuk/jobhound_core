@@ -95,6 +95,7 @@ type detailParsed struct {
 	description     string
 	tags            []string
 	applyURL        string
+	companyWebsite  string
 }
 
 func parseJobDetailHTML(html string, base *url.URL) (detailParsed, error) {
@@ -120,6 +121,12 @@ func parseJobDetailHTML(html string, base *url.URL) (detailParsed, error) {
 		au, err := absoluteURL(base, strings.TrimSpace(href))
 		if err == nil {
 			d.applyURL = au
+		}
+	}
+	if href, ok := doc.Find(selDetailWebsite).First().Attr("href"); ok {
+		wu, err := absoluteURL(base, strings.TrimSpace(href))
+		if err == nil {
+			d.companyWebsite = wu
 		}
 	}
 	tagsRaw := strings.TrimSpace(doc.Find(selDetailTags).First().Text())

@@ -10,7 +10,7 @@
 # In-container URLs (not localhost): postgres, redis, temporal — see service env below.
 # Europe Remotely: container has no IPv6. make docker-up runs cmd/ipv6proxy on the host
 # (127.0.0.1:18080); worker and agent use JOBHOUND_EUROPE_REMOTELY_PROXY.
-# Compose loads .env for variable substitution only; ${JOBHOUND_ANTHROPIC_API_KEY:-} passes the key into worker.
+# Compose loads .env for variable substitution only.
 
 x-build-app: &build-app
   context: .
@@ -155,9 +155,8 @@ services:
       JOBHOUND_BROWSER_ENABLED: "1"
       JOBHOUND_BROWSER_BIN: /usr/bin/chromium
       JOBHOUND_BROWSER_NO_SANDBOX: "1"
-      JOBHOUND_ANTHROPIC_API_KEY: ${JOBHOUND_ANTHROPIC_API_KEY:-}
-      JOBHOUND_ANTHROPIC_MODEL: ${JOBHOUND_ANTHROPIC_MODEL:-}
       JOBHOUND_EUROPE_REMOTELY_PROXY: http://host.docker.internal:18080
+      JOBHOUND_PROFILES_DIR: /app/config/profiles
     depends_on:
       postgres:
         condition: service_healthy
@@ -180,6 +179,7 @@ services:
       JOBHOUND_REDIS_URL: redis://redis:6379/0
       JOBHOUND_API_LISTEN: 0.0.0.0:3000
       JOBHOUND_API_CORS_ORIGINS: ${JOBHOUND_API_CORS_ORIGINS:-http://localhost:5173,http://localhost:3002}
+      JOBHOUND_PROFILES_DIR: /app/config/profiles
     ports:
       - "3000:3000"
     depends_on:

@@ -121,7 +121,7 @@ func runCollectorDebug(
 		if slotQ == "" {
 			jobs, fetchErr = c.Fetch(ctx)
 		} else {
-			jobs, fetchErr = c.FetchWithSlotSearch(ctx, slotQ)
+			jobs, fetchErr = c.FetchWithQuery(ctx, slotQ)
 		}
 		upstreamFetched = len(jobs)
 	case isRemotify:
@@ -136,7 +136,7 @@ func runCollectorDebug(
 		if slotQ == "" {
 			jobs, fetchErr = c.Fetch(ctx)
 		} else {
-			jobs, fetchErr = c.FetchWithSlotSearch(ctx, slotQ)
+			jobs, fetchErr = c.FetchWithQuery(ctx, slotQ)
 		}
 		upstreamFetched = len(jobs)
 	case isWellfound:
@@ -151,7 +151,7 @@ func runCollectorDebug(
 		if slotQ == "" {
 			jobs, fetchErr = c.Fetch(ctx)
 		} else {
-			jobs, fetchErr = c.FetchWithSlotSearch(ctx, slotQ)
+			jobs, fetchErr = c.FetchWithQuery(ctx, slotQ)
 		}
 		upstreamFetched = len(jobs)
 	case isVueJobs:

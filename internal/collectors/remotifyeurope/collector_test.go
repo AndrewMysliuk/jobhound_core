@@ -42,4 +42,6 @@ func TestHiringScope_headerPinWhenJSONLDEmpty(t *testing.T) {
 	require.Empty(t, regions)
 	require.Equal(t, "United Kingdom", raw)
 	require.NotContains(t, countries, "FR")
+	require.Equal(t, "https://boards.greenhouse.io/acme/jobs/1?utm_source=RemotifyEurope&utm_medium=job-board", detail.JobLink)
+	require.Equal(t, "https://acme.example/?utm_source=RemotifyEurope&utm_medium=job-board", detail.CompanyWebsite)
 }

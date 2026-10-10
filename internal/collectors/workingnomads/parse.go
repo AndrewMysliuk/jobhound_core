@@ -75,21 +75,17 @@ func jobFromSource(countries *utils.CountryResolver, src jobSource) (schema.Job,
 	hiringRawInputs := workingNomadsLocationInputs(src)
 	hiringCountries, hiringRegions, hiringRaw := utils.ParseHiringScope(countries, hiringRawInputs...)
 	j := schema.Job{
-		Source:          SourceName,
-		Title:           title,
-		Company:         company,
-		URL:             listingURL,
-		ApplyURL:        applyURL,
-		Description:     descPlain,
-		PostedAt:        postedAt,
-		Remote:          utils.RemoteMVPRule(title, descPlain, tags),
-		CountryCode:     countryFromWN(countries, src),
-		HiringCountries: hiringCountries,
-		HiringRegions:   hiringRegions,
-		HiringRaw:       hiringRaw,
-		SalaryRaw:       salaryRawWN(src),
-		Tags:            tags,
-		Position:        utils.InferPosition(title, descPlain, tags),
+		Source:      SourceName,
+		Title:       title,
+		Company:     company,
+		URL:         listingURL,
+		ApplyURL:    applyURL,
+		Description: descPlain,
+		PostedAt:    postedAt,
+		Location:    utils.LocationFromParsed(utils.RemoteMVPRule(title, descPlain, tags), "", hiringCountries, hiringRegions, hiringRaw, nil),
+		SalaryRaw:   salaryRawWN(src),
+		Tags:        tags,
+		Position:    utils.InferPosition(title, descPlain, tags),
 	}
 	if err := domainutils.AssignStableID(&j); err != nil {
 		return schema.Job{}, fmt.Errorf("stable id: %w", err)
@@ -179,12 +175,4 @@ func workingNomadsLocationInputs(src jobSource) []string {
 		out = append(out, base)
 	}
 	return out
-}
-
-func countryFromWN(r *utils.CountryResolver, src jobSource) string {
-	countries, _, _ := utils.ParseHiringScope(r, workingNomadsLocationInputs(src)...)
-	if len(countries) > 0 {
-		return countries[0]
-	}
-	return ""
 }

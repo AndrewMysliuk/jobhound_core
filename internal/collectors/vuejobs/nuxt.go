@@ -28,6 +28,7 @@ type ListingJob struct {
 	ApplyURL        string
 	SourceURL       string
 	Company         string
+	CompanyWebsite  string
 	PublishedAt     string
 	WorkPlace       []string
 	RemoteCountries []string
@@ -127,6 +128,7 @@ func listingJobFromRow(p payload, row map[string]any) (ListingJob, bool) {
 	if company == "" {
 		return ListingJob{PROLocked: true}, false
 	}
+	companyWebsite := websiteFromDomain(stringFromAny(p.resolve(org["domain"], nil)))
 
 	slug := strings.TrimSpace(stringFromAny(p.resolve(row["slug"], nil)))
 	title := strings.TrimSpace(stringFromAny(p.resolve(row["title"], nil)))
@@ -164,10 +166,26 @@ func listingJobFromRow(p payload, row map[string]any) (ListingJob, bool) {
 		ApplyURL:        apply,
 		SourceURL:       source,
 		Company:         company,
+		CompanyWebsite:  companyWebsite,
 		PublishedAt:     published,
 		WorkPlace:       workPlace,
 		RemoteCountries: remoteCountries,
 	}, true
+}
+
+func websiteFromDomain(domain string) string {
+	domain = strings.TrimSpace(domain)
+	if domain == "" || strings.ContainsAny(domain, " /") {
+		return ""
+	}
+	lower := strings.ToLower(domain)
+	if strings.HasPrefix(lower, "https://") || strings.HasPrefix(lower, "http://") {
+		return domain
+	}
+	if !strings.Contains(domain, ".") {
+		return ""
+	}
+	return "https://" + domain
 }
 
 func (p payload) resolve(v any, seen map[int]struct{}) any {

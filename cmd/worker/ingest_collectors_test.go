@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"reflect"
 	"testing"
 
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/builtin"
@@ -16,7 +15,6 @@ import (
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/workingnomads"
 	"github.com/andrewmysliuk/jobhound_core/internal/domain/schema"
 	"github.com/andrewmysliuk/jobhound_core/internal/ingest"
-	slotsutils "github.com/andrewmysliuk/jobhound_core/internal/slots/utils"
 )
 
 type stubCollector struct {
@@ -27,8 +25,18 @@ func (s stubCollector) Name() string { return s.name }
 
 func (s stubCollector) Fetch(context.Context) ([]schema.Job, error) { return nil, nil }
 
-func TestIngestCollectorMap_matchesDefaultIngestSourceIDs(t *testing.T) {
-	wantOrder := []string{
+func TestIngestCollectorMap_keys(t *testing.T) {
+	er := stubCollector{name: europeremotely.SourceName}
+	wn := stubCollector{name: workingnomads.SourceName}
+	bi := stubCollector{name: builtin.SourceName}
+	him := stubCollector{name: himalayas.SourceName}
+	re := stubCollector{name: remotifyeurope.SourceName}
+	wwr := stubCollector{name: weworkremotely.SourceName}
+	wf := stubCollector{name: wellfound.SourceName}
+	vj := stubCollector{name: vuejobs.SourceName}
+	gc := stubCollector{name: golangcafe.SourceName}
+
+	want := []string{
 		ingest.NormalizeSourceID(europeremotely.SourceName),
 		ingest.NormalizeSourceID(workingnomads.SourceName),
 		ingest.NormalizeSourceID(builtin.SourceName),
@@ -39,38 +47,34 @@ func TestIngestCollectorMap_matchesDefaultIngestSourceIDs(t *testing.T) {
 		ingest.NormalizeSourceID(vuejobs.SourceName),
 		ingest.NormalizeSourceID(golangcafe.SourceName),
 	}
-	ids := slotsutils.DefaultIngestSourceIDs()
-	if !reflect.DeepEqual(ids, wantOrder) {
-		t.Fatalf("DefaultIngestSourceIDs order %+v want %+v", ids, wantOrder)
+	m := ingestCollectorMap(er, wn, bi, him, re, wwr, wf, vj, gc)
+	if len(m) != len(want) {
+		t.Fatalf("worker map len=%d want %d", len(m), len(want))
 	}
-
-	m := ingestCollectorMap(
-		stubCollector{name: europeremotely.SourceName},
-		stubCollector{name: workingnomads.SourceName},
-		stubCollector{name: builtin.SourceName},
-		stubCollector{name: himalayas.SourceName},
-		stubCollector{name: remotifyeurope.SourceName},
-		stubCollector{name: weworkremotely.SourceName},
-		stubCollector{name: wellfound.SourceName},
-		stubCollector{name: vuejobs.SourceName},
-		stubCollector{name: golangcafe.SourceName},
-	)
-	if len(m) != len(ids) {
-		t.Fatalf("worker map len=%d DefaultIngestSourceIDs len=%d", len(m), len(ids))
-	}
-	for i, id := range ids {
+	for _, id := range want {
 		if _, ok := m[id]; !ok {
-			t.Fatalf("index %d: worker map missing %q", i, id)
+			t.Fatalf("worker map missing %q", id)
 		}
 	}
 	for _, dropped := range []string{"djinni", "dou_ua", "linkedin"} {
 		if _, ok := m[dropped]; ok {
 			t.Fatalf("worker map still has dropped source %q", dropped)
 		}
-		for _, id := range ids {
-			if id == dropped {
-				t.Fatalf("DefaultIngestSourceIDs still has dropped source %q", dropped)
-			}
-		}
+	}
+
+	noHim := ingestCollectorMap(er, wn, bi, nil, re, wwr, wf, vj, gc)
+	if _, ok := noHim[ingest.NormalizeSourceID(himalayas.SourceName)]; ok {
+		t.Fatal("himalayas present when collector is nil")
+	}
+	if _, ok := noHim[ingest.NormalizeSourceID(golangcafe.SourceName)]; !ok {
+		t.Fatal("golang_cafe missing when rod fetcher collector is set")
+	}
+
+	noCafe := ingestCollectorMap(er, wn, bi, him, re, wwr, wf, vj, nil)
+	if _, ok := noCafe[ingest.NormalizeSourceID(golangcafe.SourceName)]; ok {
+		t.Fatal("golang_cafe present when rod fetcher is nil")
+	}
+	if _, ok := noCafe[ingest.NormalizeSourceID(himalayas.SourceName)]; !ok {
+		t.Fatal("himalayas missing when collector is set")
 	}
 }

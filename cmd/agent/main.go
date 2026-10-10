@@ -1,4 +1,4 @@
-// Command agent runs the MVP pipeline or optional local debug HTTP for collectors (composition only).
+// Command agent runs optional local debug HTTP for collectors (composition only).
 package main
 
 import (
@@ -24,11 +24,6 @@ import (
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/wellfound"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/workingnomads"
 	"github.com/andrewmysliuk/jobhound_core/internal/config"
-	llmmock "github.com/andrewmysliuk/jobhound_core/internal/llm/mock"
-	manualschema "github.com/andrewmysliuk/jobhound_core/internal/manual/schema"
-	manual_workflows "github.com/andrewmysliuk/jobhound_core/internal/manual/workflows"
-	"github.com/andrewmysliuk/jobhound_core/internal/pipeline/impl"
-	"github.com/andrewmysliuk/jobhound_core/internal/pipeline/mock"
 	"github.com/andrewmysliuk/jobhound_core/internal/platform/logging"
 	"github.com/rs/zerolog"
 )
@@ -37,45 +32,22 @@ const debugHTTPShutdownTimeout = 30 * time.Second
 
 func main() {
 	debugHTTPAddr := flag.String("debug-http-addr", "", "if set, listen for local debug HTTP (GET /health, per-source POST /debug/collectors/…); overrides "+config.EnvDebugHTTPAddr)
-	temporalManual := flag.Bool("temporal-manual-slot-run", false, "dial Temporal (JOBHOUND_TEMPORAL_ADDRESS) and run ManualSlotRunWorkflow; prints JSON aggregate to stdout; use -manual-* flags")
-	manualSlotID := flag.String("manual-slot-id", "", "slot UUID (required with -temporal-manual-slot-run)")
-	manualRunKind := flag.String("manual-run-kind", string(manualschema.RunKindPipelineStage2), "ManualSlotRunWorkflow run kind (e.g. PIPELINE_STAGE2)")
-	manualWorkflowID := flag.String("manual-workflow-id", "", "Temporal workflow ID (default: auto-generated)")
-	manualSourceIDs := flag.String("manual-source-ids", "", "comma-separated source ids for ingest kinds")
-	manualProfile := flag.String("manual-profile", "", "profile text when stage 3 runs")
-	manualPipelineRunID := flag.Int64("manual-pipeline-run-id", 0, "pipeline run id for PIPELINE_STAGE3 (>0)")
-	manualExplicitRefresh := flag.Bool("manual-explicit-refresh", false, "pass explicit refresh to ingest children when applicable")
 	flag.Parse()
 
 	ctx := context.Background()
-	appCfg := config.Load()
+	appCfg, err := config.Load()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "config: %v\n", err)
+		os.Exit(1)
+	}
 	log := logging.NewRoot(appCfg.Logging.Level, appCfg.Logging.Format, "agent")
 	addr := strings.TrimSpace(*debugHTTPAddr)
 	if addr == "" {
 		addr = strings.TrimSpace(appCfg.DebugHTTPAddr)
 	}
-
-	if *temporalManual {
-		if addr != "" {
-			fmt.Fprintln(os.Stderr, "jobhound_core: use either -temporal-manual-slot-run or -debug-http-addr, not both")
-			os.Exit(1)
-		}
-		runCtx, cancel := context.WithTimeout(ctx, manual_workflows.DefaultManualSlotRunWorkflowTimeout+time.Minute)
-		defer cancel()
-		err := runTemporalManualSlotRun(runCtx, log, temporalManualOpts{
-			slotID:          *manualSlotID,
-			runKind:         *manualRunKind,
-			workflowID:      *manualWorkflowID,
-			sourceIDs:       *manualSourceIDs,
-			profile:         *manualProfile,
-			pipelineRunID:   *manualPipelineRunID,
-			explicitRefresh: *manualExplicitRefresh,
-		})
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			os.Exit(1)
-		}
-		return
+	if addr == "" {
+		fmt.Fprintln(os.Stderr, "jobhound_core: set -debug-http-addr or "+config.EnvDebugHTTPAddr)
+		os.Exit(1)
 	}
 
 	er, wn, builtinColl, himColl, reColl, wwrColl, wfColl, vjColl, gcColl, err := bootstrap.MVPCollectors(ctx, nil, appCfg.DataDir, appCfg.BuiltinCollector, appCfg.HimalayasCollector, appCfg.Browser, appCfg.EuropeRemotely)
@@ -84,59 +56,42 @@ func main() {
 		os.Exit(1)
 	}
 
-	if addr != "" {
-		var wnConcrete *workingnomads.WorkingNomads
-		if x, ok := wn.(*workingnomads.WorkingNomads); ok {
-			wnConcrete = x
-		}
-		var erConcrete *europeremotely.EuropeRemotely
-		if x, ok := er.(*europeremotely.EuropeRemotely); ok {
-			erConcrete = x
-		}
-		var himConcrete *himalayas.Himalayas
-		if x, ok := himColl.(*himalayas.Himalayas); ok {
-			himConcrete = x
-		}
-		var builtinConcrete *builtin.BuiltIn
-		if x, ok := builtinColl.(*builtin.BuiltIn); ok {
-			builtinConcrete = x
-		}
-		var reConcrete *remotifyeurope.RemotifyEurope
-		if x, ok := reColl.(*remotifyeurope.RemotifyEurope); ok {
-			reConcrete = x
-		}
-		var wfConcrete *wellfound.Wellfound
-		if x, ok := wfColl.(*wellfound.Wellfound); ok {
-			wfConcrete = x
-		}
-		var vjConcrete *vuejobs.VueJobs
-		if x, ok := vjColl.(*vuejobs.VueJobs); ok {
-			vjConcrete = x
-		}
-		var gcConcrete *golangcafe.GolangCafe
-		if x, ok := gcColl.(*golangcafe.GolangCafe); ok {
-			gcConcrete = x
-		}
-		if err := runDebugHTTPServer(log, addr, er, wn, himColl, builtinColl, reColl, wwrColl, wfColl, vjColl, gcColl, wnConcrete, erConcrete, himConcrete, builtinConcrete, reConcrete, wfConcrete, vjConcrete, gcConcrete); err != nil {
-			log.Error().Err(err).Msg("debug http")
-			os.Exit(1)
-		}
-		return
+	var wnConcrete *workingnomads.WorkingNomads
+	if x, ok := wn.(*workingnomads.WorkingNomads); ok {
+		wnConcrete = x
 	}
-
-	coll := bootstrap.MVPMulti(er, wn, builtinColl, himColl, reColl, wwrColl, wfColl, vjColl, gcColl, &log)
-	p := &impl.Pipeline{
-		Collector: coll,
-		Scorer:    llmmock.Scorer{},
-		Dedup:     mock.Dedup{},
-		Notify:    mock.Notifier{},
-		Log:       log,
+	var erConcrete *europeremotely.EuropeRemotely
+	if x, ok := er.(*europeremotely.EuropeRemotely); ok {
+		erConcrete = x
 	}
-	if err := p.Run(ctx); err != nil {
-		fmt.Fprintln(os.Stderr, err)
+	var himConcrete *himalayas.Himalayas
+	if x, ok := himColl.(*himalayas.Himalayas); ok {
+		himConcrete = x
+	}
+	var builtinConcrete *builtin.BuiltIn
+	if x, ok := builtinColl.(*builtin.BuiltIn); ok {
+		builtinConcrete = x
+	}
+	var reConcrete *remotifyeurope.RemotifyEurope
+	if x, ok := reColl.(*remotifyeurope.RemotifyEurope); ok {
+		reConcrete = x
+	}
+	var wfConcrete *wellfound.Wellfound
+	if x, ok := wfColl.(*wellfound.Wellfound); ok {
+		wfConcrete = x
+	}
+	var vjConcrete *vuejobs.VueJobs
+	if x, ok := vjColl.(*vuejobs.VueJobs); ok {
+		vjConcrete = x
+	}
+	var gcConcrete *golangcafe.GolangCafe
+	if x, ok := gcColl.(*golangcafe.GolangCafe); ok {
+		gcConcrete = x
+	}
+	if err := runDebugHTTPServer(log, addr, er, wn, himColl, builtinColl, reColl, wwrColl, wfColl, vjColl, gcColl, wnConcrete, erConcrete, himConcrete, builtinConcrete, reConcrete, wfConcrete, vjConcrete, gcConcrete); err != nil {
+		log.Error().Err(err).Msg("debug http")
 		os.Exit(1)
 	}
-	fmt.Fprintln(os.Stderr, "jobhound_core: noop pipeline run ok")
 }
 
 func runDebugHTTPServer(

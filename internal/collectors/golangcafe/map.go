@@ -60,24 +60,19 @@ func jobFromPost(p jobPost, countries *utils.CountryResolver) (schema.Job, bool,
 	tags := normalizeTags(p.Tags)
 	postedAt := postedAtFromEpochMs(p.Date)
 
-	countryCode := countryCodeFromPost(p)
 	hiringCountries, hiringRegions, hiringRaw := utils.ParseHiringScope(countries, p.Location)
 	j := schema.Job{
-		Source:          SourceName,
-		Title:           title,
-		Company:         company,
-		URL:             listingURL,
-		ApplyURL:        applyURL,
-		Description:     descPlain,
-		PostedAt:        postedAt,
-		Remote:          remoteFromPost(p),
-		CountryCode:     countryCode,
-		HiringCountries: hiringCountries,
-		HiringRegions:   hiringRegions,
-		HiringRaw:       hiringRaw,
-		SalaryRaw:       formatSalaryRaw(p),
-		Tags:            tags,
-		Position:        utils.InferPosition(title, descPlain, tags),
+		Source:      SourceName,
+		Title:       title,
+		Company:     company,
+		URL:         listingURL,
+		ApplyURL:    applyURL,
+		Description: descPlain,
+		PostedAt:    postedAt,
+		Location:    utils.LocationFromParsed(remoteFromPost(p), countryCodeFromPost(p), hiringCountries, hiringRegions, hiringRaw, nil),
+		SalaryRaw:   formatSalaryRaw(p),
+		Tags:        tags,
+		Position:    utils.InferPosition(title, descPlain, tags),
 	}
 	if err := domainutils.AssignStableID(&j); err != nil {
 		return schema.Job{}, false, err

@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/andrewmysliuk/jobhound_core/internal/config"
-	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/require"
 )
@@ -34,29 +33,28 @@ func TestRedisCoordinator_liveRedis_integration(t *testing.T) {
 	require.NoError(t, rdb.Ping(ctx).Err())
 
 	src := "integration-ingest-" + strconv.FormatInt(time.Now().UnixNano(), 10)
-	slotID := uuid.New()
 	norm := NormalizeSourceID(src)
-	lockK := lockKey(slotID, norm, catalogQuerySegment)
-	cdK := cooldownKey(slotID, norm, catalogQuerySegment)
+	lockK := lockKey(norm, catalogQuerySegment)
+	cdK := cooldownKey(norm, catalogQuerySegment)
 	t.Cleanup(func() {
 		_ = rdb.Del(context.Background(), lockK, cdK).Err()
 	})
 
 	c := NewRedisCoordinatorWithTTL(rdb, 30, 45)
-	rel, err := c.Begin(ctx, slotID, src, "", false)
+	rel, err := c.Begin(ctx, src, "", false)
 	require.NoError(t, err)
 	require.NotNil(t, rel)
 
-	_, err = c.Begin(ctx, slotID, src, "", false)
+	_, err = c.Begin(ctx, src, "", false)
 	require.ErrorIs(t, err, ErrLockHeld)
 
 	require.NoError(t, rel(ctx))
 
-	require.NoError(t, c.RecordSuccessfulIngest(ctx, slotID, src, ""))
-	_, err = c.Begin(ctx, slotID, src, "", false)
+	require.NoError(t, c.RecordSuccessfulIngest(ctx, src, ""))
+	_, err = c.Begin(ctx, src, "", false)
 	require.ErrorIs(t, err, ErrCooldownActive)
 
-	rel2, err := c.Begin(ctx, slotID, src, "", true)
+	rel2, err := c.Begin(ctx, src, "", true)
 	require.NoError(t, err)
 	require.NoError(t, rel2(ctx))
 }

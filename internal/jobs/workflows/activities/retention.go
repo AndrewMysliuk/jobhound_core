@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/andrewmysliuk/jobhound_core/internal/config"
 	"github.com/andrewmysliuk/jobhound_core/internal/jobs"
 	jobsschema "github.com/andrewmysliuk/jobhound_core/internal/jobs/schema"
 	jobutils "github.com/andrewmysliuk/jobhound_core/internal/jobs/utils"
@@ -18,14 +19,14 @@ const RunJobRetentionActivityName = "RunJobRetentionActivity"
 
 // RetentionActivities holds dependencies for job retention (worker wire-up).
 type RetentionActivities struct {
-	Clock func() time.Time
-	Jobs  jobs.JobRepository
-	Log   zerolog.Logger
+	Clock            func() time.Time
+	Jobs             jobs.JobRepository
+	Log              zerolog.Logger
+	JobRetentionDays int
 }
 
-// RunJobRetention deletes jobs with created_at older than 7 days (UTC), per retention-jobs.md.
-// Dependent pipeline_run_jobs rows are removed by ON DELETE CASCADE on job_id (007 pipeline-run-job-status.md §5, §7);
-// no explicit delete is required in application code.
+// RunJobRetention deletes jobs whose last_seen_at is older than the retention window (UTC).
+// The window is JobRetentionDays from config (JOBHOUND_JOB_RETENTION_DAYS, default 30).
 func (a *RetentionActivities) RunJobRetention(ctx context.Context) (*jobsschema.JobRetentionOutput, error) {
 	if a == nil || a.Jobs == nil {
 		return nil, fmt.Errorf("jobs activities: RunJobRetention requires Jobs repository")
@@ -36,8 +37,8 @@ func (a *RetentionActivities) RunJobRetention(ctx context.Context) (*jobsschema.
 	if a.Clock != nil {
 		now = a.Clock().UTC()
 	}
-	cutoff := jobutils.CutoffUTC(now)
-	n, err := a.Jobs.DeleteJobsCreatedBeforeUTC(ctx, cutoff)
+	cutoff := jobutils.CutoffUTC(now, config.Config{JobRetentionDays: a.JobRetentionDays})
+	n, err := a.Jobs.DeleteJobsLastSeenBeforeUTC(ctx, cutoff)
 	if err != nil {
 		log.Error().Err(err).Msg("delete jobs before cutoff")
 		return nil, err
