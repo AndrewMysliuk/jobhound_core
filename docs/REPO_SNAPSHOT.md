@@ -20,7 +20,7 @@ A profile file (`config/profiles/<id>.yaml`) is the only copy of:
 
 **Stage 1** is ingest. It does not score. A profile run expands `sources` × `queries` into child `IngestSourceWorkflow`s: keyword children for query sources, `wellfound_roles` children for Wellfound, one catalog child for `we_work_remotely` / `vue_jobs` / `golang_cafe` (`queries` ignored), one catalog child per `consider_*` source (`Queries` set, lock segment `catalog`), and one keyword child per `getro_*` query. Redis keys are `ingest:lock:{source_id}:{query_segment}` and `ingest:cooldown:{source_id}:{query_segment}`; an empty query uses the segment `catalog`.
 
-**Stage 2** is a score on stored rows whose `first_seen_at` is inside 10 days before `profile_runs.started_at`. Order: `exclude_title` against the title, then `exclude_text` against title plus description plus `location.raw`, then `location.countries` / `location.regions` against the profile lists (`CUT_LOCATION` when the scope is known and misses both lists), then +1 once per `queries` phrase in the title plus description, then −10 once per `penalties` phrase. A reject stops the pass and is stored as a signal. Otherwise the bucket is `PASSED`, including score 0 and negative scores. Phrase match is case-insensitive and on word boundaries (`java` does not hit `javascript`). Country and region codes match the whole code, case-insensitive. There is no `min_score`, no `UNKNOWN` bucket, and no LLM.
+**Stage 2** is a score on stored rows whose `first_seen_at` is inside 10 days before `profile_runs.started_at`. Order: `exclude_title` against the title, then `exclude_text` against title plus description plus `location.raw`, then `location.countries` / `location.regions` against the profile lists (`CUT_LOCATION` when the scope is known and misses both lists), then +1 once per `queries` phrase in the title plus description, then −10 once per `penalties` phrase. A reject stops the pass and is stored as a signal. Otherwise the bucket is `PASSED`, including score 0 and negative scores. Phrase match is case-insensitive and on word boundaries (`java` does not hit `javascript`). Country and region codes match the whole code, case-insensitive. A `PASSED` list omits score 0 and below. There is no `min_score` parameter, no `UNKNOWN` bucket, and no LLM.
 
 One vacancy is one `jobs` row. `id` is `company_key + U+001E + normalized title + U+001E + normalized location.raw`. Normalization is trim, collapse each whitespace run to one space, then lowercase. `apply_url` is not part of `id`. Re-ingest merges `sources`, keeps `first_seen_at`, and moves `last_seen_at`. It fills an empty `company_website` and leaves a non-empty one. ATS `url` / `apply_url` win over aggregator values. A portfolio URL does not replace a stored URL. A recompute overwrites score, bucket, and signals and keeps `user_status`.
 
@@ -75,7 +75,7 @@ The arrow from `cmd/api` to Temporal is the run start in section 2.3. `cmd/api` 
 **Read / correct**
 
 - `GET /api/v1/profiles` — file-name order. Item fields: `id`, `name`, `domain`, `sources`, `queries`.
-- `GET /api/v1/profiles/{profile_id}/jobs` — `bucket` (`PASSED` or `REJECTED`, default `PASSED`), `user_status` (`NEW` or `HIDDEN`; omitted means `NEW`), `page` (≥1), `limit` (1–100). Sort `score DESC, first_seen_at DESC`. No query returns both statuses. No score threshold.
+- `GET /api/v1/profiles/{profile_id}/jobs` — `bucket` (`PASSED` or `REJECTED`, default `PASSED`), `user_status` (`NEW` or `HIDDEN`; omitted means `NEW`), `page` (≥1), `limit` (1–100). Sort `score DESC, first_seen_at DESC`. No query returns both statuses. A `PASSED` list includes only score greater than 0. `REJECTED` does not apply that cut.
 - `PATCH /api/v1/profiles/{profile_id}/jobs/{job_id}` body `{ "user_status": "NEW" | "HIDDEN" }`. `404` when this profile has no match.
 
 **Retention:** hard-delete `jobs` where `last_seen_at` is older than 30 days. `JobRetentionWorkflow` Sunday 05:00 UTC (`jobhound-job-retention`), or `bin/retention run`. Matches cascade with the job.
@@ -120,7 +120,7 @@ Nuxt 4 under `app/`. Pages call `app/api/publicApi.ts`. No Pinia store for this 
 | Route | Behavior |
 |-------|----------|
 | `/` | `getProfiles`. Each row shows `name` and links to `/profiles/{id}`. No create, no delete, no slot cap. The header’s only nav target is `/`. |
-| `/profiles/{id}` | Latest run plus the job list (`PaginatedDataTable`). The run button calls `postProfileRun` with a new UUID and an empty body. While status is `RUNNING`, the page polls `getLatestProfileRun` and `getProfileJobs`. It shows status, `jobs_scored`, and `sources_skipped` when those fields are present. The default list omits `bucket` and `user_status`. One control requests `bucket=REJECTED`. One control requests `user_status=HIDDEN` and can patch a row back to `NEW`. Hide calls `patchProfileJob` with `HIDDEN`. Failures render `error.message`, including an already-open run. Exclude and penalty lists are not rendered. |
+| `/profiles/{id}` | Latest run plus the job list (`PaginatedDataTable`). The run button calls `postProfileRun` with a new UUID and an empty body. While status is `RUNNING`, the page polls `getLatestProfileRun` and `getProfileJobs`. It shows status, `jobs_scored`, and `sources_skipped` when those fields are present. The default list omits `bucket` and `user_status`, so it is `PASSED` and `NEW` with score greater than 0. One control requests `bucket=REJECTED`. One control requests `user_status=HIDDEN` and can patch a row back to `NEW`. Hide calls `patchProfileJob` with `HIDDEN`. Failures render `error.message`, including an already-open run. Exclude and penalty lists are not rendered. |
 
 Client functions: `getProfiles`, `postProfileRun`, `getLatestProfileRun`, `getProfileJobs`, `patchProfileJob`. `postProfileRun` sends `Idempotency-Key` and no body. `getProfileJobs` sends `bucket`, `user_status`, `page`, and `limit` only when the caller set them.
 
@@ -417,7 +417,7 @@ From `internal/config` (single source). Values not listed.
 - **README** points at `.env.example` and stays thinner than Compose (no routes, no ports).
 - **Scheduled vacancy auto-refresh:** explicit backlog. Retention cron is unrelated (delete old `jobs` rows).
 - **Auth / multi-user / Telegram push:** out of MVP.
-- **`min_score`:** not a filter. The default list is `PASSED` and `NEW`, sorted by score.
+- **`min_score`:** not a query parameter. `PASSED` lists omit score 0 and below. The default list is `PASSED` and `NEW`, sorted by score.
 - **`tests/`:** empty placeholder.
 - **GCP deploy:** named as production target; not implemented in-repo.
 - **Himalayas nil:** if `JOBHOUND_COLLECTOR_HIMALAYAS_DISABLED`, debug route returns 500; worker omits the source from the collector map. A profile that lists it counts a skipped source.

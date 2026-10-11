@@ -128,6 +128,7 @@ func (s *Service) LatestRun(ctx context.Context, profileID string) (schema.Run, 
 }
 
 // ListJobs lists matches. An empty bucket means PASSED. An empty user status means NEW.
+// A PASSED list omits score 0 and below.
 func (s *Service) ListJobs(ctx context.Context, p schema.ListJobsParams) (schema.JobPage, error) {
 	if p.Bucket == "" {
 		p.Bucket = schema.BucketPassed

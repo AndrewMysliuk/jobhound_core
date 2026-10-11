@@ -244,8 +244,12 @@ func TestRepository_List_filtersAndSorts(t *testing.T) {
 	insertJob(t, db, "job-high", "High", latest)
 	insertJob(t, db, "job-tie-new", "Tie new", newer)
 	insertJob(t, db, "job-tie-old", "Tie old", older)
+	insertJob(t, db, "job-zero", "Zero", latest)
+	insertJob(t, db, "job-negative", "Negative", latest)
 	insertJob(t, db, "job-hidden", "Hidden", latest)
+	insertJob(t, db, "job-hidden-zero", "Hidden zero", latest)
 	insertJob(t, db, "job-rejected", "Rejected", latest)
+	insertJob(t, db, "job-rejected-zero", "Rejected zero", latest)
 	insertJob(t, db, "job-rejected-hidden", "Rejected hidden", latest)
 	insertJob(t, db, "job-other", "Other", latest)
 
@@ -253,8 +257,12 @@ func TestRepository_List_filtersAndSorts(t *testing.T) {
 		{ProfileID: "andrew", JobID: "job-high", Bucket: schema.BucketPassed, Score: 9, UserStatus: schema.UserStatusNew, RunID: run.ID},
 		{ProfileID: "andrew", JobID: "job-tie-new", Bucket: schema.BucketPassed, Score: 5, UserStatus: schema.UserStatusNew, RunID: run.ID},
 		{ProfileID: "andrew", JobID: "job-tie-old", Bucket: schema.BucketPassed, Score: 5, UserStatus: schema.UserStatusNew, RunID: run.ID},
+		{ProfileID: "andrew", JobID: "job-zero", Bucket: schema.BucketPassed, Score: 0, UserStatus: schema.UserStatusNew, RunID: run.ID},
+		{ProfileID: "andrew", JobID: "job-negative", Bucket: schema.BucketPassed, Score: -9, UserStatus: schema.UserStatusNew, RunID: run.ID},
 		{ProfileID: "andrew", JobID: "job-hidden", Bucket: schema.BucketPassed, Score: 50, UserStatus: schema.UserStatusHidden, RunID: run.ID},
+		{ProfileID: "andrew", JobID: "job-hidden-zero", Bucket: schema.BucketPassed, Score: 0, UserStatus: schema.UserStatusHidden, RunID: run.ID},
 		{ProfileID: "andrew", JobID: "job-rejected", Bucket: schema.BucketRejected, Score: 100, UserStatus: schema.UserStatusNew, RunID: run.ID},
+		{ProfileID: "andrew", JobID: "job-rejected-zero", Bucket: schema.BucketRejected, Score: 0, UserStatus: schema.UserStatusNew, RunID: run.ID},
 		{ProfileID: "andrew", JobID: "job-rejected-hidden", Bucket: schema.BucketRejected, Score: 100, UserStatus: schema.UserStatusHidden, RunID: run.ID},
 		{ProfileID: "other", JobID: "job-other", Bucket: schema.BucketPassed, Score: 1000, UserStatus: schema.UserStatusNew, RunID: run.ID},
 	}
@@ -298,7 +306,7 @@ func TestRepository_List_filtersAndSorts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if rejected.Total != 1 || len(rejected.Jobs) != 1 || rejected.Jobs[0].JobID != "job-rejected" {
+	if rejected.Total != 2 || len(rejected.Jobs) != 2 || rejected.Jobs[0].JobID != "job-rejected" || rejected.Jobs[1].JobID != "job-rejected-zero" {
 		t.Fatalf("rejected = %#v", rejected.Jobs)
 	}
 
