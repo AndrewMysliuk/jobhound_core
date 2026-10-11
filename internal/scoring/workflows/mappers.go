@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strings"
 
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors"
 	"github.com/andrewmysliuk/jobhound_core/internal/ingest"
 	ingestschema "github.com/andrewmysliuk/jobhound_core/internal/ingest/schema"
 	profileschema "github.com/andrewmysliuk/jobhound_core/internal/profiles/schema"
@@ -16,6 +17,7 @@ const (
 	sourceGolangCafe     = "golang_cafe"
 	sourceBuiltin        = "builtin"
 	browserLane          = "browser"
+	considerSourcePrefix = "consider_"
 )
 
 // WorkflowID is the Temporal id for one profile. A second start while it is open is rejected.
@@ -24,7 +26,9 @@ func WorkflowID(profileID string) string {
 }
 
 // IngestChildren expands a profile into ingest child inputs.
-// Keyword sources get one child per query. Wellfound gets one child per role slug.
+// Keyword sources, including getro_*, get one child per query.
+// consider_* gets one child: Queries is the profile query list and Query is empty.
+// Wellfound gets one child per role slug.
 // Catalog sources get one child with an empty query; their queries are ignored.
 func IngestChildren(profile profileschema.Profile) []ingestschema.IngestSourceInput {
 	var out []ingestschema.IngestSourceInput
@@ -44,6 +48,11 @@ func IngestChildren(profile profileschema.Profile) []ingestschema.IngestSourceIn
 			}
 		case catalogSource(id):
 			out = append(out, ingestschema.IngestSourceInput{SourceID: id})
+		case strings.HasPrefix(id, considerSourcePrefix):
+			out = append(out, ingestschema.IngestSourceInput{
+				SourceID: id,
+				Queries:  append([]string(nil), profile.Queries...),
+			})
 		default:
 			for _, query := range profile.Queries {
 				query = strings.TrimSpace(query)
@@ -112,7 +121,7 @@ func catalogSource(id string) bool {
 }
 
 // ChildSkipped reports a child that must not fail the profile run:
-// lock held, cooldown, rate limit, or a source this worker did not build.
+// lock held, cooldown, rate limit, a dead tenant, or a source this worker did not build.
 func ChildSkipped(err error) bool {
 	if err == nil {
 		return false
@@ -120,11 +129,17 @@ func ChildSkipped(err error) bool {
 	if errors.Is(err, ingest.ErrLockHeld) || errors.Is(err, ingest.ErrCooldownActive) {
 		return true
 	}
+	if errors.Is(err, collectors.ErrTenantUnavailable) {
+		return true
+	}
 	msg := strings.ToLower(err.Error())
 	if strings.Contains(msg, strings.ToLower(ingest.ErrLockHeld.Error())) {
 		return true
 	}
 	if strings.Contains(msg, strings.ToLower(ingest.ErrCooldownActive.Error())) {
+		return true
+	}
+	if strings.Contains(msg, strings.ToLower(collectors.ErrTenantUnavailable.Error())) {
 		return true
 	}
 	if strings.Contains(msg, "unknown source_id") {

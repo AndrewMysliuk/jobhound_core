@@ -5,9 +5,11 @@ package schema
 type IngestSourceInput struct {
 	SourceID        string
 	ExplicitRefresh bool
-	// Query is the search string or Wellfound role slug for this ingest child.
-	// Empty means catalog fetch.
+	// Query is one search string. Empty is the catalog lock segment.
 	Query string
+	// Queries is the full profile query list for a union search.
+	// Set only for Consider. Query stays empty, so the lock segment is catalog.
+	Queries []string
 }
 
 // IngestSourceOutput summarizes ingest work for observability.

@@ -173,3 +173,62 @@ func TestRepository_SaveIngest_atsURLWins(t *testing.T) {
 		t.Fatalf("sources %#v", got.Sources)
 	}
 }
+
+func TestRepository_SaveIngest_fillsEmptyCompanyWebsite(t *testing.T) {
+	ctx := context.Background()
+	db := testJobsDB(t)
+	repo := NewRepository(pgsql.NewGetter(db))
+
+	first := jobdata.Job{
+		Source:   "himalayas",
+		Title:    "Engineer",
+		Company:  "Acme",
+		URL:      "https://himalayas.example/jobs/1",
+		ApplyURL: "https://agg.example/apply/1",
+		Location: jobdata.Location{Raw: "Berlin"},
+	}
+	if err := domainutils.AssignStableID(&first); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.SaveIngest(ctx, first); err != nil {
+		t.Fatal(err)
+	}
+
+	portfolio := first
+	portfolio.Source = "consider_andreessen_horowitz"
+	portfolio.Sources = nil
+	portfolio.URL = "https://jobs.a16z.com/jobs/1?gh_jid=1"
+	portfolio.ApplyURL = "https://boards.greenhouse.io/acme/jobs/1"
+	portfolio.CompanyWebsite = "https://acme.example"
+	if _, err := repo.SaveIngest(ctx, portfolio); err != nil {
+		t.Fatal(err)
+	}
+	got, err := repo.GetByID(ctx, first.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.CompanyWebsite != portfolio.CompanyWebsite {
+		t.Fatalf("company_website = %q, want %q", got.CompanyWebsite, portfolio.CompanyWebsite)
+	}
+	if got.URL != first.URL || got.ApplyURL != first.ApplyURL {
+		t.Fatalf("portfolio replaced links: url %q apply %q", got.URL, got.ApplyURL)
+	}
+
+	later := portfolio
+	later.CompanyWebsite = "https://other.example"
+	later.URL = "https://jobs.a16z.com/jobs/2"
+	later.ApplyURL = "https://boards.greenhouse.io/acme/jobs/2"
+	if _, err := repo.SaveIngest(ctx, later); err != nil {
+		t.Fatal(err)
+	}
+	got, err = repo.GetByID(ctx, first.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.CompanyWebsite != portfolio.CompanyWebsite {
+		t.Fatalf("company_website = %q, want stored %q", got.CompanyWebsite, portfolio.CompanyWebsite)
+	}
+	if got.URL != first.URL || got.ApplyURL != first.ApplyURL {
+		t.Fatalf("portfolio replaced links: url %q apply %q", got.URL, got.ApplyURL)
+	}
+}

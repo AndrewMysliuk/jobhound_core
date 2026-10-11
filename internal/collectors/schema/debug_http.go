@@ -31,4 +31,8 @@ type CollectorsPOSTBody struct {
 	BuiltinMaxListingPagesPerCountry *int `json:"builtin_max_listing_pages_per_country,omitempty"`
 	// Built In: when set, toggles rod-backed HTML fetch for this debug request (requires a rod-backed fetcher; default bootstrap enables the browser unless JOBHOUND_BROWSER_ENABLED=0).
 	BuiltinUseBrowser *bool `json:"builtin_use_browser,omitempty"`
+	// Consider and Getro: tenant source id (ignored on other routes).
+	SourceID *string `json:"source_id,omitempty"`
+	// Consider: profile queries for one FetchUnion call (ignored on other routes).
+	Queries []string `json:"queries,omitempty"`
 }

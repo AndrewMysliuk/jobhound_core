@@ -37,15 +37,17 @@ func NewFileStore(dir string, knownSourceIDs []string) *FileStore {
 var _ profiles.Store = (*FileStore)(nil)
 
 type fileProfile struct {
-	ID             string   `yaml:"id"`
-	Name           string   `yaml:"name"`
-	Domain         string   `yaml:"domain"`
-	Sources        []string `yaml:"sources"`
-	Queries        []string `yaml:"queries"`
-	WellfoundRoles []string `yaml:"wellfound_roles"`
-	ExcludeTitle   []string `yaml:"exclude_title"`
-	ExcludeText    []string `yaml:"exclude_text"`
-	Penalties      []string `yaml:"penalties"`
+	ID                string   `yaml:"id"`
+	Name              string   `yaml:"name"`
+	Domain            string   `yaml:"domain"`
+	Sources           []string `yaml:"sources"`
+	Queries           []string `yaml:"queries"`
+	WellfoundRoles    []string `yaml:"wellfound_roles"`
+	LocationCountries []string `yaml:"location_countries"`
+	LocationRegions   []string `yaml:"location_regions"`
+	ExcludeTitle      []string `yaml:"exclude_title"`
+	ExcludeText       []string `yaml:"exclude_text"`
+	Penalties         []string `yaml:"penalties"`
 }
 
 func (s *FileStore) List(ctx context.Context) ([]schema.Profile, error) {
@@ -108,15 +110,17 @@ func (s *FileStore) load(path, wantID string) (schema.Profile, error) {
 		}
 	}
 	return schema.Profile{
-		ID:             raw.ID,
-		Name:           raw.Name,
-		Domain:         domain,
-		Sources:        raw.Sources,
-		Queries:        raw.Queries,
-		WellfoundRoles: raw.WellfoundRoles,
-		ExcludeTitle:   raw.ExcludeTitle,
-		ExcludeText:    raw.ExcludeText,
-		Penalties:      raw.Penalties,
+		ID:                raw.ID,
+		Name:              raw.Name,
+		Domain:            domain,
+		Sources:           raw.Sources,
+		Queries:           raw.Queries,
+		WellfoundRoles:    raw.WellfoundRoles,
+		LocationCountries: raw.LocationCountries,
+		LocationRegions:   raw.LocationRegions,
+		ExcludeTitle:      raw.ExcludeTitle,
+		ExcludeText:       raw.ExcludeText,
+		Penalties:         raw.Penalties,
 	}, nil
 }
 

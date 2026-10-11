@@ -42,10 +42,12 @@ Not on this path: collectors debug HTTP (`cmd/agent`, stays as-is), `cmd/ipv6pro
 - **`queries`** — stage-1 search strings, and the only words that add a point at stage 2. Replaces `collectors/schema.Queries`. No job-title words: `frontend` and `full-stack` are not in this list.
 - **`wellfound_roles`** — Wellfound `/role/r/{slug}` segments. This is how that one site is addressed. The slugs are not search words for other boards and they do not affect the score.
 - **`exclude_title`** — phrases that reject when they hit the title. Checked first.
-- **`exclude_text`** — phrases that reject when they hit the title or the description, including country locks (`uk only`, Germany, Philippines, and the rest of that kind). Checked after the title list.
-- **`penalties`** — phrases that mean the employer wants the person in a country: visa, work permit, work authorization, right to work, must be based, must reside, citizenship. Each hit subtracts 10. The vacancy stays in the list.
+- **`location_countries`** — ISO country codes. A known hiring scope stays when any code is in this list.
+- **`location_regions`** — board region codes. `WORLDWIDE`, `EUROPE`, and `EMEA` stay. `EUROPE` already covers the phrases `EU` and `EEA`.
+- **`exclude_text`** — phrases that reject when they hit the title, the description, or the location line. Stack and domain phrases live here. Country names do not. Checked after the title list.
+- **`penalties`** — phrases that mean the employer wants the person in a country: visa, work permit, right to work, must reside. Each hit subtracts 10. The vacancy stays in the list. US work authorization and US citizenship are `exclude_text`, not penalties.
 
-There is no `roles` field, no must/nice tech split, no seniority field, and no country allow-list in code. Europe and USA are allowed because the YAML does not exclude them. A phrase that rejects the USA as a whole is not copied into either exclude list.
+There is no `roles` field, no must/nice tech split, and no seniority field. Country policy is these two YAML lists, not a table in Go. An empty location (no countries and no regions) stays, so an unparsed board row is not dropped. A phrase that rejects the USA as a whole is not copied into either exclude list.
 
 **Lifecycle:** files are read on every request, not cached across runs — editing a YAML and pressing the button is enough, no restart. A malformed file or an unknown source id fails the request for that profile only; the other profile keeps working.
 
@@ -55,7 +57,7 @@ There is no `roles` field, no must/nice tech split, no seniority field, and no c
 
 **Two profiles today:**
 
-- `andrew` — software, nine current sources. Queries are the old matrix without `frontend` and `full-stack`: `vue`, `typescript`, `react`, `golang`, `node`, `AI native`, `AI engineer`, `LLM`. Four Wellfound slugs stay as URLs only.
+- `andrew` — software, nine current sources. Queries are `vue`, `typescript`, `react`, `golang`, `node`. Wellfound slugs are `frontend-engineer`, `full-stack-engineer`, `backend-engineer`.
 - `architecture` — **not shipped in this slice**. The domain value stays so a later file can use it. Collectors, per-source slug lists, and `architecture.yaml` are [`docs/02-architecture-profile/`](../02-architecture-profile/architecture-profile-concept.md).
 
 ## Runtime
@@ -80,12 +82,13 @@ Stage 2 only. Stage 1 has already stored the vacancies. Per job, in this order. 
 
 1. **Load** — jobs with `first_seen_at` inside the 10 days before the run started. The text is the title plus the description. No section split.
 2. **`exclude_title` → `REJECTED`.** A listed phrase in the title. This list runs before the whole-text list.
-3. **`exclude_text` → `REJECTED`.** A listed phrase in the title or the description. Country locks live here, not in a geo table.
-4. **Score the rest.** Start at 0.
+3. **`exclude_text` → `REJECTED`.** A listed phrase in the title, the description, or the location line.
+4. **Location → `REJECTED`.** Read `location.countries` and `location.regions` only. Stay when both are empty, when any country is in `location_countries`, or when any region is in `location_regions`. Otherwise `CUT_LOCATION`. The description is not read. Empty profile lists skip this step.
+5. **Score the rest.** Start at 0.
    - Each `queries` phrase found once in the title or description: **+1**.
    - Each `penalties` phrase found once: **−10**. The row stays `PASSED`.
-5. **Bucket:** `REJECTED` from step 2 or 3. `PASSED` otherwise, including a score of 0 or below. There is no `UNKNOWN` bucket and no "must have matched" gate.
-6. **Persist** — upsert `profile_matches` with bucket, score, the list of phrases that fired, and the run id. `user_status` is never written by scoring.
+6. **Bucket:** `REJECTED` from step 2, 3, or 4. `PASSED` otherwise, including a score of 0 or below. There is no `UNKNOWN` bucket and no "must have matched" gate.
+7. **Persist** — upsert `profile_matches` with bucket, score, the list of phrases that fired, and the run id. `user_status` is never written by scoring.
 
 The default job list is `PASSED` and `user_status` `NEW`, sorted by score. `REJECTED` rows are stored too, with the phrase recorded, and are available through the bucket filter. Hidden rows stay out of that default list until the client asks for `HIDDEN`.
 
@@ -159,11 +162,11 @@ Steps 1–5 are a working v2. Early check: one `ProfileRunWorkflow` test with a 
 
 - **Migrations:** `000001_initial_schema` is rewritten for the v2 shape, not followed by a `000002` full of `DROP`s. There is no deploy, the database lives in a container and job identity changes anyway, so there is nothing to preserve.
 - **Job identity:** `jobs.id` *is* the dedup key — one row per vacancy, `sources` accumulates boards. No separate `dedup_key` column. The key is `company_key` + `\x1e` + normalized title + `\x1e` + normalized `location.raw`. Title and `location.raw` are trimmed, runs of whitespace collapse to a single space, then the string is lowercased. Empty raw is an empty segment. No stemmer, no stop-word list, no geo coder. `apply_url` is stored on the row and is not part of `id`, so a later ATS link does not create a second row.
-- **Location:** the six location columns collapse into one `location` jsonb for display. Country policy is phrases in the profile YAML, not a code allow-list and not `EUROPE_HIRING_OK`.
+- **Location:** the six location columns collapse into one `location` jsonb. Scoring reads `countries` and `regions` against `location_countries` and `location_regions` in the profile YAML. It does not revive `EUROPE_HIRING_OK`.
 - **Module names:** `internal/pipeline` → `internal/scoring`, the parent workflow moves there, `internal/manual` is deleted.
 - **Search phrases:** only in profile YAML. Stage 1 fetches them. Stage 2 scores them. The frontend does not substitute defaults.
 - **Titles:** job-title words are not queries and not points. Wellfound slugs are the exception, and only as URLs.
-- **Score:** +1 once per `queries` phrase, −10 once per `penalties` phrase. Title exclude, then text exclude.
+- **Score:** +1 once per `queries` phrase, −10 once per `penalties` phrase. Title exclude, then text exclude, then the location lists.
 - **Missing collector:** a YAML source whose collector this worker did not build is skipped and counted. The run still succeeds.
 - **Job list:** omitted `user_status` means `NEW`.
 - **UI:** both repositories are tasked from this folder. The screen lists profiles, starts a run, and shows the scored list.

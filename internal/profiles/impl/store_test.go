@@ -14,7 +14,6 @@ import (
 )
 
 var contractSourceIDs = []string{
-	"europe_remotely",
 	"working_nomads",
 	"himalayas",
 	"remotify_europe",
@@ -23,6 +22,29 @@ var contractSourceIDs = []string{
 	"vue_jobs",
 	"golang_cafe",
 	"builtin",
+	"consider_andreessen_horowitz",
+	"consider_lightspeed",
+	"consider_sequoia_capital",
+	"consider_gv",
+	"consider_bessemer_ventures",
+	"consider_balderton_capital",
+	"consider_notion_capital",
+	"consider_atlantic_labs",
+	"consider_battery_ventures",
+	"consider_panoramic_ventures",
+	"consider_ivp",
+	"consider_kleiner_perkins",
+	"consider_nea",
+	"consider_sequoia_capital_india",
+	"consider_union_square_ventures",
+	"getro_accel",
+	"getro_general_catalyst",
+	"getro_atomico",
+	"getro_hv_capital",
+	"getro_point_nine",
+	"getro_earlybird",
+	"getro_firstminute",
+	"getro_craft_ventures",
 }
 
 func TestFileStoreLoadsAndrew(t *testing.T) {
@@ -40,39 +62,58 @@ func TestFileStoreLoadsAndrew(t *testing.T) {
 	require.Equal(t, "Andrew", got.Name)
 	require.Equal(t, schema.DomainSoftware, got.Domain)
 	require.Equal(t, contractSourceIDs, got.Sources)
-	require.Equal(t, []string{"vue", "typescript", "react", "golang", "node", "AI native", "AI engineer", "LLM"}, got.Queries)
+	require.Equal(t, []string{"vue", "typescript", "react", "golang", "node"}, got.Queries)
 	require.Equal(t, []string{
 		"frontend-engineer",
 		"full-stack-engineer",
 		"backend-engineer",
-		"artificial-intelligence-engineer",
 	}, got.WellfoundRoles)
 	require.NotContains(t, got.Queries, "frontend")
 	require.NotContains(t, got.Queries, "full-stack")
-	require.Len(t, got.ExcludeTitle, 188)
-	require.Len(t, got.ExcludeText, 167)
-	require.Len(t, got.Penalties, 11)
+	require.Equal(t, []string{
+		"US",
+		"AT", "BE", "BG", "CY", "CZ", "DE", "DK", "EE", "ES", "FI", "FR", "GR", "HR", "HU", "IE", "IT",
+		"LT", "LU", "LV", "MT", "NL", "PL", "PT", "RO", "SE", "SI", "SK",
+		"IS", "LI", "NO", "CH", "GB",
+	}, got.LocationCountries)
+	require.Equal(t, []string{"WORLDWIDE", "EUROPE", "EMEA"}, got.LocationRegions)
+	require.Len(t, got.ExcludeTitle, 155)
+	require.Len(t, got.ExcludeText, 130)
+	require.Len(t, got.Penalties, 5)
 	require.Contains(t, got.ExcludeTitle, "recruiter")
-	require.Contains(t, got.ExcludeTitle, "product manager")
+	require.Contains(t, got.ExcludeTitle, "manager")
 	require.Contains(t, got.ExcludeTitle, "junior")
 	require.Contains(t, got.ExcludeTitle, "staff engineer")
+	require.Contains(t, got.ExcludeTitle, "swift developer")
+	require.Contains(t, got.ExcludeTitle, "java")
 	require.Contains(t, got.ExcludeText, "php")
-	require.Contains(t, got.ExcludeText, "java")
-	require.Contains(t, got.ExcludeText, "uk only")
-	require.Contains(t, got.ExcludeText, "must be based in germany")
+	require.Contains(t, got.ExcludeText, "react-native")
+	require.Contains(t, got.ExcludeText, "pacific time")
+	require.Contains(t, got.ExcludeText, "apac timezone only")
+	require.Contains(t, got.ExcludeText, "americas overlap")
+	for _, phrase := range []string{"uk only", "russia", "india", "argentina", "must be based in germany", "poland only", "canada only"} {
+		require.NotContains(t, got.ExcludeText, phrase)
+	}
+	for _, phrase := range []string{"swift", "fraud", "wallet", "machine learning", "android", "soc 2", "java"} {
+		require.NotContains(t, got.ExcludeText, phrase)
+	}
 	require.Contains(t, got.Penalties, "work permit required")
 	require.Contains(t, got.Penalties, "right to work in germany")
 	for _, phrase := range []string{
 		"must reside in the us",
 		"must be based in the us",
 		"authorized to work in the us",
+		"authorized to work in the united states",
+		"authorized to work in the u.s",
 		"authorization to work in the us",
 		"us citizenship",
 		"u.s. citizenship",
+		"u.s. citizen",
+		"us work authorization",
 	} {
-		require.Contains(t, got.Penalties, phrase)
+		require.Contains(t, got.ExcludeText, phrase)
 		require.NotContains(t, got.ExcludeTitle, phrase)
-		require.NotContains(t, got.ExcludeText, phrase)
+		require.NotContains(t, got.Penalties, phrase)
 	}
 	for _, phrase := range []string{
 		"united states only",

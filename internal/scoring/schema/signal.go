@@ -10,6 +10,7 @@ const (
 	SignalPenalty         SignalCode = "PENALTY"
 	SignalCutExcludeTitle SignalCode = "CUT_EXCLUDE_TITLE"
 	SignalCutExcludeText  SignalCode = "CUT_EXCLUDE_TEXT"
+	SignalCutLocation     SignalCode = "CUT_LOCATION"
 )
 
 func (c SignalCode) String() string { return string(c) }
@@ -20,7 +21,7 @@ func (c SignalCode) Pointer() *SignalCode { return &c }
 
 func (c SignalCode) FromValue(s string) (SignalCode, error) {
 	switch SignalCode(s) {
-	case SignalQuery, SignalPenalty, SignalCutExcludeTitle, SignalCutExcludeText:
+	case SignalQuery, SignalPenalty, SignalCutExcludeTitle, SignalCutExcludeText, SignalCutLocation:
 		return SignalCode(s), nil
 	default:
 		return "", fmt.Errorf("unknown SignalCode %q: valid values are %v", s, ValuesSignalCode())
@@ -28,7 +29,7 @@ func (c SignalCode) FromValue(s string) (SignalCode, error) {
 }
 
 func ValuesSignalCode() []SignalCode {
-	return []SignalCode{SignalQuery, SignalPenalty, SignalCutExcludeTitle, SignalCutExcludeText}
+	return []SignalCode{SignalQuery, SignalPenalty, SignalCutExcludeTitle, SignalCutExcludeText, SignalCutLocation}
 }
 
 func FromStringSignalCode(s string) (SignalCode, error) {

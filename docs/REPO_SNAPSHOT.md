@@ -10,18 +10,19 @@ MVP is **single-tenant** (no auth). The unit of search is a **profile** loaded f
 
 A profile file (`config/profiles/<id>.yaml`) is the only copy of:
 
-1. **`sources`** — which of the nine collectors to poll.
+1. **`sources`** — which collectors to poll: the nine aggregators, plus the Consider and Getro source ids in section 2.4.
 2. **`queries`** — stage-1 search strings, and the only words that add a point at stage 2. `frontend` and `full-stack` are not in this list.
 3. **`wellfound_roles`** — Wellfound `/role/r/{slug}` segments. They address that one site. They are not search words for other boards and they do not affect the score.
-4. **`exclude_title`**, **`exclude_text`**, **`penalties`** — stage-2 phrase lists. Not returned by `GET /api/v1/profiles`.
+4. **`location_countries`**, **`location_regions`** — stage-2 hiring scope. A known scope stays when any code hits. An empty scope stays. Not returned by `GET /api/v1/profiles`.
+5. **`exclude_title`**, **`exclude_text`**, **`penalties`** — stage-2 phrase lists. Not returned by `GET /api/v1/profiles`.
 
 `domain` is `software` or `architecture`. `architecture.yaml` is not in this tree. Profiles are read on every `List`/`Get` (no cache). They are not created, updated, or deleted over HTTP. The only user-writable field is `user_status` on a match (`NEW` or `HIDDEN`).
 
-**Stage 1** is ingest. It does not score. A profile run expands `sources` × `queries` into child `IngestSourceWorkflow`s: keyword children for query sources, `wellfound_roles` children for Wellfound, one catalog child for `we_work_remotely` / `vue_jobs` / `golang_cafe` (`queries` ignored). Redis keys are `ingest:lock:{source_id}:{query_segment}` and `ingest:cooldown:{source_id}:{query_segment}`; an empty query uses the segment `catalog`.
+**Stage 1** is ingest. It does not score. A profile run expands `sources` × `queries` into child `IngestSourceWorkflow`s: keyword children for query sources, `wellfound_roles` children for Wellfound, one catalog child for `we_work_remotely` / `vue_jobs` / `golang_cafe` (`queries` ignored), one catalog child per `consider_*` source (`Queries` set, lock segment `catalog`), and one keyword child per `getro_*` query. Redis keys are `ingest:lock:{source_id}:{query_segment}` and `ingest:cooldown:{source_id}:{query_segment}`; an empty query uses the segment `catalog`.
 
-**Stage 2** is a score on stored rows whose `first_seen_at` is inside 10 days before `profile_runs.started_at`. Order: `exclude_title` against the title, then `exclude_text` against title plus description, then +1 once per `queries` phrase in that text, then −10 once per `penalties` phrase. A reject stops the pass and is stored as a signal. Otherwise the bucket is `PASSED`, including score 0 and negative scores. Match is case-insensitive and on word boundaries (`java` does not hit `javascript`). There is no `min_score`, no `UNKNOWN` bucket, and no LLM.
+**Stage 2** is a score on stored rows whose `first_seen_at` is inside 10 days before `profile_runs.started_at`. Order: `exclude_title` against the title, then `exclude_text` against title plus description plus `location.raw`, then `location.countries` / `location.regions` against the profile lists (`CUT_LOCATION` when the scope is known and misses both lists), then +1 once per `queries` phrase in the title plus description, then −10 once per `penalties` phrase. A reject stops the pass and is stored as a signal. Otherwise the bucket is `PASSED`, including score 0 and negative scores. Phrase match is case-insensitive and on word boundaries (`java` does not hit `javascript`). Country and region codes match the whole code, case-insensitive. There is no `min_score`, no `UNKNOWN` bucket, and no LLM.
 
-One vacancy is one `jobs` row. `id` is `company_key + U+001E + normalized title + U+001E + normalized location.raw`. Normalization is trim, collapse each whitespace run to one space, then lowercase. `apply_url` is not part of `id`. Re-ingest merges `sources`, keeps `first_seen_at`, and moves `last_seen_at`. ATS `url` / `apply_url` win over aggregator values. A recompute overwrites score, bucket, and signals and keeps `user_status`.
+One vacancy is one `jobs` row. `id` is `company_key + U+001E + normalized title + U+001E + normalized location.raw`. Normalization is trim, collapse each whitespace run to one space, then lowercase. `apply_url` is not part of `id`. Re-ingest merges `sources`, keeps `first_seen_at`, and moves `last_seen_at`. It fills an empty `company_website` and leaves a non-empty one. ATS `url` / `apply_url` win over aggregator values. A portfolio URL does not replace a stored URL. A recompute overwrites score, bucket, and signals and keeps `user_status`.
 
 There is no stage 3, no Anthropic call, no global profile text, and no client-side keyword default.
 
@@ -67,7 +68,7 @@ The arrow from `cmd/api` to Temporal is the run start in section 2.3. `cmd/api` 
 1. `POST /api/v1/profiles/{profile_id}/runs` with header `Idempotency-Key` (non-nil UUID) and an empty body. A JSON body is `400`.
 2. The handler writes a `profile_runs` row (`RUNNING`) and starts `ProfileRunWorkflow`, workflow id `profile-run-{profile_id}`, reuse `ALLOW_DUPLICATE` after close. Input is `ProfileRunInput{ProfileID, RunID}` only. Activities re-read the YAML.
 3. A second POST while that execution is open is **409** `PROFILES.RUN_ALREADY_RUNNING`. The same idempotency key returns the same run. The same key with a different profile is **409** `HTTP.IDEMPOTENCY_KEY_CONFLICT`.
-4. Ingest children run at the same time across resources, and in order inside one resource. `builtin` and `golang_cafe` share one lane (one Chromium). Workflow id is `ingest-{source}-{segment}` (`catalog` when the query is empty). Each child takes a Redis lock and respects cooldown. A locked, cooling-down, rate-limited, or not-built collector child is skipped, logged with its source id, and counted in `sources_skipped`. It is not a failed run. Two profiles share the ingest cooldown.
+4. Ingest children run at the same time across resources, and in order inside one resource. `builtin` and `golang_cafe` share one lane (one Chromium). Workflow id is `ingest-{source}-{segment}` (`catalog` when the query is empty). Each child takes a Redis lock and respects cooldown. A locked, cooling-down, rate-limited, or not-built collector child is skipped, logged with its source id, and counted in `sources_skipped`. It is not a failed run. A 404 or 410 tenant is `sources_skipped`, not a failed run. Two profiles share the ingest cooldown.
 5. After each child that stored jobs, and once more when every lane has finished, score jobs with `first_seen_at` inside `ScoreWindowDays` (10) before that run's `started_at`. Upsert `profile_matches` (`bucket`, `score`, `signals`, `run_id`, `updated_at`). `user_status` is not in the update set. The open run's `jobs_scored` and `sources_skipped` update as children finish. A failed score attempt does not delete existing matches.
 6. Mark the run `SUCCEEDED` with those counters. `FAILED` only after Temporal retries. `GET /api/v1/profiles/{profile_id}/runs/latest` reads that row.
 
@@ -94,19 +95,21 @@ Every source implements `collectors.Collector` (`Name` + `Fetch`). Optional: `In
 | `wellfound` | wellfound.com | T2: HTML `/role/r/{slug}` + JobPosting JSON-LD; site mutex + 1s delay | one child per `wellfound_roles` slug |
 | `vue_jobs` | vuejobs.com | T2: SSR `__NUXT_DATA__` remote catalog; skip PRO; `Job.URL` = `/jobs/{slug}` | catalog |
 | `golang_cafe` | golang.cafe | **T3 rod** JSON API via shared `browserfetch` (plain HTTP = Vercel 429) | catalog |
+| `consider_*` | one Consider host per fund | T1: `GET {host}/jobs` (CSRF) then `POST {host}/api-boards/search-jobs` | one catalog child (`Queries` set, lock segment `catalog`) |
+| `getro_*` | api.getro.com | T1: `POST /api/v2/collections/{collection_id}/search/jobs` | one keyword child per `queries` phrase |
 
-`andrew.yaml` queries: `vue` · `typescript` · `react` · `golang` · `node` · `AI native` · `AI engineer` · `LLM`. Wellfound slugs: `frontend-engineer` · `full-stack-engineer` · `backend-engineer` · `artificial-intelligence-engineer`.
+`andrew.yaml` queries: `vue` · `typescript` · `react` · `golang` · `node`. Wellfound slugs: `frontend-engineer` · `full-stack-engineer` · `backend-engineer`.
 
-Known source ids are those nine. `djinni` and `dou_ua` are dropped. LinkedIn is **cancelled** (never shipped; no package, no session cookies, no `SessionProvider`). If `JOBHOUND_COLLECTOR_HIMALAYAS_DISABLED`, the worker omits `himalayas`. `golang_cafe` is omitted when the rod fetcher is nil. A listed source with no collector in the worker map increments `sources_skipped`; the run still succeeds.
+Known source ids are the nine aggregators plus these Consider and Getro ids. Consider: `consider_andreessen_horowitz` · `consider_lightspeed` · `consider_sequoia_capital` · `consider_gv` · `consider_bessemer_ventures` · `consider_balderton_capital` · `consider_notion_capital` · `consider_atlantic_labs` · `consider_battery_ventures` · `consider_panoramic_ventures` · `consider_ivp` · `consider_kleiner_perkins` · `consider_nea` · `consider_sequoia_capital_india` · `consider_union_square_ventures`. Getro: `getro_accel` · `getro_general_catalyst` · `getro_atomico` · `getro_hv_capital` · `getro_point_nine` · `getro_earlybird` · `getro_firstminute` · `getro_craft_ventures`. `djinni` and `dou_ua` are dropped. LinkedIn is **cancelled** (never shipped; no package, no session cookies, no `SessionProvider`). If `JOBHOUND_COLLECTOR_HIMALAYAS_DISABLED`, the worker omits `himalayas`. `golang_cafe` is omitted when the rod fetcher is nil. A listed source with no collector in the worker map increments `sources_skipped`; the run still succeeds.
 
-Debug HTTP (`cmd/agent`): `GET /health`, `POST /debug/collectors/{europe_remotely,working_nomads,himalayas,builtin,remotify_europe,we_work_remotely,wellfound,vue_jobs,golang_cafe}`.
+Debug HTTP (`cmd/agent`): `GET /health`, `POST /debug/collectors/{europe_remotely,working_nomads,himalayas,builtin,remotify_europe,we_work_remotely,wellfound,vue_jobs,golang_cafe}`, `POST /debug/collectors/consider`, `POST /debug/collectors/getro`.
 
 ### 2.5 What is *not* on the product path
 
 - Stage 3, Claude / Anthropic, `internal/llm`, the global `user_profile` text, slots, the three-slot cap, and `ManualSlotRunWorkflow`.
 - Client keyword defaults (`defaultStage2Exclude.ts`, `EUROPE_HIRING_OK`, a stage-2 rule builder). Phrases are not posted by the browser.
 - `config/profiles/architecture.yaml` and any architecture collector (`docs/02-architecture-profile/`).
-- Companies and ATS polling, VC portfolio boards, a company-tag signal, `min_score`.
+- Companies and ATS polling, a company-tag signal, `min_score`.
 - Telegram / push, auth, users, payments, scheduled vacancy auto-refresh, GCP deploy.
 - Collectors debug HTTP and `cmd/ipv6proxy` stay; they are not the product path.
 
@@ -396,7 +399,7 @@ From `internal/config` (single source). Values not listed.
 
 ### Project-specific (remove when turning into a template)
 
-- Job-board collectors (`europe_remotely`, `working_nomads`, `builtin`, `himalayas`, `remotify_europe`, `we_work_remotely`, `wellfound`, `vue_jobs`, `golang_cafe`), `browserfetch` / Chromium, and host `cmd/ipv6proxy` for Europe Remotely from Docker
+- Job-board collectors (`europe_remotely`, `working_nomads`, `builtin`, `himalayas`, `remotify_europe`, `we_work_remotely`, `wellfound`, `vue_jobs`, `golang_cafe`, Consider `consider_*`, Getro `getro_*`), `browserfetch` / Chromium, and host `cmd/ipv6proxy` for Europe Remotely from Docker
 - Profile YAML (`config/profiles/andrew.yaml`) and phrase scoring (`exclude_title` / `exclude_text` / +1 query / −10 penalty)
 - Content-key job id and `profile_runs` / `profile_matches`
 - Redis ingest lock/cooldown keys `ingest:lock|cooldown:{source_id}:{query_segment}`

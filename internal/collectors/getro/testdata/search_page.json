@@ -1,0 +1,30 @@
+{
+  "results": {
+    "jobs": [
+      {
+        "title": "Senior Frontend Engineer",
+        "url": "https://jobs.accel.com/companies/acme/jobs/1?gh_jid=99",
+        "created_at": 1710000000,
+        "locations": ["Berlin, Germany", "United States"],
+        "work_mode": "remote",
+        "skills": ["Vue.js", "TypeScript"],
+        "organization": { "name": "Acme", "domain": "acme.example" }
+      },
+      {
+        "title": "Backend Engineer",
+        "url": "https://jobs.accel.com/companies/n8n/jobs/2",
+        "locations": ["Remote"],
+        "skills": ["Go"],
+        "organization": { "name": "n8n" }
+      },
+      {
+        "title": "",
+        "url": "https://jobs.accel.com/companies/drop/jobs/3",
+        "created_at": 1710000001,
+        "locations": ["France"],
+        "skills": ["React"],
+        "organization": { "name": "Drop Me" }
+      }
+    ]
+  }
+}

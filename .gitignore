@@ -3,6 +3,9 @@
 .env.*
 !.env.example
 
+# Local CV material for search calibration
+/config/cv/
+
 # Go
 /bin/
 /dist/

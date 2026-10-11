@@ -10,7 +10,9 @@ import (
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/bootstrap"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/builtin"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/consider"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/europeremotely"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/getro"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/golangcafe"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/himalayas"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/remotifyeurope"
@@ -46,6 +48,15 @@ var knownCollectorSourceIDs = []string{
 	vuejobs.SourceName,
 	golangcafe.SourceName,
 	builtin.SourceName,
+}
+
+func init() {
+	for _, tenant := range consider.Tenants() {
+		knownCollectorSourceIDs = append(knownCollectorSourceIDs, tenant.SourceID)
+	}
+	for _, tenant := range getro.Tenants() {
+		knownCollectorSourceIDs = append(knownCollectorSourceIDs, tenant.SourceID)
+	}
 }
 
 func main() {
@@ -106,13 +117,13 @@ func main() {
 			ingestRedis = ingest.NewRedisCoordinatorWithTTL(rdb, appCfg.Ingest.LockTTLSeconds, appCfg.Ingest.CooldownTTLSeconds)
 			ingestWatermarks = ingest.NewGormWatermarkStore(getter)
 			bootCtx, bcancel := context.WithTimeout(context.Background(), 2*time.Minute)
-			er, wn, builtinColl, himColl, reColl, wwrColl, wfColl, vjColl, gcColl, err := bootstrap.MVPCollectors(bootCtx, nil, appCfg.DataDir, appCfg.BuiltinCollector, appCfg.HimalayasCollector, appCfg.Browser, appCfg.EuropeRemotely)
+			er, wn, builtinColl, himColl, reColl, wwrColl, wfColl, vjColl, gcColl, considerColls, getroColls, err := bootstrap.MVPCollectors(bootCtx, nil, appCfg.DataDir, appCfg.BuiltinCollector, appCfg.HimalayasCollector, appCfg.Browser, appCfg.EuropeRemotely)
 			bcancel()
 			if err != nil {
 				log.Error().Err(err).Msg("collectors bootstrap")
 				os.Exit(1)
 			}
-			ingestCollectors = ingestCollectorMap(er, wn, builtinColl, himColl, reColl, wwrColl, wfColl, vjColl, gcColl)
+			ingestCollectors = ingestCollectorMap(er, wn, builtinColl, himColl, reColl, wwrColl, wfColl, vjColl, gcColl, considerColls, getroColls)
 			ingestExplicitRefresh = appCfg.Ingest.ExplicitRefresh
 		}
 	}
@@ -158,9 +169,11 @@ func main() {
 
 // ingestCollectorMap keys are the collectors this process built.
 // himalayas is omitted when nil; golang_cafe is omitted when the rod fetcher is nil.
+// considerColls and getroColls are keyed by Name(); a nil collector in either slice is skipped.
 func ingestCollectorMap(
 	er, wn, builtinColl, himColl,
 	reColl, wwrColl, wfColl, vjColl, gcColl collectors.Collector,
+	considerColls, getroColls []collectors.Collector,
 ) map[string]collectors.Collector {
 	m := map[string]collectors.Collector{
 		ingest.NormalizeSourceID(europeremotely.SourceName): er,
@@ -176,6 +189,18 @@ func ingestCollectorMap(
 	}
 	if gcColl != nil {
 		m[ingest.NormalizeSourceID(golangcafe.SourceName)] = gcColl
+	}
+	for _, c := range considerColls {
+		if c == nil {
+			continue
+		}
+		m[ingest.NormalizeSourceID(c.Name())] = c
+	}
+	for _, c := range getroColls {
+		if c == nil {
+			continue
+		}
+		m[ingest.NormalizeSourceID(c.Name())] = c
 	}
 	return m
 }

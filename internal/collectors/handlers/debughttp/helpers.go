@@ -10,7 +10,9 @@ import (
 	"time"
 
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/builtin"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/consider"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/europeremotely"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/getro"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/himalayas"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/schema"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/workingnomads"
@@ -114,6 +116,22 @@ func applyWorkingNomadsOverrides(req *schema.CollectorsPOSTBody, c *workingnomad
 	if len(req.SourceFieldNames) > 0 {
 		c.SourceFieldNames = append([]string(nil), req.SourceFieldNames...)
 	}
+}
+
+func lookupConsiderBoard(boards map[string]*consider.Board, sourceID string) (*consider.Board, bool) {
+	board := boards[sourceID]
+	if board == nil {
+		return nil, false
+	}
+	return board, true
+}
+
+func lookupGetroBoard(boards map[string]*getro.Board, sourceID string) (*getro.Board, bool) {
+	board := boards[sourceID]
+	if board == nil {
+		return nil, false
+	}
+	return board, true
 }
 
 func bytesTrimSpace(b []byte) []byte {

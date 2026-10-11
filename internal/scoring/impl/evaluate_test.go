@@ -24,6 +24,14 @@ func TestEvaluate(t *testing.T) {
 	cutText := func(phrase string) schema.Signal {
 		return schema.Signal{Code: schema.SignalCutExcludeText, Terms: []string{phrase}}
 	}
+	cutLocation := func(terms ...string) schema.Signal {
+		return schema.Signal{Code: schema.SignalCutLocation, Terms: terms}
+	}
+	locations := profileschema.Profile{
+		LocationCountries: []string{"US", "DE", "RO", "GB"},
+		LocationRegions:   []string{"WORLDWIDE", "EUROPE", "EMEA"},
+		Queries:           []string{"vue"},
+	}
 
 	tests := []struct {
 		name    string
@@ -187,6 +195,123 @@ func TestEvaluate(t *testing.T) {
 				Bucket:  schema.BucketPassed,
 				Score:   schema.QueryPoints,
 				Signals: []schema.Signal{query("frontend")},
+			},
+		},
+		{
+			name: "location raw is an exclude",
+			profile: profileschema.Profile{
+				ExcludeText: []string{"india"},
+				Queries:     []string{"vue"},
+			},
+			job: jobdata.Job{
+				Title:       "Frontend Engineer",
+				Description: "vue",
+				Location:    jobdata.Location{Raw: "India"},
+			},
+			want: Outcome{
+				Bucket:  schema.BucketRejected,
+				Signals: []schema.Signal{cutText("india")},
+			},
+		},
+		{
+			name:    "empty location stays",
+			profile: locations,
+			job: jobdata.Job{
+				Title:       "Frontend Engineer",
+				Description: "vue",
+			},
+			want: Outcome{
+				Bucket:  schema.BucketPassed,
+				Score:   schema.QueryPoints,
+				Signals: []schema.Signal{query("vue")},
+			},
+		},
+		{
+			name:    "allowed country stays",
+			profile: locations,
+			job: jobdata.Job{
+				Title:       "Frontend Engineer",
+				Description: "vue and an office in India",
+				Location:    jobdata.Location{Countries: []string{"DE", "BR"}},
+			},
+			want: Outcome{
+				Bucket:  schema.BucketPassed,
+				Score:   schema.QueryPoints,
+				Signals: []schema.Signal{query("vue")},
+			},
+		},
+		{
+			name:    "allowed region stays",
+			profile: locations,
+			job: jobdata.Job{
+				Title:       "Frontend Engineer",
+				Description: "vue",
+				Location:    jobdata.Location{Regions: []string{"EMEA"}},
+			},
+			want: Outcome{
+				Bucket:  schema.BucketPassed,
+				Score:   schema.QueryPoints,
+				Signals: []schema.Signal{query("vue")},
+			},
+		},
+		{
+			name:    "worldwide stays",
+			profile: locations,
+			job: jobdata.Job{
+				Title:       "Frontend Engineer",
+				Description: "vue",
+				Location:    jobdata.Location{Regions: []string{"worldwide"}},
+			},
+			want: Outcome{
+				Bucket:  schema.BucketPassed,
+				Score:   schema.QueryPoints,
+				Signals: []schema.Signal{query("vue")},
+			},
+		},
+		{
+			name:    "location outside the lists is rejected",
+			profile: locations,
+			job: jobdata.Job{
+				Title:       "Frontend Engineer",
+				Description: "vue",
+				Location:    jobdata.Location{Countries: []string{"BR", "AR"}, Regions: []string{"LATAM"}},
+			},
+			want: Outcome{
+				Bucket:  schema.BucketRejected,
+				Signals: []schema.Signal{cutLocation("BR", "AR", "LATAM")},
+			},
+		},
+		{
+			name: "text exclude still wins over an allowed country",
+			profile: profileschema.Profile{
+				LocationCountries: []string{"DE"},
+				ExcludeText:       []string{"php"},
+				Queries:           []string{"vue"},
+			},
+			job: jobdata.Job{
+				Title:       "Backend Engineer",
+				Description: "php and vue",
+				Location:    jobdata.Location{Countries: []string{"DE"}},
+			},
+			want: Outcome{
+				Bucket:  schema.BucketRejected,
+				Signals: []schema.Signal{cutText("php")},
+			},
+		},
+		{
+			name: "empty location lists skip the check",
+			profile: profileschema.Profile{
+				Queries: []string{"vue"},
+			},
+			job: jobdata.Job{
+				Title:       "Frontend Engineer",
+				Description: "vue",
+				Location:    jobdata.Location{Countries: []string{"BR"}},
+			},
+			want: Outcome{
+				Bucket:  schema.BucketPassed,
+				Score:   schema.QueryPoints,
+				Signals: []schema.Signal{query("vue")},
 			},
 		},
 		{

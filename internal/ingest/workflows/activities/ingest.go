@@ -66,8 +66,19 @@ func (a *IngestActivities) RunIngestSource(ctx context.Context, in ingestschema.
 	var list []schema.Job
 	var usedIncr bool
 	var nextCursor string
-	query := strings.TrimSpace(in.Query)
-	if query != "" {
+	if len(in.Queries) > 0 {
+		uf, ok := col.(collectors.UnionQueryFetcher)
+		if !ok {
+			err := fmt.Errorf("ingest activity: collector does not implement union fetch")
+			log.Error().Err(err).Msg("fetch union")
+			return nil, err
+		}
+		list, err = uf.FetchUnion(ctx, in.Queries)
+		if err != nil {
+			log.Error().Err(err).Msg("fetch union")
+			return nil, err
+		}
+	} else if query := strings.TrimSpace(in.Query); query != "" {
 		if sf, ok := col.(collectors.QueryFetcher); ok {
 			list, err = sf.FetchWithQuery(ctx, query)
 			if err != nil {

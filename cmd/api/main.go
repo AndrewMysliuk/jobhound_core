@@ -12,7 +12,9 @@ import (
 	"time"
 
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/builtin"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/consider"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/europeremotely"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/getro"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/golangcafe"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/himalayas"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/remotifyeurope"
@@ -46,6 +48,15 @@ var knownCollectorSourceIDs = []string{
 	vuejobs.SourceName,
 	golangcafe.SourceName,
 	builtin.SourceName,
+}
+
+func init() {
+	for _, tenant := range consider.Tenants() {
+		knownCollectorSourceIDs = append(knownCollectorSourceIDs, tenant.SourceID)
+	}
+	for _, tenant := range getro.Tenants() {
+		knownCollectorSourceIDs = append(knownCollectorSourceIDs, tenant.SourceID)
+	}
 }
 
 func main() {

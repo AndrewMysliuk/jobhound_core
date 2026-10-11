@@ -1,0 +1,34 @@
+{
+  "meta": {
+    "size": 50,
+    "sequence": "cursor-1"
+  },
+  "jobs": [
+    {
+      "jobId": "job-1",
+      "title": "Software Engineer",
+      "companyName": "Databricks",
+      "companyDomain": "databricks.com",
+      "url": "https://boards.greenhouse.io/databricks/jobs/123?gh_jid=123",
+      "applyUrl": "https://boards.greenhouse.io/databricks/jobs/123?gh_jid=123&utm_source=consider",
+      "timeStamp": "2026-03-01T12:00:00Z",
+      "minValue": 120000,
+      "maxValue": 180000,
+      "currency": "USD",
+      "locations": ["Berlin, Germany"],
+      "normalizedLocations": [{ "label": "United States" }],
+      "regions": [{ "label": "Europe" }],
+      "remote": true,
+      "hybrid": true,
+      "requiredSkills": [{ "id": "resume:Go", "label": "Go" }],
+      "preferredSkills": "[{\"id\":\"resume:Vue.js\",\"label\":\"Vue.js\"}]"
+    },
+    {
+      "jobId": "job-drop",
+      "title": " ",
+      "companyName": "",
+      "url": "",
+      "applyUrl": ""
+    }
+  ]
+}

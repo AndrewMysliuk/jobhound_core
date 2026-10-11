@@ -15,7 +15,9 @@ import (
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/bootstrap"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/builtin"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/consider"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/europeremotely"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/getro"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/golangcafe"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/handlers/debughttp"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/himalayas"
@@ -50,7 +52,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	er, wn, builtinColl, himColl, reColl, wwrColl, wfColl, vjColl, gcColl, err := bootstrap.MVPCollectors(ctx, nil, appCfg.DataDir, appCfg.BuiltinCollector, appCfg.HimalayasCollector, appCfg.Browser, appCfg.EuropeRemotely)
+	er, wn, builtinColl, himColl, reColl, wwrColl, wfColl, vjColl, gcColl, considerColls, getroColls, err := bootstrap.MVPCollectors(ctx, nil, appCfg.DataDir, appCfg.BuiltinCollector, appCfg.HimalayasCollector, appCfg.Browser, appCfg.EuropeRemotely)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
@@ -88,10 +90,34 @@ func main() {
 	if x, ok := gcColl.(*golangcafe.GolangCafe); ok {
 		gcConcrete = x
 	}
-	if err := runDebugHTTPServer(log, addr, er, wn, himColl, builtinColl, reColl, wwrColl, wfColl, vjColl, gcColl, wnConcrete, erConcrete, himConcrete, builtinConcrete, reConcrete, wfConcrete, vjConcrete, gcConcrete); err != nil {
+	if err := runDebugHTTPServer(log, addr, er, wn, himColl, builtinColl, reColl, wwrColl, wfColl, vjColl, gcColl, wnConcrete, erConcrete, himConcrete, builtinConcrete, reConcrete, wfConcrete, vjConcrete, gcConcrete, considerBoardsBySourceID(considerColls), getroBoardsBySourceID(getroColls)); err != nil {
 		log.Error().Err(err).Msg("debug http")
 		os.Exit(1)
 	}
+}
+
+func considerBoardsBySourceID(colls []collectors.Collector) map[string]*consider.Board {
+	out := make(map[string]*consider.Board, len(colls))
+	for _, c := range colls {
+		board, ok := c.(*consider.Board)
+		if !ok || board == nil {
+			continue
+		}
+		out[board.Name()] = board
+	}
+	return out
+}
+
+func getroBoardsBySourceID(colls []collectors.Collector) map[string]*getro.Board {
+	out := make(map[string]*getro.Board, len(colls))
+	for _, c := range colls {
+		board, ok := c.(*getro.Board)
+		if !ok || board == nil {
+			continue
+		}
+		out[board.Name()] = board
+	}
+	return out
 }
 
 func runDebugHTTPServer(
@@ -106,6 +132,8 @@ func runDebugHTTPServer(
 	wellfoundConcrete *wellfound.Wellfound,
 	vueJobsConcrete *vuejobs.VueJobs,
 	golangCafeConcrete *golangcafe.GolangCafe,
+	considerBoards map[string]*consider.Board,
+	getroBoards map[string]*getro.Board,
 ) error {
 	srv := &http.Server{
 		Addr: addr,
@@ -115,6 +143,8 @@ func runDebugHTTPServer(
 			workingNomadsConcrete, europeRemotelyConcrete, himalayasConcrete, builtinConcrete,
 			remotifyEuropeConcrete, wellfoundConcrete, vueJobsConcrete, golangCafeConcrete,
 			log,
+			considerBoards,
+			getroBoards,
 		),
 	}
 

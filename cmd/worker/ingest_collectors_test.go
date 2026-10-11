@@ -4,8 +4,11 @@ import (
 	"context"
 	"testing"
 
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/builtin"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/consider"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/europeremotely"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/getro"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/golangcafe"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/himalayas"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/remotifyeurope"
@@ -47,7 +50,11 @@ func TestIngestCollectorMap_keys(t *testing.T) {
 		ingest.NormalizeSourceID(vuejobs.SourceName),
 		ingest.NormalizeSourceID(golangcafe.SourceName),
 	}
-	m := ingestCollectorMap(er, wn, bi, him, re, wwr, wf, vj, gc)
+	portfolio := portfolioCollectors()
+	for _, id := range portfolio.ids {
+		want = append(want, id)
+	}
+	m := ingestCollectorMap(er, wn, bi, him, re, wwr, wf, vj, gc, portfolio.consider, portfolio.getro)
 	if len(m) != len(want) {
 		t.Fatalf("worker map len=%d want %d", len(m), len(want))
 	}
@@ -62,7 +69,14 @@ func TestIngestCollectorMap_keys(t *testing.T) {
 		}
 	}
 
-	noHim := ingestCollectorMap(er, wn, bi, nil, re, wwr, wf, vj, gc)
+	absent := ingestCollectorMap(er, wn, bi, him, re, wwr, wf, vj, gc, nil, nil)
+	for _, id := range portfolio.ids {
+		if _, ok := absent[id]; ok {
+			t.Fatalf("worker map has %q when portfolio slices are nil", id)
+		}
+	}
+
+	noHim := ingestCollectorMap(er, wn, bi, nil, re, wwr, wf, vj, gc, nil, nil)
 	if _, ok := noHim[ingest.NormalizeSourceID(himalayas.SourceName)]; ok {
 		t.Fatal("himalayas present when collector is nil")
 	}
@@ -70,11 +84,30 @@ func TestIngestCollectorMap_keys(t *testing.T) {
 		t.Fatal("golang_cafe missing when rod fetcher collector is set")
 	}
 
-	noCafe := ingestCollectorMap(er, wn, bi, him, re, wwr, wf, vj, nil)
+	noCafe := ingestCollectorMap(er, wn, bi, him, re, wwr, wf, vj, nil, nil, nil)
 	if _, ok := noCafe[ingest.NormalizeSourceID(golangcafe.SourceName)]; ok {
 		t.Fatal("golang_cafe present when rod fetcher is nil")
 	}
 	if _, ok := noCafe[ingest.NormalizeSourceID(himalayas.SourceName)]; !ok {
 		t.Fatal("himalayas missing when collector is set")
 	}
+}
+
+type portfolioSet struct {
+	consider []collectors.Collector
+	getro    []collectors.Collector
+	ids      []string
+}
+
+func portfolioCollectors() portfolioSet {
+	var set portfolioSet
+	for _, tenant := range consider.Tenants() {
+		set.consider = append(set.consider, stubCollector{name: tenant.SourceID})
+		set.ids = append(set.ids, ingest.NormalizeSourceID(tenant.SourceID))
+	}
+	for _, tenant := range getro.Tenants() {
+		set.getro = append(set.getro, stubCollector{name: tenant.SourceID})
+		set.ids = append(set.ids, ingest.NormalizeSourceID(tenant.SourceID))
+	}
+	return set
 }

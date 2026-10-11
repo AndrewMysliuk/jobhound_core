@@ -30,8 +30,11 @@ domain: software
 
 sources: [europe_remotely, working_nomads, himalayas, remotify_europe, we_work_remotely, wellfound, vue_jobs, golang_cafe, builtin]
 
-queries: [vue, typescript, react, golang, node, "AI native", "AI engineer", LLM]
-wellfound_roles: [frontend-engineer, full-stack-engineer, backend-engineer, artificial-intelligence-engineer]
+queries: [vue, typescript, react, golang, node]
+wellfound_roles: [frontend-engineer, full-stack-engineer, backend-engineer]
+
+location_countries: [US, DE, RO, GB]
+location_regions: [WORLDWIDE, EUROPE, EMEA]
 
 exclude_title:
   - recruiter
@@ -47,11 +50,12 @@ penalties:
 The three phrase lists in the sample show the shape. The real `andrew` file contains every phrase from `jobhound_frontend/app/utils/defaultStage2Exclude.ts`, classified once:
 
 - A phrase that names a role or a title ("recruiter", "product manager", "junior", "staff engineer") goes to `exclude_title`.
-- A phrase that locks a country or region other than a blanket USA ban ("uk only", "must be based in germany", "philippines") goes to `exclude_text`, together with stack and domain phrases ("php", "java", "kubernetes").
-- A phrase about visa, work permit, work authorization, right to work, citizenship, "must be based", or "must reside" goes to `penalties`, not to either exclude list.
-- A phrase that rejects the USA as a whole ("united states only", "us based applicants only", "eastern time", "overlap with us") is **not copied**. Europe and USA stay allowed because they are absent.
+- Stack and domain phrases ("php", "java", "kubernetes") go to `exclude_text`. Country names and "only / must be based" locks do not. Timezone locks ("pacific time", "apac timezone only") stay in `exclude_text`.
+- `location_countries` and `location_regions` are the country policy. A known scope stays when any country or region hits. An empty scope stays. `andrew` allows the US, the EU, Iceland, Liechtenstein, Norway, Switzerland, and the UK, plus regions `WORLDWIDE`, `EUROPE`, and `EMEA`.
+- A phrase about visa, work permit, right to work, or "must reside" outside the US goes to `penalties`. US work authorization and US citizenship ("authorized to work in the united states", "u.s. citizenship", "us work authorization") go to `exclude_text`.
+- A phrase that rejects the USA as a whole ("united states only", "us based applicants only", "eastern time", "overlap with us") is **not copied**.
 
-`queries` are the old `collectors/schema/queries.go` matrix **without** `frontend` and `full-stack`. `wellfound_roles` are the old Wellfound slugs, copied as URL segments. After `andrew.yaml` exists, delete `defaultStage2Exclude.ts`, the `EUROPE_HIRING_OK` rule in `app/utils/stagePayload.ts`, and `internal/collectors/schema/queries.go`.
+`queries` are `vue`, `typescript`, `react`, `golang`, `node`. `frontend` and `full-stack` are not queries. `wellfound_roles` are URL segments, not score phrases. After `andrew.yaml` exists, delete `defaultStage2Exclude.ts`, the `EUROPE_HIRING_OK` rule in `app/utils/stagePayload.ts`, and `internal/collectors/schema/queries.go`.
 
 `sources` entries must be known collector source ids. `queries` are ignored for catalog sources (`we_work_remotely`, `vue_jobs`, `golang_cafe`); Wellfound uses `wellfound_roles` and does not use `queries`. No `min_score` field. No dictionary keys: every entry is a literal phrase.
 
@@ -77,10 +81,12 @@ type Profile struct {
 	Domain         Domain
 	Sources        []string
 	Queries        []string
-	WellfoundRoles []string
-	ExcludeTitle   []string
-	ExcludeText    []string
-	Penalties      []string
+	WellfoundRoles    []string
+	LocationCountries []string
+	LocationRegions   []string
+	ExcludeTitle      []string
+	ExcludeText       []string
+	Penalties         []string
 }
 ```
 
@@ -117,6 +123,7 @@ const (
 	SignalPenalty        SignalCode = "PENALTY"
 	SignalCutExcludeTitle SignalCode = "CUT_EXCLUDE_TITLE"
 	SignalCutExcludeText  SignalCode = "CUT_EXCLUDE_TEXT"
+	SignalCutLocation     SignalCode = "CUT_LOCATION"
 )
 
 // Signal is one fired phrase with its contribution.
@@ -196,7 +203,7 @@ var (
 | `url`, `apply_url` | canonical listing URL and apply/ATS link; ATS-sourced values win over aggregator values |
 | `company`, `company_key` | display name and the normalized key (lowercased, `Inc` / `GmbH` / `Ltd` / `LLC` / `SRL` stripped). `company_key` is the join target for the future `companies` table |
 | `company_website` | when a board reports it; empty otherwise |
-| `location` | `JSONB` `{ "type": "remote\|hybrid\|office", "regions": [], "countries": [], "timezone": "", "raw": "" }`. Collapses `is_remote`, `country_code`, `hiring_countries`, `hiring_regions`, `hiring_raw`, `timezone_offsets`. Display only. Country policy does not read this object. Only `raw` is copied into `jobs.id` |
+| `location` | `JSONB` `{ "type": "remote\|hybrid\|office", "regions": [], "countries": [], "timezone": "", "raw": "" }`. Collapses `is_remote`, `country_code`, `hiring_countries`, `hiring_regions`, `hiring_raw`, `timezone_offsets`. Scoring reads `countries` and `regions`. Only `raw` is copied into `jobs.id` |
 | `first_seen_at`, `last_seen_at` | set on insert; only `last_seen_at` moves on re-ingest. Scoring filters on `first_seen_at`. Retention deletes on `last_seen_at` |
 
 **Dropped columns:** `stage1_status` (every row in `jobs` is ingested by definition), `user_id` (unused, returns with auth), plus the six location columns listed above.

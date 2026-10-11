@@ -14,7 +14,9 @@ import (
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/browserfetch"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/builtin"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/consider"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/europeremotely"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/getro"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/golangcafe"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/himalayas"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/multi"
@@ -37,19 +39,20 @@ import (
 // builtinCfg from config.Load().BuiltinCollector (JOBHOUND_COLLECTOR_BUILTIN_*).
 // browserCfg from config.Load().Browser (JOBHOUND_BROWSER_*); Enabled defaults true unless JOBHOUND_BROWSER_ENABLED=0.
 // When Enabled and builtinCfg.UseBrowserForHTML, a rod-backed fetcher is shared by Built In and Golang Cafe.
-func MVPCollectors(ctx context.Context, httpClient *http.Client, dataDir string, builtinCfg config.BuiltinCollectorConfig, himCfg config.HimalayasCollectorConfig, browserCfg config.BrowserConfig, erCfg config.EuropeRemotelyConfig) (europeRemotely, workingNomads, builtIn, himal, remotifyEurope, weWorkRemotely, wellfoundColl, vueJobs, golangCafe collectors.Collector, err error) {
+// considerBoards and getroBoards are one collector per Tenants() row, sharing httpClient and the country resolver.
+func MVPCollectors(ctx context.Context, httpClient *http.Client, dataDir string, builtinCfg config.BuiltinCollectorConfig, himCfg config.HimalayasCollectorConfig, browserCfg config.BrowserConfig, erCfg config.EuropeRemotelyConfig) (europeRemotely, workingNomads, builtIn, himal, remotifyEurope, weWorkRemotely, wellfoundColl, vueJobs, golangCafe collectors.Collector, considerBoards, getroBoards []collectors.Collector, err error) {
 	if httpClient == nil {
 		httpClient = utils.NewHTTPClient()
 	}
 	cr, err := loadCountryResolver(dataDir)
 	if err != nil {
-		return nil, nil, nil, nil, nil, nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, err
 	}
 	erHTTP := httpClient
 	if proxy := strings.TrimSpace(erCfg.ProxyURL); proxy != "" {
 		c, perr := utils.HTTPClientWithProxy(httpClient, proxy)
 		if perr != nil {
-			return nil, nil, nil, nil, nil, nil, nil, nil, nil, fmt.Errorf("collectors bootstrap: europe remotely proxy: %w", perr)
+			return nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, fmt.Errorf("collectors bootstrap: europe remotely proxy: %w", perr)
 		}
 		erHTTP = c
 	}
@@ -59,7 +62,7 @@ func MVPCollectors(ctx context.Context, httpClient *http.Client, dataDir string,
 	}
 	siteBase, err := europeremotely.DefaultSiteBase()
 	if err != nil {
-		return nil, nil, nil, nil, nil, nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, err
 	}
 	feedForm := url.Values{
 		"action":  {"erj_ajax_search"},
@@ -90,7 +93,7 @@ func MVPCollectors(ctx context.Context, httpClient *http.Client, dataDir string,
 			NoSandbox:   browserCfg.NoSandbox,
 		})
 		if ferr != nil {
-			return nil, nil, nil, nil, nil, nil, nil, nil, nil, fmt.Errorf("collectors bootstrap: browser fetcher: %w", ferr)
+			return nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, fmt.Errorf("collectors bootstrap: browser fetcher: %w", ferr)
 		}
 		htmlFetch = f
 		useBuiltinBrowser = true
@@ -122,7 +125,25 @@ func MVPCollectors(ctx context.Context, httpClient *http.Client, dataDir string,
 	if htmlFetch != nil {
 		gc = &golangcafe.GolangCafe{HTMLDocumentFetcher: htmlFetch, Countries: cr}
 	}
-	return er, wn, builtinColl, him, re, wwr, wf, vj, gc, nil
+	considerRows := consider.Tenants()
+	considerColls := make([]collectors.Collector, 0, len(considerRows))
+	for _, tenant := range considerRows {
+		considerColls = append(considerColls, &consider.Board{
+			HTTPClient: httpClient,
+			Countries:  cr,
+			Tenant:     tenant,
+		})
+	}
+	getroRows := getro.Tenants()
+	getroColls := make([]collectors.Collector, 0, len(getroRows))
+	for _, tenant := range getroRows {
+		getroColls = append(getroColls, &getro.Board{
+			HTTPClient: httpClient,
+			Countries:  cr,
+			Tenant:     tenant,
+		})
+	}
+	return er, wn, builtinColl, him, re, wwr, wf, vj, gc, considerColls, getroColls, nil
 }
 
 // MVPMulti wraps MVP collectors in one collectors.Collector (Himalayas and Golang Cafe when non-nil).
@@ -146,7 +167,7 @@ func MVPMulti(
 
 // MVPCollector returns a single collectors.Collector that runs all MVP sources.
 func MVPCollector(ctx context.Context, httpClient *http.Client, dataDir string, builtinCfg config.BuiltinCollectorConfig, himCfg config.HimalayasCollectorConfig, browserCfg config.BrowserConfig, erCfg config.EuropeRemotelyConfig, log *zerolog.Logger) (collectors.Collector, error) {
-	er, wn, bi, h, re, wwr, wf, vj, gc, err := MVPCollectors(ctx, httpClient, dataDir, builtinCfg, himCfg, browserCfg, erCfg)
+	er, wn, bi, h, re, wwr, wf, vj, gc, _, _, err := MVPCollectors(ctx, httpClient, dataDir, builtinCfg, himCfg, browserCfg, erCfg)
 	if err != nil {
 		return nil, err
 	}

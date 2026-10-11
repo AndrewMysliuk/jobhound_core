@@ -3,7 +3,7 @@ name: Andrew
 domain: software
 
 sources:
-  - europe_remotely
+  # - europe_remotely
   - working_nomads
   - himalayas
   - remotify_europe
@@ -12,6 +12,29 @@ sources:
   - vue_jobs
   - golang_cafe
   - builtin
+  - consider_andreessen_horowitz
+  - consider_lightspeed
+  - consider_sequoia_capital
+  - consider_gv
+  - consider_bessemer_ventures
+  - consider_balderton_capital
+  - consider_notion_capital
+  - consider_atlantic_labs
+  - consider_battery_ventures
+  - consider_panoramic_ventures
+  - consider_ivp
+  - consider_kleiner_perkins
+  - consider_nea
+  - consider_sequoia_capital_india
+  - consider_union_square_ventures
+  - getro_accel
+  - getro_general_catalyst
+  - getro_atomico
+  - getro_hv_capital
+  - getro_point_nine
+  - getro_earlybird
+  - getro_firstminute
+  - getro_craft_ventures
 
 queries:
   - vue
@@ -19,44 +42,70 @@ queries:
   - react
   - golang
   - node
-  - "AI native"
-  - "AI engineer"
-  - LLM
 
 wellfound_roles:
   - frontend-engineer
   - full-stack-engineer
   - backend-engineer
-  - artificial-intelligence-engineer
+
+location_countries:
+  - US
+  - AT
+  - BE
+  - BG
+  - CY
+  - CZ
+  - DE
+  - DK
+  - EE
+  - ES
+  - FI
+  - FR
+  - GR
+  - HR
+  - HU
+  - IE
+  - IT
+  - LT
+  - LU
+  - LV
+  - MT
+  - NL
+  - PL
+  - PT
+  - RO
+  - SE
+  - SI
+  - SK
+  - IS
+  - LI
+  - NO
+  - CH
+  - GB
+
+location_regions:
+  - WORLDWIDE
+  - EUROPE
+  - EMEA
 
 exclude_title:
   - "sdr"
   - "appointment setter"
-  - "sales development representative"
-  - "quality assurance rater"
   - "operations assistant"
   - "executive assistant"
   - "recruiter"
   - "talent acquisition"
-  - "account manager"
-  - "product marketing"
+  - "manager"
   - "marketing"
   - "accountant"
-  - "test analyst"
   - "compliance officer"
   - "video editor"
   - "visual content creator"
   - "cold caller"
   - "customer retention"
-  - "retention manager"
-  - "business analyst"
-  - "process analyst"
-  - "project manager"
   - "technical writer"
-  - "conversation designer"
-  - "ui/ux designer"
+  - "designer"
   - "content moderator"
-  - "social media analyst"
   - "technical mentor"
   - "independent contractor mentor"
   - "business unit head"
@@ -64,11 +113,9 @@ exclude_title:
   - "machine learning scientist"
   - "ml engineer"
   - "data engineer"
-  - "java developer"
-  - "java engineer"
+  - "java"
   - "power bi developer"
   - "shopify developer"
-  - "junior role"
   - "intern"
   - "internship"
   - "entry level"
@@ -85,9 +132,7 @@ exclude_title:
   - "recorder"
   - "account executive"
   - "business development"
-  - "pre-sales"
   - "presales"
-  - "sales engineer"
   - "solution engineer"
   - "solutions engineer"
   - "sales"
@@ -103,11 +148,8 @@ exclude_title:
   - "customer engineer"
   - "technical support"
   - "support engineer"
-  - "support advisor"
   - "virtual assistant"
   - "customer evidence"
-  - "financial advisor"
-  - "wealth advisor"
   - "advisor"
   - "accounts payable"
   - "legal counsel"
@@ -120,19 +162,10 @@ exclude_title:
   - "scientific liaison"
   - "compensation"
   - "operations specialist"
-  - "operations manager"
-  - "partner manager"
   - "coordinator"
-  - "product designer"
-  - "ux designer"
-  - "graphic designer"
   - "content writer"
   - "course writer"
   - "creative producer"
-  - "education designer"
-  - "product manager"
-  - "program manager"
-  - "product director"
   - "product lead"
   - "owner"
   - "qa specialist"
@@ -140,12 +173,13 @@ exclude_title:
   - "qa engineer"
   - "test engineer"
   - "ios engineer"
+  - "swift developer"
+  - "swift engineer"
   - "mobile engineer"
   - "ml ops"
   - "applied scientist"
   - "researcher"
   - "cv engineer"
-  - "engineering manager"
   - "director"
   - "head of"
   - "junior"
@@ -155,22 +189,15 @@ exclude_title:
   - "developer advocate"
   - "developer relations"
   - "developer engagement"
-  - "community manager"
-  - "solutions architect"
-  - "solution architect"
-  - "systems architect"
+  - "architect"
   - "professional services"
   - "technical specialist"
   - "consultant"
-  - "soc analyst"
   - "strategist"
-  - "process owner"
   - "technician"
   - "analyst"
   - "security engineer"
   - "security operations"
-  - "security analyst"
-  - "security architect"
   - "compliance engineer"
   - "privacy engineer"
   - "trust and safety"
@@ -184,7 +211,6 @@ exclude_title:
   - "platform engineer"
   - "infrastructure engineer"
   - "cloud engineer"
-  - "cloud architect"
   - "release engineer"
   - "build engineer"
   - "engineering productivity"
@@ -229,6 +255,8 @@ exclude_text:
   - "scikit-learn"
   - "transformer architecture"
   - "fine-tuning"
+  - "fine tuning"
+  - "finetuning"
   - "knowledge automation"
   - "semantic technologies"
   - "spring boot"
@@ -242,7 +270,8 @@ exclude_text:
   - "workday"
   - "c#"
   - ".net"
-  - "ruby on rails"
+  - "asp.net"
+  - "dotnet"
   - "django"
   - "rust"
   - "power platform"
@@ -250,35 +279,21 @@ exclude_text:
   - "power automate"
   - "embedded systems"
   - "avionics"
-  - "automotive safety"
   - "iso 26262"
-  - "must be based in germany"
-  - "based in the philippines"
-  - "remote within south africa"
-  - "remote from egypt"
-  - "remote from tunisia"
-  - "americas only"
-  - "latin am"
   - "apac timezone only"
-  - "fraud"
-  - "blockchain"
   - "audio transcription"
   - "generative audio"
   - "data collection"
-  - "social media"
-  - "monetization"
   - "growth analytics"
   - "support teams"
   - "clinical supply"
   - "creative art"
   - "test automation"
   - "react native"
+  - "react-native"
   - "flutter"
-  - "android"
   - "mobile design"
-  - "machine learning"
   - "robotics"
-  - "java"
   - "ruby"
   - "drupal"
   - "symfony"
@@ -311,25 +326,16 @@ exclude_text:
   - "siem"
   - "edr"
   - "cnapp"
-  - "soc 2"
-  - "iso 27001"
   - "identity and access"
   - "kubernetes operator"
-  - "terraform"
-  - "ansible"
-  - "jenkins"
-  - "gpu"
   - "hpc"
   - "slurm"
   - "c++"
-  - "c/c++"
   - "clojure"
   - "scala"
   - "elixir"
-  - "swift"
   - "objective-c"
   - "electron"
-  - "electron.js"
   - "webrtc"
   - "geospatial"
   - "desktop app"
@@ -339,7 +345,6 @@ exclude_text:
   - "gambling"
   - "crypto"
   - "web3"
-  - "wallet"
   - "defi"
   - "healthtech"
   - "edtech"
@@ -349,33 +354,36 @@ exclude_text:
   - "staff augmentation"
   - "outsourcing"
   - "bpo"
-  - "must be based in the uk"
-  - "remote uk"
-  - "remote within the uk"
-  - "uk only"
-  - "russia"
-  - "must be based in canada"
-  - "remote canada"
-  - "canada only"
-  - "north america only"
-  - "us and canada"
-  - "remote within ireland"
-  - "remote within the netherlands"
-  - "based in the netherlands"
-  - "netherlands only"
-  - "remote poland"
-  - "remote within poland"
-  - "work from poland"
-  - "poland only"
-  - "remote portugal"
-  - "remote spain"
-  - "based in france"
-  - "remote within france"
-  - "anywhere in france"
-  - "must be based in spain"
-  - "northern ireland"
-  - "barbados"
+  - "pacific time"
   - "americas overlap"
+  - "authorized to work in the united states"
+  - "authorized to work in the u.s"
+  - "authorized to work in the us"
+  - "authorized to work in the usa"
+  - "authorized to work lawfully"
+  - "authorization to work in the us"
+  - "must reside in the us"
+  - "must reside in the eastern"
+  - "must be based in the us"
+  - "based in the united states"
+  - "based in the us"
+  - "reside in the united states"
+  - "located in the united states"
+  - "us based only"
+  - "hiring only within the u.s"
+  - "remote in the us"
+  - "remote in the usa"
+  - "remote in usa"
+  - "must live in the state"
+  - "u.s. citizen"
+  - "u.s. citizenship"
+  - "us citizenship"
+  - "us work authorization"
+  - "no visa sponsorship"
+  - "visa sponsorship is not available"
+  - "visa sponsorship: none"
+  - "without sponsorship"
+  - "no sponsorship needed"
   - "umowa o prac"
   - "thrive under pressure"
   - "hungry to achieve"
@@ -384,20 +392,12 @@ exclude_text:
   - "work hard, play hard"
   - "rockstar"
   - "ninja"
-  - "on-call rotation"
-  - "on call rotation"
   - "deferred compensation"
   - "compensation will be deferred"
 
 penalties:
   - "right to work in germany"
   - "must reside in switzerland"
-  - "must reside in the us"
   - "right to work in the uk"
   - "eligible to work in france"
   - "work permit required"
-  - "must be based in the us"
-  - "authorized to work in the us"
-  - "authorization to work in the us"
-  - "us citizenship"
-  - "u.s. citizenship"

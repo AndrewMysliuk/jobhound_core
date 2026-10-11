@@ -19,15 +19,20 @@ type Outcome struct {
 }
 
 // Evaluate applies one profile to one job. It does not read storage or the network.
-// Title excludes run first, then text excludes. A hit stops the pass.
-// Otherwise the bucket is PASSED, including a score of 0 or below.
+// Title excludes run first, then text excludes against the title, the description,
+// and the location line. Location countries and regions run after that.
+// A hit stops the pass. Otherwise the bucket is PASSED, including a score of 0 or below.
 func Evaluate(profile profileschema.Profile, job jobdata.Job) Outcome {
 	if phrase, ok := firstMatch(profile.ExcludeTitle, job.Title); ok {
 		return rejected(schema.SignalCutExcludeTitle, phrase)
 	}
 	text := jobText(job.Title, job.Description)
-	if phrase, ok := firstMatch(profile.ExcludeText, text); ok {
+	excludeText := jobText(text, job.Location.Raw)
+	if phrase, ok := firstMatch(profile.ExcludeText, excludeText); ok {
 		return rejected(schema.SignalCutExcludeText, phrase)
+	}
+	if terms, ok := cutLocation(profile, job.Location); ok {
+		return rejected(schema.SignalCutLocation, terms...)
 	}
 
 	var signals []schema.Signal
@@ -51,14 +56,59 @@ func Evaluate(profile profileschema.Profile, job jobdata.Job) Outcome {
 	return Outcome{Bucket: schema.BucketPassed, Score: score, Signals: signals}
 }
 
-func rejected(code schema.SignalCode, phrase string) Outcome {
+func rejected(code schema.SignalCode, terms ...string) Outcome {
 	return Outcome{
 		Bucket: schema.BucketRejected,
 		Signals: []schema.Signal{{
 			Code:  code,
-			Terms: []string{phrase},
+			Terms: terms,
 		}},
 	}
+}
+
+// cutLocation rejects a known hiring scope that misses the profile lists.
+// Empty countries and regions stay. Empty profile lists turn the check off.
+func cutLocation(profile profileschema.Profile, loc jobdata.Location) ([]string, bool) {
+	allowedCountries := compact(profile.LocationCountries)
+	allowedRegions := compact(profile.LocationRegions)
+	if len(allowedCountries) == 0 && len(allowedRegions) == 0 {
+		return nil, false
+	}
+	countries := compact(loc.Countries)
+	regions := compact(loc.Regions)
+	if len(countries) == 0 && len(regions) == 0 {
+		return nil, false
+	}
+	if overlaps(allowedCountries, countries) || overlaps(allowedRegions, regions) {
+		return nil, false
+	}
+	terms := make([]string, 0, len(countries)+len(regions))
+	terms = append(terms, countries...)
+	terms = append(terms, regions...)
+	return terms, true
+}
+
+func compact(values []string) []string {
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		out = append(out, value)
+	}
+	return out
+}
+
+func overlaps(allowed, got []string) bool {
+	for _, code := range got {
+		for _, want := range allowed {
+			if strings.EqualFold(want, code) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func jobText(title, description string) string {

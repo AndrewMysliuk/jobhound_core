@@ -6,7 +6,9 @@ import (
 
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/builtin"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/consider"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/europeremotely"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/getro"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/golangcafe"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/himalayas"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/remotifyeurope"
@@ -44,6 +46,12 @@ const PathVueJobs = "POST /debug/collectors/vue_jobs"
 // PathGolangCafe is the registered method+path for the Golang Cafe debug fetch.
 const PathGolangCafe = "POST /debug/collectors/golang_cafe"
 
+// PathConsider is the registered method+path for the Consider debug fetch.
+const PathConsider = "POST /debug/collectors/consider"
+
+// PathGetro is the registered method+path for the Getro debug fetch.
+const PathGetro = "POST /debug/collectors/getro"
+
 // HTTPHandler wires debug routes on a ServeMux (omg-bo style: handler.go + registerRoutes + one file per route).
 type HTTPHandler struct {
 	mux   *http.ServeMux
@@ -67,12 +75,14 @@ type HTTPHandler struct {
 	wellfoundConcrete      *wellfound.Wellfound
 	vueJobsConcrete        *vuejobs.VueJobs
 	golangCafeConcrete     *golangcafe.GolangCafe
+	considerBoards         map[string]*consider.Board
+	getroBoards            map[string]*getro.Board
 }
 
 // NewHTTPHandler returns a handler with GET /health and POST /debug/collectors/* registered.
 // europeRemotely, workingNomads, and builtin must not be nil; himalayas may be nil (route returns 500).
 // Concrete types may be nil (tests); when set, POST bodies can override per-source settings without mutating bootstrap.
-// log is the binary root logger (e.g. from logging.NewRoot); use zerolog.Nop() in tests.
+// considerBoards and getroBoards may be nil; this constructor does not build boards. log is the binary root logger (e.g. from logging.NewRoot); use zerolog.Nop() in tests.
 func NewHTTPHandler(
 	europeRemotely, workingNomads, himalayasColl, builtinColl collectors.Collector,
 	remotifyEuropeColl, weWorkRemotelyColl, wellfoundColl, vueJobsColl, golangCafeColl collectors.Collector,
@@ -85,6 +95,8 @@ func NewHTTPHandler(
 	vueJobsConcrete *vuejobs.VueJobs,
 	golangCafeConcrete *golangcafe.GolangCafe,
 	log zerolog.Logger,
+	considerBoards map[string]*consider.Board,
+	getroBoards map[string]*getro.Board,
 ) *HTTPHandler {
 	h := &HTTPHandler{
 		mux:                    http.NewServeMux(),
@@ -106,6 +118,8 @@ func NewHTTPHandler(
 		wellfoundConcrete:      wellfoundConcrete,
 		vueJobsConcrete:        vueJobsConcrete,
 		golangCafeConcrete:     golangCafeConcrete,
+		considerBoards:         considerBoards,
+		getroBoards:            getroBoards,
 	}
 	h.registerRoutes()
 	h.chain = logging.RequestIDMiddleware(h.mux)
@@ -123,6 +137,8 @@ func (h *HTTPHandler) registerRoutes() {
 	h.mux.HandleFunc(PathWellfound, h.postWellfound)
 	h.mux.HandleFunc(PathVueJobs, h.postVueJobs)
 	h.mux.HandleFunc(PathGolangCafe, h.postGolangCafe)
+	h.mux.HandleFunc(PathConsider, h.postConsider)
+	h.mux.HandleFunc(PathGetro, h.postGetro)
 }
 
 // ServeHTTP applies request-id middleware then dispatches to registered routes.

@@ -245,3 +245,133 @@ func TestRunIngestSource_persistsJob(t *testing.T) {
 	require.False(t, first.IsZero())
 	require.False(t, last.IsZero())
 }
+
+type nopWatermarks struct{}
+
+func (nopWatermarks) GetCursor(context.Context, string) (string, error) { return "", nil }
+
+func (nopWatermarks) SetCursor(context.Context, string, string) error { return nil }
+
+type stubUnionCollector struct {
+	name       string
+	queries    []string
+	fetch      int
+	fetchQuery int
+	fetchIncr  int
+	fetchUnion int
+}
+
+func (s *stubUnionCollector) Name() string { return s.name }
+
+func (s *stubUnionCollector) Fetch(context.Context) ([]schema.Job, error) {
+	s.fetch++
+	return nil, nil
+}
+
+func (s *stubUnionCollector) FetchWithQuery(context.Context, string) ([]schema.Job, error) {
+	s.fetchQuery++
+	return nil, nil
+}
+
+func (s *stubUnionCollector) FetchIncremental(context.Context, string) ([]schema.Job, string, error) {
+	s.fetchIncr++
+	return nil, "", nil
+}
+
+func (s *stubUnionCollector) FetchUnion(_ context.Context, queries []string) ([]schema.Job, error) {
+	s.fetchUnion++
+	s.queries = append([]string(nil), queries...)
+	return []schema.Job{{
+		ID: "u1", Source: "src", Title: "t", Company: "c", URL: "https://u",
+		Description: "d", PostedAt: time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC),
+	}}, nil
+}
+
+var (
+	_ collectors.Collector            = (*stubUnionCollector)(nil)
+	_ collectors.QueryFetcher         = (*stubUnionCollector)(nil)
+	_ collectors.IncrementalCollector = (*stubUnionCollector)(nil)
+	_ collectors.UnionQueryFetcher    = (*stubUnionCollector)(nil)
+)
+
+func TestRunIngestSource_queriesCallFetchUnion(t *testing.T) {
+	ctx := context.Background()
+	mr, err := miniredis.Run()
+	require.NoError(t, err)
+	t.Cleanup(mr.Close)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	t.Cleanup(func() { _ = rdb.Close() })
+
+	src := "unionsrc"
+	col := &stubUnionCollector{name: src}
+	mj := &memJobs{}
+	acts := &IngestActivities{
+		Redis:      ingest.NewRedisCoordinator(rdb),
+		Jobs:       mj,
+		Watermarks: nopWatermarks{},
+		Collectors: map[string]collectors.Collector{
+			ingest.NormalizeSourceID(src): col,
+		},
+		Log: logging.Nop(),
+	}
+
+	queries := []string{"vue", "golang"}
+	out, err := acts.RunIngestSource(ctx, ingestschema.IngestSourceInput{
+		SourceID:        src,
+		Query:           "vue",
+		Queries:         queries,
+		ExplicitRefresh: true,
+	})
+	require.NoError(t, err)
+	require.Equal(t, 1, out.JobsWritten)
+	require.False(t, out.UsedIncremental)
+	require.Equal(t, 1, col.fetchUnion)
+	require.Equal(t, queries, col.queries)
+	require.Equal(t, 0, col.fetch)
+	require.Equal(t, 0, col.fetchQuery)
+	require.Equal(t, 0, col.fetchIncr)
+	require.Equal(t, 1, mj.saved)
+}
+
+type stubPlainCollector struct {
+	name  string
+	fetch int
+}
+
+func (s *stubPlainCollector) Name() string { return s.name }
+
+func (s *stubPlainCollector) Fetch(context.Context) ([]schema.Job, error) {
+	s.fetch++
+	return nil, nil
+}
+
+func TestRunIngestSource_queriesWithoutUnionFetcher(t *testing.T) {
+	ctx := context.Background()
+	mr, err := miniredis.Run()
+	require.NoError(t, err)
+	t.Cleanup(mr.Close)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	t.Cleanup(func() { _ = rdb.Close() })
+
+	src := "plainsrc"
+	col := &stubPlainCollector{name: src}
+	acts := &IngestActivities{
+		Redis:      ingest.NewRedisCoordinator(rdb),
+		Jobs:       &memJobs{},
+		Watermarks: nopWatermarks{},
+		Collectors: map[string]collectors.Collector{
+			ingest.NormalizeSourceID(src): col,
+		},
+		Log: logging.Nop(),
+	}
+
+	_, err = acts.RunIngestSource(ctx, ingestschema.IngestSourceInput{
+		SourceID: src,
+		Queries:  []string{"vue", "golang"},
+	})
+	require.Error(t, err)
+	require.NotContains(t, err.Error(), "unknown source_id")
+	require.NotContains(t, err.Error(), "429")
+	require.NotContains(t, err.Error(), "collector tenant unavailable")
+	require.Equal(t, 0, col.fetch)
+}

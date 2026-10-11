@@ -15,7 +15,15 @@ func mergeIngestJob(existing, incoming schema.Job, now time.Time) schema.Job {
 	incomingATS := sourcesIncludeATS(append(append([]string{}, incoming.Sources...), incoming.Source))
 	out.URL = preferURL(existing.URL, incoming.URL, existingATS, incomingATS)
 	out.ApplyURL = preferURL(existing.ApplyURL, incoming.ApplyURL, existingATS, incomingATS)
+	out.CompanyWebsite = fillCompanyWebsite(existing.CompanyWebsite, incoming.CompanyWebsite)
 	return out
+}
+
+func fillCompanyWebsite(existing, incoming string) string {
+	if strings.TrimSpace(existing) == "" && strings.TrimSpace(incoming) != "" {
+		return strings.TrimSpace(incoming)
+	}
+	return existing
 }
 
 func preferURL(existing, incoming string, existingATS, incomingATS bool) string {

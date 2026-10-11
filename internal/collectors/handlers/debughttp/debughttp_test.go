@@ -40,7 +40,7 @@ func (s stubCollector) Fetch(context.Context) ([]schema.Job, error) {
 }
 
 func newTestHandler(er, wn, him, bi collectors.Collector, erConcrete *europeremotely.EuropeRemotely) *HTTPHandler {
-	return NewHTTPHandler(er, wn, him, bi, nil, nil, nil, nil, nil, nil, erConcrete, nil, nil, nil, nil, nil, nil, zerolog.Nop())
+	return NewHTTPHandler(er, wn, him, bi, nil, nil, nil, nil, nil, nil, erConcrete, nil, nil, nil, nil, nil, nil, zerolog.Nop(), nil, nil)
 }
 
 func TestHealth(t *testing.T) {
