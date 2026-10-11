@@ -29,7 +29,7 @@ type IngestActivities struct {
 }
 
 // RunIngestSource acquires the ingest lock, fetches via the collector,
-// upserts jobs via SaveIngest, updates the watermark when incremental, and sets cooldown.
+// upserts jobs via SaveIngest, and sets cooldown.
 func (a *IngestActivities) RunIngestSource(ctx context.Context, in ingestschema.IngestSourceInput) (*ingestschema.IngestSourceOutput, error) {
 	if a == nil || a.Redis == nil {
 		return nil, ingest.ErrNilRedisClient
@@ -64,8 +64,6 @@ func (a *IngestActivities) RunIngestSource(ctx context.Context, in ingestschema.
 	defer func() { _ = release(ctx) }()
 
 	var list []schema.Job
-	var usedIncr bool
-	var nextCursor string
 	if len(in.Queries) > 0 {
 		uf, ok := col.(collectors.UnionQueryFetcher)
 		if !ok {
@@ -92,18 +90,6 @@ func (a *IngestActivities) RunIngestSource(ctx context.Context, in ingestschema.
 				return nil, err
 			}
 		}
-	} else if inc, ok := col.(collectors.IncrementalCollector); ok {
-		usedIncr = true
-		cur, err := a.Watermarks.GetCursor(ctx, id)
-		if err != nil {
-			log.Error().Err(err).Msg("watermark get cursor")
-			return nil, err
-		}
-		list, nextCursor, err = inc.FetchIncremental(ctx, cur)
-		if err != nil {
-			log.Error().Err(err).Msg("fetch incremental")
-			return nil, err
-		}
 	} else {
 		list, err = col.Fetch(ctx)
 		if err != nil {
@@ -112,9 +98,7 @@ func (a *IngestActivities) RunIngestSource(ctx context.Context, in ingestschema.
 		}
 	}
 
-	out := &ingestschema.IngestSourceOutput{
-		UsedIncremental: usedIncr,
-	}
+	out := &ingestschema.IngestSourceOutput{}
 	for _, j := range list {
 		skipped, err := a.Jobs.SaveIngest(ctx, j)
 		if err != nil {
@@ -126,14 +110,6 @@ func (a *IngestActivities) RunIngestSource(ctx context.Context, in ingestschema.
 		} else {
 			out.JobsWritten++
 		}
-	}
-
-	if usedIncr {
-		if err := a.Watermarks.SetCursor(ctx, id, nextCursor); err != nil {
-			log.Error().Err(err).Msg("watermark set cursor")
-			return nil, err
-		}
-		out.WatermarkAdvanced = true
 	}
 
 	if err := a.Redis.RecordSuccessfulIngest(ctx, id, in.Query); err != nil {

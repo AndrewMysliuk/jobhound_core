@@ -21,28 +21,6 @@ import (
 	"gorm.io/gorm"
 )
 
-type stubIncrCollector struct {
-	name string
-}
-
-func (s stubIncrCollector) Name() string { return s.name }
-
-func (stubIncrCollector) Fetch(context.Context) ([]schema.Job, error) {
-	panic("Fetch should not run for incremental collector in this test")
-}
-
-func (stubIncrCollector) FetchIncremental(_ context.Context, cursor string) ([]schema.Job, string, error) {
-	next := "v2"
-	if cursor == "v2" {
-		next = "v3"
-	}
-	j := schema.Job{
-		ID: "j1", Source: "src", Title: "t", Company: "c", URL: "https://u",
-		Description: "d", PostedAt: time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC),
-	}
-	return []schema.Job{j}, next, nil
-}
-
 type memJobs struct {
 	saved int
 }
@@ -68,54 +46,6 @@ func (m *memJobs) DeleteJobsLastSeenBeforeUTC(context.Context, time.Time) (int64
 
 var _ jobs.JobRepository = (*memJobs)(nil)
 
-func TestRunIngestSource_incrementalWatermark(t *testing.T) {
-	ctx := context.Background()
-	mr, err := miniredis.Run()
-	require.NoError(t, err)
-	t.Cleanup(mr.Close)
-	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	t.Cleanup(func() { _ = rdb.Close() })
-
-	memName := strings.ReplaceAll(t.Name(), "/", "_")
-	db, err := gorm.Open(sqlite.Open("file:"+memName+"?mode=memory&cache=private"), &gorm.Config{})
-	require.NoError(t, err)
-	require.NoError(t, db.Exec(`
-		CREATE TABLE ingest_watermarks (
-			source_id TEXT NOT NULL,
-			cursor TEXT,
-			updated_at TIMESTAMP NOT NULL,
-			PRIMARY KEY (source_id)
-		)
-	`).Error)
-
-	src := "testsrc"
-	acts := &IngestActivities{
-		Redis:      ingest.NewRedisCoordinator(rdb),
-		Jobs:       &memJobs{},
-		Watermarks: ingest.NewGormWatermarkStore(pgsql.NewGetter(db)),
-		Collectors: map[string]collectors.Collector{
-			ingest.NormalizeSourceID(src): stubIncrCollector{name: src},
-		},
-		Log: logging.Nop(),
-	}
-
-	out, err := acts.RunIngestSource(ctx, ingestschema.IngestSourceInput{SourceID: src, ExplicitRefresh: false})
-	require.NoError(t, err)
-	require.True(t, out.UsedIncremental)
-	require.True(t, out.WatermarkAdvanced)
-	require.Equal(t, 1, out.JobsWritten)
-
-	var cur string
-	require.NoError(t, db.Raw(`SELECT cursor FROM ingest_watermarks WHERE source_id = ?`, ingest.NormalizeSourceID(src)).Scan(&cur).Error)
-	require.Equal(t, "v2", cur)
-
-	out2, err := acts.RunIngestSource(ctx, ingestschema.IngestSourceInput{SourceID: src, ExplicitRefresh: true})
-	require.NoError(t, err)
-	require.NoError(t, db.Raw(`SELECT cursor FROM ingest_watermarks WHERE source_id = ?`, ingest.NormalizeSourceID(src)).Scan(&cur).Error)
-	require.Equal(t, "v3", cur)
-	require.Equal(t, 1, out2.JobsWritten)
-}
-
 type stubMultiCollector struct {
 	name string
 }
@@ -123,10 +53,6 @@ type stubMultiCollector struct {
 func (s stubMultiCollector) Name() string { return s.name }
 
 func (stubMultiCollector) Fetch(context.Context) ([]schema.Job, error) {
-	panic("Fetch not used")
-}
-
-func (stubMultiCollector) FetchIncremental(_ context.Context, _ string) ([]schema.Job, string, error) {
 	old := schema.Job{
 		ID: "old", Source: "src", Title: "t", Company: "c", URL: "https://old",
 		Description: "d", PostedAt: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC),
@@ -135,7 +61,7 @@ func (stubMultiCollector) FetchIncremental(_ context.Context, _ string) ([]schem
 		ID: "fresh", Source: "src", Title: "t", Company: "c", URL: "https://fresh",
 		Description: "d", PostedAt: time.Date(2026, 4, 9, 0, 0, 0, 0, time.UTC),
 	}
-	return []schema.Job{old, fresh}, "next", nil
+	return []schema.Job{old, fresh}, nil
 }
 
 func TestRunIngestSource_savesEveryFetchedJob(t *testing.T) {
@@ -257,7 +183,6 @@ type stubUnionCollector struct {
 	queries    []string
 	fetch      int
 	fetchQuery int
-	fetchIncr  int
 	fetchUnion int
 }
 
@@ -273,11 +198,6 @@ func (s *stubUnionCollector) FetchWithQuery(context.Context, string) ([]schema.J
 	return nil, nil
 }
 
-func (s *stubUnionCollector) FetchIncremental(context.Context, string) ([]schema.Job, string, error) {
-	s.fetchIncr++
-	return nil, "", nil
-}
-
 func (s *stubUnionCollector) FetchUnion(_ context.Context, queries []string) ([]schema.Job, error) {
 	s.fetchUnion++
 	s.queries = append([]string(nil), queries...)
@@ -288,10 +208,9 @@ func (s *stubUnionCollector) FetchUnion(_ context.Context, queries []string) ([]
 }
 
 var (
-	_ collectors.Collector            = (*stubUnionCollector)(nil)
-	_ collectors.QueryFetcher         = (*stubUnionCollector)(nil)
-	_ collectors.IncrementalCollector = (*stubUnionCollector)(nil)
-	_ collectors.UnionQueryFetcher    = (*stubUnionCollector)(nil)
+	_ collectors.Collector         = (*stubUnionCollector)(nil)
+	_ collectors.QueryFetcher      = (*stubUnionCollector)(nil)
+	_ collectors.UnionQueryFetcher = (*stubUnionCollector)(nil)
 )
 
 func TestRunIngestSource_queriesCallFetchUnion(t *testing.T) {
@@ -329,7 +248,6 @@ func TestRunIngestSource_queriesCallFetchUnion(t *testing.T) {
 	require.Equal(t, queries, col.queries)
 	require.Equal(t, 0, col.fetch)
 	require.Equal(t, 0, col.fetchQuery)
-	require.Equal(t, 0, col.fetchIncr)
 	require.Equal(t, 1, mj.saved)
 }
 

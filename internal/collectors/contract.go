@@ -14,13 +14,6 @@ type Collector interface {
 	Fetch(ctx context.Context) ([]schema.Job, error)
 }
 
-// IncrementalCollector is optional: sources that support watermark-based fetch (006).
-// Implementations return an opaque nextCursor for Postgres ingest_watermarks; empty nextCursor clears advancement for that run.
-type IncrementalCollector interface {
-	Collector
-	FetchIncremental(ctx context.Context, cursor string) (jobs []schema.Job, nextCursor string, err error)
-}
-
 // QueryFetcher fetches listings for one search string (keyword or Wellfound role slug).
 // When query is empty, implementations should behave like [Collector.Fetch].
 type QueryFetcher interface {

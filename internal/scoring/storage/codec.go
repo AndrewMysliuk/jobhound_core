@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 
 	jobdata "github.com/andrewmysliuk/jobhound_core/internal/domain/schema"
-	jobsstorage "github.com/andrewmysliuk/jobhound_core/internal/jobs/storage"
+	jobutils "github.com/andrewmysliuk/jobhound_core/internal/jobs/utils"
 	"github.com/andrewmysliuk/jobhound_core/internal/scoring/schema"
 )
 
@@ -55,7 +55,7 @@ func decodeLocation(b []byte) (jobdata.Location, error) {
 }
 
 func decodeSources(b []byte) ([]string, error) {
-	sources, err := jobsstorage.ParseSourceIDs(string(b))
+	sources, err := jobutils.ParseSourceIDs(string(b))
 	if err != nil {
 		return nil, err
 	}

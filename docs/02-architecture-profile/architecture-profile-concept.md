@@ -1,6 +1,6 @@
 # Architecture profile — concept
 
-> **Sequence 2.** Next after [`docs/01-profiles-and-scoring/`](../01-profiles-and-scoring/profiles-and-scoring-concept.md). Then [`docs/03-vc-portfolio-boards/`](../03-vc-portfolio-boards/vc-portfolio-boards-concept.md), then [`docs/04-companies-and-ats/`](../04-companies-and-ats/companies-and-ats-concept.md).
+> **Sequence 2.** Next: [`docs/04-companies-and-ats/`](../04-companies-and-ats/companies-and-ats-concept.md).
 > **Backlog.** Separate slice. Profiles-and-scoring only reserves `domain: architecture`. It does not create `architecture.yaml` or these collectors. Contracts and tasks stay absent until this slice is picked up.
 > Checked 2026-10-10. Roles: Architectural Designer, Architectural Assistant, Landscape Designer.
 

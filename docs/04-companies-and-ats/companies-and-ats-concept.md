@@ -1,6 +1,6 @@
 # Company database and direct ATS polling — concept
 
-> **Sequence 4.** After [`docs/03-vc-portfolio-boards/`](../03-vc-portfolio-boards/vc-portfolio-boards-concept.md). Depends on [`docs/01-profiles-and-scoring/`](../01-profiles-and-scoring/profiles-and-scoring-concept.md) shipping first.
+> **Sequence 4.** After [`docs/02-architecture-profile/`](../02-architecture-profile/architecture-profile-concept.md).
 > Contracts and tasks files are intentionally absent until this slice is picked up.
 
 ## Why
@@ -12,7 +12,7 @@ Meanwhile the aggregators already hand us the one thing needed to bypass them: a
 **New solution:**
 
 1. Companies are written into the database **once**, then checked. Re-discovering a known company from an aggregator on every run is wasted work: the ATS board is public, and the slug does not change.
-2. Discovery only adds a row that is not already stored. Inputs, cheapest first: the manual company table the user already keeps, VC portfolio boards ([`docs/03-vc-portfolio-boards/`](../03-vc-portfolio-boards/vc-portfolio-boards-concept.md)), and aggregators that already return an apply URL for free.
+2. Discovery only adds a row that is not already stored. Inputs, cheapest first: the manual company table the user already keeps, VC portfolio boards, and aggregators that already return an apply URL for free.
 3. A resolver works out each company's **ATS and board slug**, primarily by parsing the apply URL. It runs for `PENDING` rows only.
 4. Every later run polls the stored `RESOLVED` companies directly on their ATS board. That is the vacancy source. The aggregator drops out of the path for that company.
 5. Company rows accumulate **tech tags** from their recent vacancies, which feeds the "known company with matching stack" scoring signal left unimplemented in v2.

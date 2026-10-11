@@ -51,9 +51,7 @@ func TestIngestCollectorMap_keys(t *testing.T) {
 		ingest.NormalizeSourceID(golangcafe.SourceName),
 	}
 	portfolio := portfolioCollectors()
-	for _, id := range portfolio.ids {
-		want = append(want, id)
-	}
+	want = append(want, portfolio.ids...)
 	m := ingestCollectorMap(er, wn, bi, him, re, wwr, wf, vj, gc, portfolio.consider, portfolio.getro)
 	if len(m) != len(want) {
 		t.Fatalf("worker map len=%d want %d", len(m), len(want))

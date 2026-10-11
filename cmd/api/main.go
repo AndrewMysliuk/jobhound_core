@@ -11,17 +11,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/andrewmysliuk/jobhound_core/internal/collectors/builtin"
-	"github.com/andrewmysliuk/jobhound_core/internal/collectors/consider"
-	"github.com/andrewmysliuk/jobhound_core/internal/collectors/europeremotely"
-	"github.com/andrewmysliuk/jobhound_core/internal/collectors/getro"
-	"github.com/andrewmysliuk/jobhound_core/internal/collectors/golangcafe"
-	"github.com/andrewmysliuk/jobhound_core/internal/collectors/himalayas"
-	"github.com/andrewmysliuk/jobhound_core/internal/collectors/remotifyeurope"
-	"github.com/andrewmysliuk/jobhound_core/internal/collectors/vuejobs"
-	"github.com/andrewmysliuk/jobhound_core/internal/collectors/wellfound"
-	"github.com/andrewmysliuk/jobhound_core/internal/collectors/weworkremotely"
-	"github.com/andrewmysliuk/jobhound_core/internal/collectors/workingnomads"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/sourceids"
 	"github.com/andrewmysliuk/jobhound_core/internal/config"
 	jobsstorage "github.com/andrewmysliuk/jobhound_core/internal/jobs/storage"
 	"github.com/andrewmysliuk/jobhound_core/internal/platform/logging"
@@ -36,28 +26,6 @@ import (
 )
 
 const shutdownTimeout = 30 * time.Second
-
-// knownCollectorSourceIDs is the allow-list for profile YAML sources.
-var knownCollectorSourceIDs = []string{
-	europeremotely.SourceName,
-	workingnomads.SourceName,
-	himalayas.SourceName,
-	remotifyeurope.SourceName,
-	weworkremotely.SourceName,
-	wellfound.SourceName,
-	vuejobs.SourceName,
-	golangcafe.SourceName,
-	builtin.SourceName,
-}
-
-func init() {
-	for _, tenant := range consider.Tenants() {
-		knownCollectorSourceIDs = append(knownCollectorSourceIDs, tenant.SourceID)
-	}
-	for _, tenant := range getro.Tenants() {
-		knownCollectorSourceIDs = append(knownCollectorSourceIDs, tenant.SourceID)
-	}
-}
 
 func main() {
 	appCfg, err := config.Load()
@@ -103,7 +71,7 @@ func main() {
 	defer temporalClient.Close()
 
 	getter := pgsql.NewGetter(gdb)
-	profileStore := profilesimpl.NewFileStore(appCfg.ProfilesDir, knownCollectorSourceIDs)
+	profileStore := profilesimpl.NewFileStore(appCfg.ProfilesDir, sourceids.KnownSourceIDs())
 	scoringSvc := scoringimpl.New(profileStore, scoringstorage.NewRepository(getter), jobsstorage.NewRepository(getter), &scoringworkflows.Starter{
 		Client:    temporalClient,
 		TaskQueue: temporalCfg.TaskQueue,

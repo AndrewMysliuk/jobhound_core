@@ -19,7 +19,6 @@ import (
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/getro"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/golangcafe"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/himalayas"
-	"github.com/andrewmysliuk/jobhound_core/internal/collectors/multi"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/remotifyeurope"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/utils"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/vuejobs"
@@ -27,7 +26,6 @@ import (
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/weworkremotely"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/workingnomads"
 	"github.com/andrewmysliuk/jobhound_core/internal/config"
-	"github.com/rs/zerolog"
 )
 
 // MVPCollectors returns Europe Remotely, Working Nomads, Built In, and optionally Himalayas as separate collectors.
@@ -144,34 +142,6 @@ func MVPCollectors(ctx context.Context, httpClient *http.Client, dataDir string,
 		})
 	}
 	return er, wn, builtinColl, him, re, wwr, wf, vj, gc, considerColls, getroColls, nil
-}
-
-// MVPMulti wraps MVP collectors in one collectors.Collector (Himalayas and Golang Cafe when non-nil).
-// Optional log: per-source Fetch failures log at Warn on multi.All when OnSourceError is unset.
-func MVPMulti(
-	europeRemotely, workingNomads, builtIn, himalayas,
-	remotifyEurope, weWorkRemotely, wellfoundColl, vueJobs, golangCafe collectors.Collector,
-	log *zerolog.Logger,
-) collectors.Collector {
-	list := []collectors.Collector{europeRemotely, workingNomads, builtIn}
-	if himalayas != nil {
-		list = append(list, himalayas)
-	}
-	for _, c := range []collectors.Collector{remotifyEurope, weWorkRemotely, wellfoundColl, vueJobs, golangCafe} {
-		if c != nil {
-			list = append(list, c)
-		}
-	}
-	return &multi.All{Collectors: list, Log: log}
-}
-
-// MVPCollector returns a single collectors.Collector that runs all MVP sources.
-func MVPCollector(ctx context.Context, httpClient *http.Client, dataDir string, builtinCfg config.BuiltinCollectorConfig, himCfg config.HimalayasCollectorConfig, browserCfg config.BrowserConfig, erCfg config.EuropeRemotelyConfig, log *zerolog.Logger) (collectors.Collector, error) {
-	er, wn, bi, h, re, wwr, wf, vj, gc, _, _, err := MVPCollectors(ctx, httpClient, dataDir, builtinCfg, himCfg, browserCfg, erCfg)
-	if err != nil {
-		return nil, err
-	}
-	return MVPMulti(er, wn, bi, h, re, wwr, wf, vj, gc, log), nil
 }
 
 func loadCountryResolver(dataDir string) (*utils.CountryResolver, error) {

@@ -9,6 +9,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/sourceids"
 	"github.com/andrewmysliuk/jobhound_core/internal/profiles"
 	"github.com/andrewmysliuk/jobhound_core/internal/profiles/schema"
 )
@@ -55,13 +56,18 @@ func TestFileStoreLoadsAndrew(t *testing.T) {
 		t.Fatalf("architecture.yaml present: %v", err)
 	}
 
-	store := NewFileStore(dir, contractSourceIDs)
+	store := NewFileStore(dir, sourceids.KnownSourceIDs())
 	got, err := store.Get(context.Background(), "andrew")
 	require.NoError(t, err)
 	require.Equal(t, "andrew", got.ID)
 	require.Equal(t, "Andrew", got.Name)
 	require.Equal(t, schema.DomainSoftware, got.Domain)
 	require.Equal(t, contractSourceIDs, got.Sources)
+	known := sourceids.KnownSourceIDs()
+	for _, id := range contractSourceIDs {
+		require.Contains(t, known, id)
+	}
+	require.Contains(t, known, "europe_remotely")
 	require.Equal(t, []string{"vue", "typescript", "react", "golang", "node"}, got.Queries)
 	require.Equal(t, []string{
 		"frontend-engineer",
@@ -78,7 +84,7 @@ func TestFileStoreLoadsAndrew(t *testing.T) {
 	}, got.LocationCountries)
 	require.Equal(t, []string{"WORLDWIDE", "EUROPE", "EMEA"}, got.LocationRegions)
 	require.Len(t, got.ExcludeTitle, 155)
-	require.Len(t, got.ExcludeText, 130)
+	require.Len(t, got.ExcludeText, 148)
 	require.Len(t, got.Penalties, 5)
 	require.Contains(t, got.ExcludeTitle, "recruiter")
 	require.Contains(t, got.ExcludeTitle, "manager")
@@ -146,7 +152,7 @@ exclude_text: []
 penalties: []
 min_score: 1
 `)
-	_, err := NewFileStore(dir, contractSourceIDs).Get(context.Background(), "sample")
+	_, err := NewFileStore(dir, sourceids.KnownSourceIDs()).Get(context.Background(), "sample")
 	require.ErrorIs(t, err, profiles.ErrProfileInvalid)
 }
 
@@ -164,14 +170,34 @@ exclude_title: []
 exclude_text: []
 penalties: []
 `)
-	_, err := NewFileStore(dir, contractSourceIDs).Get(context.Background(), "sample")
+	_, err := NewFileStore(dir, sourceids.KnownSourceIDs()).Get(context.Background(), "sample")
 	require.ErrorIs(t, err, profiles.ErrProfileInvalid)
+}
+
+func TestFileStoreAcceptsEuropeRemotely(t *testing.T) {
+	t.Parallel()
+	require.Contains(t, sourceids.KnownSourceIDs(), "europe_remotely")
+	dir := t.TempDir()
+	writeProfile(t, dir, "sample", `
+id: sample
+name: Sample
+domain: software
+sources: [europe_remotely]
+queries: []
+wellfound_roles: []
+exclude_title: []
+exclude_text: []
+penalties: []
+`)
+	got, err := NewFileStore(dir, sourceids.KnownSourceIDs()).Get(context.Background(), "sample")
+	require.NoError(t, err)
+	require.Equal(t, []string{"europe_remotely"}, got.Sources)
 }
 
 func TestFileStoreGetReadsFileAgain(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	store := NewFileStore(dir, contractSourceIDs)
+	store := NewFileStore(dir, sourceids.KnownSourceIDs())
 	writeProfile(t, dir, "sample", `
 id: sample
 name: Alpha
@@ -207,7 +233,7 @@ penalties: []
 
 func TestFileStoreUnknownID(t *testing.T) {
 	t.Parallel()
-	_, err := NewFileStore(t.TempDir(), contractSourceIDs).Get(context.Background(), "missing")
+	_, err := NewFileStore(t.TempDir(), sourceids.KnownSourceIDs()).Get(context.Background(), "missing")
 	require.ErrorIs(t, err, profiles.ErrProfileNotFound)
 }
 

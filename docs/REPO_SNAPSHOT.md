@@ -1,6 +1,6 @@
 ## 1. Purpose
 
-Repository remote `AndrewMysliuk/jobhound_core` (`go.mod` module: `github.com/andrewmysliuk/jobhound_core`; README: “jobhound_core”) is the JobHound backend: ingest job listings from public boards, persist one row per vacancy in PostgreSQL, score that pool with in-process phrase rules, and expose a JSON HTTP API. Role: backend / worker / debug collector process. The product UI is the sibling Nuxt app `jobhound_frontend` (section 2.6). There is no `jobhound_frontend/docs/01-profiles-and-scoring/`.
+Repository remote `AndrewMysliuk/jobhound_core` (`go.mod` module: `github.com/andrewmysliuk/jobhound_core`; README: “jobhound_core”) is the JobHound backend: ingest job listings from public boards, persist one row per vacancy in PostgreSQL, score that pool with in-process phrase rules, and expose a JSON HTTP API. Role: backend / worker / debug collector process. The product UI is the sibling Nuxt app `jobhound_frontend` (section 2.6).
 
 MVP is **single-tenant** (no auth). The unit of search is a **profile** loaded from YAML, not a slot. One profile is shipped: `andrew` (`domain: software`). Product HTTP is API-first (`cmd/api`). Collectors debug HTTP (`cmd/agent`) is development-only. Search phrases exist only in `config/profiles/*.yaml`. The browser does not send queries, excludes, or penalties.
 
@@ -82,7 +82,7 @@ The arrow from `cmd/api` to Temporal is the run start in section 2.3. `cmd/api` 
 
 ### 2.4 Collectors (what “ingest” actually hits)
 
-Every source implements `collectors.Collector` (`Name` + `Fetch`). Optional: `IncrementalCollector`, search fetch. Bootstrap: `internal/collectors/bootstrap.MVPCollectors`. The query strings come from the profile file, not from a Go matrix. Profile **name** is not a board query.
+Every source implements `collectors.Collector` (`Name` + `Fetch`). Optional: `QueryFetcher`, `UnionQueryFetcher`. Bootstrap: `internal/collectors/bootstrap.MVPCollectors`. The query strings come from the profile file, not from a Go matrix. Profile **name** is not a board query.
 
 | `Job.Source` | Site | Transport (fact) | Ingest children |
 |--------------|------|------------------|-----------------|
@@ -185,7 +185,7 @@ jobhound_core/
 ├── config/profiles/         # andrew.yaml (the only shipped profile)
 ├── data/                    # countries.json (ISO lookup for collectors)
 ├── docker/temporal/         # Temporal dynamic config for Compose
-├── docs/                    # REPO_SNAPSHOT.md + feature slices (01-profiles-and-scoring, 02-architecture-profile, 03-vc-portfolio-boards, 04-companies-and-ats)
+├── docs/                    # REPO_SNAPSHOT.md + feature slices (02-architecture-profile, 04-companies-and-ats)
 ├── internal/
 │   ├── config/              # JOBHOUND_* names + typed loaders only
 │   ├── domain/              # shared kernel: schema.Job, identity utils
@@ -372,7 +372,7 @@ From `internal/config` (single source). Values not listed.
 | `.cursor/rules/specify-rules.mdc` | yes | Always-applied: stack, `cmd/` vs `internal/`, collectors `schema/`, debughttp layout, Canonical Enum, publicapi JSON Schema, lint gate (`make lint` + fmt/vet; CI), product error registry (`WriteError`, handlers do not pick status or message), anti-patterns, testing, make targets |
 | `.cursor/templates/` | yes | `concept.md`, `schemas-contracts.md`, `tasks.md`, README |
 | `.cursor/skills/audit-feature-tasks/` | yes | audit `*-tasks.md` vs code |
-| `docs/` | `REPO_SNAPSHOT.md`, `01-profiles-and-scoring/`, `02-architecture-profile/`, `03-vc-portfolio-boards/`, `04-companies-and-ats/` | — |
+| `docs/` | `REPO_SNAPSHOT.md`, `02-architecture-profile/`, `04-companies-and-ats/` | — |
 
 ## 13. Documentation
 
@@ -380,7 +380,6 @@ From `internal/config` (single source). Values not listed.
 |------|----------|-------------------------------|
 | `README.md` | One paragraph + pointer to `.env.example` + Docker two-liner + host `cmd/ipv6proxy` sentence + migrate hint | Does not list binaries, API routes, or Compose ports (those are in `docker-compose.yml` comments). Env key table lives in `.env.example`, not a second copy in the README. Opening line still says “pipeline”. |
 | `.cursor/rules/specify-rules.mdc` | Engineering constitution | Live sections list `cmd/api`, `internal/profiles`, `internal/scoring`, and `internal/ingest`. Older recent-changes lines still name the removed LLM and pipeline layout as history. |
-| `docs/01-profiles-and-scoring/` | Concept, contracts, tasks for this slice | **Done.** Sections 2.3 and 2.6 match the shipped run. |
 | `LICENSE` | — | **Missing** |
 
 ## 14. Scaffold vs business logic

@@ -12,23 +12,6 @@ func isRecruiteeHost(host string) bool {
 	return strings.HasSuffix(strings.ToLower(strings.TrimSpace(host)), "recruitee.com")
 }
 
-// RecruiteeCareersURLFromApply returns the company careers homepage for a Recruitee apply/job URL.
-func RecruiteeCareersURLFromApply(raw string) (string, bool) {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return "", false
-	}
-	norm, err := NormalizeApplyURL(raw)
-	if err != nil {
-		return "", false
-	}
-	u, err := url.Parse(norm)
-	if err != nil || !isRecruiteeHost(u.Host) {
-		return "", false
-	}
-	return u.Scheme + "://" + u.Host + "/", true
-}
-
 // RecruiteeJobPageMissing GETs a normalized Recruitee job URL and reports the public "job not found" page.
 func RecruiteeJobPageMissing(ctx context.Context, client *http.Client, rawApplyURL string) (bool, error) {
 	norm, err := NormalizeApplyURL(rawApplyURL)

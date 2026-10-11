@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"net/http/cookiejar"
 	"net/url"
 	"strings"
 	"time"
@@ -58,16 +57,6 @@ func HTTPClientWithProxy(base *http.Client, proxyRaw string) (*http.Client, erro
 	tr := collectorTransport()
 	tr.Proxy = http.ProxyURL(u)
 	return &http.Client{Timeout: timeout, Transport: tr}, nil
-}
-
-// NewHTTPClientWithJar returns an *http.Client like NewHTTPClient but with an in-memory cookie jar (e.g. DOU CSRF cookie).
-func NewHTTPClientWithJar() *http.Client {
-	jar, _ := cookiejar.New(nil)
-	return &http.Client{
-		Jar:       jar,
-		Timeout:   DefaultHTTPTimeout,
-		Transport: collectorTransport(),
-	}
 }
 
 func collectorTransport() *http.Transport {
