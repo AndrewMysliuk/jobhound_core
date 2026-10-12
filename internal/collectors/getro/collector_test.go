@@ -134,7 +134,7 @@ func TestFetchWithQuery_searchBodyAndMapping(t *testing.T) {
 	require.Equal(t, []string{"DE", "US"}, first.Location.Countries)
 	require.Equal(t, schema.LocationRemote, first.Location.Type)
 	require.Equal(t, domainutils.CompanyKey("Acme"), first.CompanyKey)
-	require.Equal(t, domainutils.StableJobID(first.CompanyKey, first.Title, first.Location.Raw), first.ID)
+	require.Equal(t, domainutils.StableJobID(first.CompanyKey, first.Title), first.ID)
 
 	second := jobs[1]
 	require.Equal(t, "Backend Engineer", second.Title)

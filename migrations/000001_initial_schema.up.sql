@@ -13,6 +13,7 @@ CREATE TABLE jobs (
     description TEXT NOT NULL DEFAULT '',
     posted_at TIMESTAMPTZ,
     location JSONB NOT NULL DEFAULT '{"type":"","regions":[],"countries":[],"timezone":"","raw":""}'::jsonb,
+    openings JSONB NOT NULL DEFAULT '[]'::jsonb,
     salary_raw TEXT NOT NULL DEFAULT '',
     tags JSONB NOT NULL DEFAULT '[]'::jsonb,
     position TEXT,

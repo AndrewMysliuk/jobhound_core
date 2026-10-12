@@ -38,6 +38,14 @@ type ProfileJobLocation struct {
 	Raw       string   `json:"raw"`
 }
 
+// ProfileJobOpening is one country listing on a scored job.
+// Country is display text, not an ISO code.
+type ProfileJobOpening struct {
+	Country  string `json:"country"`
+	URL      string `json:"url"`
+	ApplyURL string `json:"apply_url"`
+}
+
 // ProfileJobSignal is one fired phrase on a scored job.
 type ProfileJobSignal struct {
 	Code   string   `json:"code"`
@@ -47,20 +55,21 @@ type ProfileJobSignal struct {
 
 // ProfileJob is one job entry in the profile job page and the PATCH 200 body.
 type ProfileJob struct {
-	JobID       string             `json:"job_id"`
-	Title       string             `json:"title"`
-	Company     string             `json:"company"`
-	URL         string             `json:"url"`
-	ApplyURL    string             `json:"apply_url"`
-	Location    ProfileJobLocation `json:"location"`
-	Sources     []string           `json:"sources"`
-	PostedAt    *time.Time         `json:"posted_at"`
-	FirstSeenAt time.Time          `json:"first_seen_at"`
-	LastSeenAt  time.Time          `json:"last_seen_at"`
-	Bucket      string             `json:"bucket"`
-	Score       int                `json:"score"`
-	Signals     []ProfileJobSignal `json:"signals"`
-	UserStatus  string             `json:"user_status"`
+	JobID       string              `json:"job_id"`
+	Title       string              `json:"title"`
+	Company     string              `json:"company"`
+	URL         string              `json:"url"`
+	ApplyURL    string              `json:"apply_url"`
+	Location    ProfileJobLocation  `json:"location"`
+	Openings    []ProfileJobOpening `json:"openings"`
+	Sources     []string            `json:"sources"`
+	PostedAt    *time.Time          `json:"posted_at"`
+	FirstSeenAt time.Time           `json:"first_seen_at"`
+	LastSeenAt  time.Time           `json:"last_seen_at"`
+	Bucket      string              `json:"bucket"`
+	Score       int                 `json:"score"`
+	Signals     []ProfileJobSignal  `json:"signals"`
+	UserStatus  string              `json:"user_status"`
 }
 
 // ProfileJobPage is the GET /api/v1/profiles/{profile_id}/jobs 200 body.

@@ -28,6 +28,9 @@ func TestJobModel_roundTrip(t *testing.T) {
 			Timezone:  "5.5",
 			Raw:       "Berlin",
 		},
+		Openings: []schema.Opening{
+			{Country: "Germany", URL: "https://job", ApplyURL: "https://ats"},
+		},
 		SalaryRaw:   "€80k",
 		Tags:        []string{"go"},
 		Position:    strPtr("backend"),
@@ -67,6 +70,32 @@ func TestJob_ToDomain_locationJSON(t *testing.T) {
 	}
 }
 
+func TestJobModel_openingsNullAndEmpty(t *testing.T) {
+	empty := NewJobModel(schema.Job{})
+	if string(empty.Openings) != "[]" {
+		t.Fatalf("nil openings encoded %s", empty.Openings)
+	}
+	if empty.ApplyURL != nil {
+		t.Fatalf("empty apply_url stored as %q", *empty.ApplyURL)
+	}
+	if got := empty.ToDomain(); got.Openings != nil {
+		t.Fatalf("empty openings decoded %#v", got.Openings)
+	}
+
+	docs := [][]byte{nil, {}, []byte("null"), []byte("[]")}
+	for _, doc := range docs {
+		row := Job{Openings: doc}
+		got := row.ToDomain()
+		if got.Openings != nil {
+			t.Fatalf("doc %q decoded %#v", doc, got.Openings)
+		}
+		back := NewJobModel(got)
+		if string(back.Openings) != "[]" {
+			t.Fatalf("doc %q written back %s", doc, back.Openings)
+		}
+	}
+}
+
 func domainJobEqual(a, b schema.Job) bool {
 	if a.ID != b.ID || a.Title != b.Title || a.Company != b.Company || a.CompanyKey != b.CompanyKey ||
 		a.CompanyWebsite != b.CompanyWebsite || a.URL != b.URL || a.ApplyURL != b.ApplyURL ||
@@ -77,7 +106,8 @@ func domainJobEqual(a, b schema.Job) bool {
 	}
 	if !stringSliceEqual(a.Sources, b.Sources) || !stringSliceEqual(a.Tags, b.Tags) ||
 		!stringSliceEqual(a.Location.Regions, b.Location.Regions) ||
-		!stringSliceEqual(a.Location.Countries, b.Location.Countries) {
+		!stringSliceEqual(a.Location.Countries, b.Location.Countries) ||
+		!openingsEqual(a.Openings, b.Openings) {
 		return false
 	}
 	if !strPtrEqual(a.Position, b.Position) || !a.PostedAt.Equal(b.PostedAt) ||
@@ -97,6 +127,21 @@ func strPtrEqual(a, b *string) bool {
 		return false
 	}
 	return *a == *b
+}
+
+func openingsEqual(a, b []schema.Opening) bool {
+	if len(a) == 0 && len(b) == 0 {
+		return true
+	}
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func stringSliceEqual(a, b []string) bool {

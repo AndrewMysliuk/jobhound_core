@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	jobdata "github.com/andrewmysliuk/jobhound_core/internal/domain/schema"
 	"github.com/andrewmysliuk/jobhound_core/internal/platform/pgsql"
 	"github.com/andrewmysliuk/jobhound_core/internal/scoring/schema"
 	"github.com/google/uuid"
@@ -37,6 +38,7 @@ func testScoringDB(t *testing.T) *gorm.DB {
 			description TEXT NOT NULL DEFAULT '',
 			posted_at TIMESTAMP,
 			location TEXT NOT NULL DEFAULT '{}',
+			openings TEXT NOT NULL DEFAULT '[]',
 			salary_raw TEXT NOT NULL DEFAULT '',
 			tags TEXT NOT NULL DEFAULT '[]',
 			position TEXT,
@@ -408,5 +410,84 @@ func TestRepository_RunLookupAndSetUserStatus(t *testing.T) {
 	}
 	if _, err := repo.SetUserStatus(ctx, "andrew", "missing", schema.UserStatusHidden); !errors.Is(err, ErrMatchNotFound) {
 		t.Fatalf("missing match err = %v", err)
+	}
+}
+
+func TestRepository_List_decodesOpenings(t *testing.T) {
+	ctx := context.Background()
+	db := testScoringDB(t)
+	repo := NewRepository(pgsql.NewGetter(db))
+	seen := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
+	insertJob(t, db, "job-empty", "Empty", seen)
+	insertJob(t, db, "job-two", "Two", seen)
+	err := db.Exec(`UPDATE jobs SET openings = ? WHERE id = ?`,
+		`[{"country":"Greece","url":"https://example.test/gr","apply_url":"https://example.test/gr/apply"},{"country":"Poland","url":"https://example.test/pl","apply_url":""}]`,
+		"job-two",
+	).Error
+	if err != nil {
+		t.Fatal(err)
+	}
+	run, err := repo.CreateRun(ctx, schema.Run{
+		ProfileID:      "andrew",
+		Status:         schema.RunStatusSucceeded,
+		StartedAt:      seen,
+		IdempotencyKey: uuid.New(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range []schema.Match{
+		{ProfileID: "andrew", JobID: "job-two", Bucket: schema.BucketPassed, Score: 4, UserStatus: schema.UserStatusNew, RunID: run.ID},
+		{ProfileID: "andrew", JobID: "job-empty", Bucket: schema.BucketPassed, Score: 1, UserStatus: schema.UserStatusNew, RunID: run.ID},
+	} {
+		if err := repo.UpsertMatch(ctx, m); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	page, err := repo.List(ctx, schema.ListJobsParams{ProfileID: "andrew", Page: 1, Limit: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Jobs) != 2 {
+		t.Fatalf("len = %d", len(page.Jobs))
+	}
+	want := []jobdata.Opening{
+		{Country: "Greece", URL: "https://example.test/gr", ApplyURL: "https://example.test/gr/apply"},
+		{Country: "Poland", URL: "https://example.test/pl", ApplyURL: ""},
+	}
+	if page.Jobs[0].JobID != "job-two" || len(page.Jobs[0].Openings) != len(want) {
+		t.Fatalf("two = %#v", page.Jobs[0])
+	}
+	for i := range want {
+		if page.Jobs[0].Openings[i] != want[i] {
+			t.Fatalf("openings[%d] = %#v, want %#v", i, page.Jobs[0].Openings[i], want[i])
+		}
+	}
+	if page.Jobs[1].JobID != "job-empty" || page.Jobs[1].Openings == nil || len(page.Jobs[1].Openings) != 0 {
+		t.Fatalf("empty = %#v", page.Jobs[1].Openings)
+	}
+
+	updated, err := repo.SetUserStatus(ctx, "andrew", "job-two", schema.UserStatusHidden)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(updated.Openings) != len(want) || updated.Openings[0] != want[0] || updated.Openings[1] != want[1] {
+		t.Fatalf("set status openings = %#v", updated.Openings)
+	}
+
+	for _, raw := range [][]byte{nil, []byte("[]"), []byte("null")} {
+		item, err := (listRow{
+			Location: []byte(`{}`),
+			Openings: raw,
+			Sources:  []byte(`[]`),
+			Signals:  []byte(`[]`),
+		}).toListedJob()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if item.Openings == nil || len(item.Openings) != 0 {
+			t.Fatalf("raw %q openings = %#v", raw, item.Openings)
+		}
 	}
 }

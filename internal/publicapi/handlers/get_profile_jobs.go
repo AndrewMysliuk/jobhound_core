@@ -148,6 +148,14 @@ func (h *HTTPHandler) profileJobPage(page scoringschema.JobPage) schema.ProfileJ
 				Terms:  signal.Terms,
 			})
 		}
+		openings := make([]schema.ProfileJobOpening, 0, len(job.Openings))
+		for _, opening := range job.Openings {
+			openings = append(openings, schema.ProfileJobOpening{
+				Country:  opening.Country,
+				URL:      opening.URL,
+				ApplyURL: opening.ApplyURL,
+			})
+		}
 		var postedAt *time.Time
 		if !job.PostedAt.IsZero() {
 			posted := job.PostedAt
@@ -166,6 +174,7 @@ func (h *HTTPHandler) profileJobPage(page scoringschema.JobPage) schema.ProfileJ
 				Timezone:  job.Location.Timezone,
 				Raw:       job.Location.Raw,
 			},
+			Openings:    openings,
 			Sources:     sources,
 			PostedAt:    postedAt,
 			FirstSeenAt: job.FirstSeenAt,

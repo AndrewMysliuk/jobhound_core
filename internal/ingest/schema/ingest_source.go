@@ -18,4 +18,6 @@ type IngestSourceOutput struct {
 	JobsSkipped       int
 	UsedIncremental   bool
 	WatermarkAdvanced bool
+	// Skipped is a completed early exit: cooldown or a held lock. The workflow succeeds.
+	Skipped bool
 }

@@ -3,6 +3,7 @@ package impl
 import (
 	"reflect"
 	"testing"
+	"time"
 
 	jobdata "github.com/andrewmysliuk/jobhound_core/internal/domain/schema"
 	profileschema "github.com/andrewmysliuk/jobhound_core/internal/profiles/schema"
@@ -334,6 +335,77 @@ func TestEvaluate(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			got := Evaluate(tt.profile, tt.job)
+			if got.Bucket != tt.want.Bucket || got.Score != tt.want.Score || !reflect.DeepEqual(got.Signals, tt.want.Signals) {
+				t.Fatalf("got %+v\nwant %+v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestEvaluate_postedAt(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 10, 12, 12, 0, 0, 0, time.UTC)
+	month := time.Duration(schema.PostedAtRejectDays) * 24 * time.Hour
+	profile := profileschema.Profile{
+		ExcludeTitle: []string{"recruiter"},
+		Queries:      []string{"vue"},
+	}
+	passed := Outcome{
+		Bucket:  schema.BucketPassed,
+		Score:   schema.QueryPoints,
+		Signals: []schema.Signal{{Code: schema.SignalQuery, Points: schema.QueryPoints, Terms: []string{"vue"}}},
+	}
+
+	tests := []struct {
+		name string
+		job  jobdata.Job
+		want Outcome
+	}{
+		{
+			name: "unknown posted_at is scored",
+			job:  jobdata.Job{Title: "Vue Engineer", Description: "vue"},
+			want: passed,
+		},
+		{
+			name: "posted inside a month is scored",
+			job: jobdata.Job{
+				Title:       "Vue Engineer",
+				Description: "vue",
+				PostedAt:    now.Add(-month).Add(time.Second),
+			},
+			want: passed,
+		},
+		{
+			name: "posted exactly a month ago is scored",
+			job: jobdata.Job{
+				Title:       "Vue Engineer",
+				Description: "vue",
+				PostedAt:    now.Add(-month),
+			},
+			want: passed,
+		},
+		{
+			name: "posted older than a month is rejected before title excludes",
+			job: jobdata.Job{
+				Title:       "Recruiter",
+				Description: "vue",
+				PostedAt:    now.Add(-month).Add(-time.Second),
+			},
+			want: Outcome{
+				Bucket: schema.BucketRejected,
+				Signals: []schema.Signal{{
+					Code:  schema.SignalCutPostedAt,
+					Terms: []string{now.Add(-month).Add(-time.Second).Format(time.RFC3339)},
+				}},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got := evaluateAt(profile, tt.job, now)
 			if got.Bucket != tt.want.Bucket || got.Score != tt.want.Score || !reflect.DeepEqual(got.Signals, tt.want.Signals) {
 				t.Fatalf("got %+v\nwant %+v", got, tt.want)
 			}

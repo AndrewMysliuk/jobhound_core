@@ -47,6 +47,7 @@ func TestMigrationsJobsSchema_integration(t *testing.T) {
 		"description":     {"text", "NO"},
 		"posted_at":       {"timestamp with time zone", "YES"},
 		"location":        {"jsonb", "NO"},
+		"openings":        {"jsonb", "NO"},
 		"salary_raw":      {"text", "NO"},
 		"tags":            {"jsonb", "NO"},
 		"position":        {"text", "YES"},

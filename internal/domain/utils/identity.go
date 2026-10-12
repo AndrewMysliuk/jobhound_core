@@ -64,22 +64,22 @@ func isLegalSuffix(token string) bool {
 	}
 }
 
-// StableJobID is company_key + separator + normalized title + separator + normalized location raw.
-// apply_url is not part of the key. An empty raw location is an empty segment.
-func StableJobID(companyKey, title, locationRaw string) string {
-	return companyKey + idSep + normalizeIdentitySegment(title) + idSep + normalizeIdentitySegment(locationRaw)
+// StableJobID is company_key + separator + normalized title.
+// Location and apply_url are not part of the key.
+func StableJobID(companyKey, title string) string {
+	return companyKey + idSep + normalizeIdentitySegment(title)
 }
 
 func normalizeIdentitySegment(s string) string {
 	return strings.ToLower(whitespaceRun.ReplaceAllString(strings.TrimSpace(s), " "))
 }
 
-// AssignStableID sets CompanyKey from Company and ID from that key, the title, and Location.Raw.
+// AssignStableID sets CompanyKey from Company and ID from that key and the title.
 func AssignStableID(j *schema.Job) error {
 	if j == nil {
 		return errors.New("nil job")
 	}
 	j.CompanyKey = CompanyKey(j.Company)
-	j.ID = StableJobID(j.CompanyKey, j.Title, j.Location.Raw)
+	j.ID = StableJobID(j.CompanyKey, j.Title)
 	return nil
 }

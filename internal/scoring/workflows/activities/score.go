@@ -48,7 +48,7 @@ func (a *Activities) LoadProfile(ctx context.Context, profileID string) (profile
 	return profile, nil
 }
 
-// ScoreProfile loads jobs first seen inside the score window and upserts every result, including rejects.
+// ScoreProfile scores the first-seen window and known posted_at values older than a month, then upserts every result, including rejects.
 func (a *Activities) ScoreProfile(ctx context.Context, in schema.ProfileRunInput) (schema.ScoreProfileResult, error) {
 	if a == nil || a.Profiles == nil || a.Runs == nil || a.Jobs == nil {
 		return schema.ScoreProfileResult{}, fmt.Errorf("score activity: profiles, runs, and jobs are required")

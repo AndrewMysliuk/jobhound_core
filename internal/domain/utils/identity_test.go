@@ -51,19 +51,15 @@ func TestCompanyKey_stripsLegalSuffixes(t *testing.T) {
 	}
 }
 
-func TestStableJobID_normalizesTitleAndRaw(t *testing.T) {
-	got := utils.StableJobID("acme", "  Senior   Go ", " Berlin  DE ")
-	want := "acme\x1esenior go\x1eberlin de"
+func TestStableJobID_collapsesTitleWhitespace(t *testing.T) {
+	got := utils.StableJobID("acme", "  Senior   Go ")
+	want := "acme\x1esenior go"
 	if got != want {
 		t.Fatalf("got %q want %q", got, want)
 	}
-	emptyRaw := utils.StableJobID("acme", "Senior Go", "")
-	if emptyRaw != "acme\x1esenior go\x1e" {
-		t.Fatalf("empty raw: got %q", emptyRaw)
-	}
 }
 
-func TestAssignStableID_ignoresApplyURL(t *testing.T) {
+func TestAssignStableID_ignoresLocationAndApplyURL(t *testing.T) {
 	a := &schema.Job{
 		Company:  "Acme Inc",
 		Title:    "Engineer",
@@ -74,7 +70,7 @@ func TestAssignStableID_ignoresApplyURL(t *testing.T) {
 		Company:  "acme llc",
 		Title:    "  engineer ",
 		ApplyURL: "https://other.example/apply",
-		Location: schema.Location{Raw: " berlin "},
+		Location: schema.Location{Raw: "United States"},
 	}
 	if err := utils.AssignStableID(a); err != nil {
 		t.Fatal(err)
@@ -82,8 +78,9 @@ func TestAssignStableID_ignoresApplyURL(t *testing.T) {
 	if err := utils.AssignStableID(b); err != nil {
 		t.Fatal(err)
 	}
-	if a.ID != b.ID {
-		t.Fatalf("ids differ: %q vs %q", a.ID, b.ID)
+	want := "acme\x1eengineer"
+	if a.ID != want || b.ID != want {
+		t.Fatalf("ids %q %q want %q", a.ID, b.ID, want)
 	}
 	if a.CompanyKey != "acme" || b.CompanyKey != "acme" {
 		t.Fatalf("keys %q %q", a.CompanyKey, b.CompanyKey)

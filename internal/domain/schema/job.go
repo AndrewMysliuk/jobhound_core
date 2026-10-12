@@ -9,8 +9,7 @@ const (
 	LocationOffice = "office"
 )
 
-// Location is the display location stored as one JSON object.
-// Only Raw is copied into Job.ID.
+// Location is the hiring scope used by scoring, stored as one JSON object.
 type Location struct {
 	Type      string
 	Regions   []string
@@ -19,7 +18,16 @@ type Location struct {
 	Raw       string
 }
 
+// Opening is one country listing on a vacancy.
+// Country is trimmed location raw: display text, not an ISO code.
+type Opening struct {
+	Country  string
+	URL      string
+	ApplyURL string
+}
+
 // Job is one vacancy. ID is the dedup key set by domain/utils.AssignStableID.
+// URL and ApplyURL are the listing being ingested and, after save, the first opening.
 type Job struct {
 	ID             string
 	Source         string // board that produced this in-memory listing
@@ -33,6 +41,7 @@ type Job struct {
 	Description    string
 	PostedAt       time.Time // zero if unknown
 	Location       Location
+	Openings       []Opening
 	SalaryRaw      string
 	Tags           []string
 	Position       *string

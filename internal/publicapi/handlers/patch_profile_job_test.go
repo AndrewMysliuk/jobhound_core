@@ -84,6 +84,38 @@ func TestPatchProfileJob(t *testing.T) {
 		if len(got.Signals) != 1 || got.Signals[0].Code != scoringschema.SignalQuery.String() || got.Signals[0].Points != 1 {
 			t.Fatalf("signals %#v", got.Signals)
 		}
+		if got.Openings == nil || len(got.Openings) != 0 {
+			t.Fatalf("openings %#v", got.Openings)
+		}
+	})
+
+	t.Run("two openings", func(t *testing.T) {
+		job := stored
+		job.Openings = []jobdata.Opening{
+			{Country: "United States", URL: "https://example.com/us", ApplyURL: "https://example.com/us/apply"},
+			{Country: "Greece", URL: "https://example.com/gr", ApplyURL: ""},
+		}
+		api := &patchScoring{job: job}
+		h := patchHandler(api, nil)
+		rec := patchRequest(t, h, "/api/v1/profiles/andrew/jobs/job-1", `{"user_status":"HIDDEN"}`)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status %d %s", rec.Code, rec.Body.String())
+		}
+		var got schema.ProfileJob
+		if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+			t.Fatal(err)
+		}
+		if got.URL != job.URL || got.ApplyURL != job.ApplyURL {
+			t.Fatalf("urls %#v", got)
+		}
+		if got.Location.Type != "remote" || got.Location.Raw != "Remote" || len(got.Location.Regions) != 1 || got.Location.Regions[0] != "europe" || len(got.Location.Countries) != 1 || got.Location.Countries[0] != "DE" {
+			t.Fatalf("location %#v", got.Location)
+		}
+		if len(got.Openings) != 2 ||
+			got.Openings[0].Country != "United States" || got.Openings[0].URL != "https://example.com/us" || got.Openings[0].ApplyURL != "https://example.com/us/apply" ||
+			got.Openings[1].Country != "Greece" || got.Openings[1].URL != "https://example.com/gr" || got.Openings[1].ApplyURL != "" {
+			t.Fatalf("openings %#v", got.Openings)
+		}
 	})
 
 	t.Run("404 unknown profile", func(t *testing.T) {

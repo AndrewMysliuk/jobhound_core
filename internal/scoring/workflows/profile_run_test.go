@@ -237,6 +237,7 @@ func testRunDB(t *testing.T) *gorm.DB {
 			description TEXT NOT NULL DEFAULT '',
 			posted_at TIMESTAMP,
 			location TEXT NOT NULL DEFAULT '{}',
+			openings TEXT NOT NULL DEFAULT '[]',
 			salary_raw TEXT NOT NULL DEFAULT '',
 			tags TEXT NOT NULL DEFAULT '[]',
 			position TEXT,

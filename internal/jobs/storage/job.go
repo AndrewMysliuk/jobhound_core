@@ -21,6 +21,7 @@ type Job struct {
 	Description    string     `gorm:"column:description;type:text;not null;default:''"`
 	PostedAt       *time.Time `gorm:"column:posted_at"`
 	Location       []byte     `gorm:"column:location;type:jsonb;not null"`
+	Openings       []byte     `gorm:"column:openings;type:jsonb;not null"`
 	SalaryRaw      string     `gorm:"column:salary_raw;type:text;not null;default:''"`
 	Tags           []byte     `gorm:"column:tags;type:jsonb;not null"`
 	Position       *string    `gorm:"column:position;type:text"`
@@ -48,6 +49,7 @@ func NewJobModel(j schema.Job) Job {
 		URL:            j.URL,
 		Description:    j.Description,
 		Location:       encodeLocation(j.Location),
+		Openings:       encodeOpenings(j.Openings),
 		SalaryRaw:      j.SalaryRaw,
 		Tags:           encodeJobTags(j.Tags),
 		Position:       j.Position,
@@ -133,6 +135,54 @@ func decodeLocation(b []byte) schema.Location {
 	}
 }
 
+type openingJSON struct {
+	Country  string `json:"country"`
+	URL      string `json:"url"`
+	ApplyURL string `json:"apply_url"`
+}
+
+// encodeOpenings stores a nil slice as [], not JSON null.
+func encodeOpenings(in []schema.Opening) []byte {
+	if len(in) == 0 {
+		return []byte("[]")
+	}
+	payload := make([]openingJSON, len(in))
+	for i, opening := range in {
+		payload[i] = openingJSON{
+			Country:  opening.Country,
+			URL:      opening.URL,
+			ApplyURL: opening.ApplyURL,
+		}
+	}
+	b, err := json.Marshal(payload)
+	if err != nil {
+		return []byte("[]")
+	}
+	return b
+}
+
+func decodeOpenings(b []byte) []schema.Opening {
+	if len(b) == 0 {
+		return nil
+	}
+	var payload []openingJSON
+	if err := json.Unmarshal(b, &payload); err != nil {
+		return nil
+	}
+	if len(payload) == 0 {
+		return nil
+	}
+	out := make([]schema.Opening, len(payload))
+	for i, opening := range payload {
+		out[i] = schema.Opening{
+			Country:  opening.Country,
+			URL:      opening.URL,
+			ApplyURL: opening.ApplyURL,
+		}
+	}
+	return out
+}
+
 func encodeJobTags(tags []string) []byte {
 	if len(tags) == 0 {
 		return []byte("[]")
@@ -181,6 +231,7 @@ func (m *Job) ToDomain() schema.Job {
 		URL:            m.URL,
 		Description:    m.Description,
 		Location:       decodeLocation(m.Location),
+		Openings:       decodeOpenings(m.Openings),
 		SalaryRaw:      m.SalaryRaw,
 		Tags:           decodeJobTags(m.Tags),
 		Position:       m.Position,

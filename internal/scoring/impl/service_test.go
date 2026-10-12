@@ -178,6 +178,36 @@ func TestScore(t *testing.T) {
 			}},
 		},
 		{
+			name: "posted more than a month ago is rejected outside the first-seen window",
+			jobs: []jobdata.Job{{
+				ID:          "ancient",
+				Title:       "Vue Engineer",
+				Description: "vue",
+				PostedAt:    started.Add(-time.Duration(schema.PostedAtRejectDays) * 24 * time.Hour).Add(-time.Second),
+				FirstSeenAt: started.Add(-20 * 24 * time.Hour),
+			}},
+			wantN: 1,
+			want: []schema.Match{{
+				JobID:      "ancient",
+				Bucket:     schema.BucketRejected,
+				UserStatus: schema.UserStatusNew,
+				Signals: []schema.Signal{{
+					Code:  schema.SignalCutPostedAt,
+					Terms: []string{started.Add(-time.Duration(schema.PostedAtRejectDays) * 24 * time.Hour).Add(-time.Second).Format(time.RFC3339)},
+				}},
+			}},
+		},
+		{
+			name: "unknown posted_at outside the window is not scored",
+			jobs: []jobdata.Job{{
+				ID:          "undated",
+				Title:       "Vue Engineer",
+				Description: "vue",
+				FirstSeenAt: started.Add(-20 * 24 * time.Hour),
+			}},
+			wantN: 0,
+		},
+		{
 			name:  "rejected row is stored",
 			jobs:  []jobdata.Job{rejected},
 			wantN: 1,
@@ -248,6 +278,10 @@ func TestScore(t *testing.T) {
 			wantSince := started.Add(-window)
 			if !jobs.since.Equal(wantSince) {
 				t.Fatalf("since = %s, want %s", jobs.since, wantSince)
+			}
+			wantPostedBefore := started.Add(-time.Duration(schema.PostedAtRejectDays) * 24 * time.Hour)
+			if !jobs.postedBefore.Equal(wantPostedBefore) {
+				t.Fatalf("posted before = %s, want %s", jobs.postedBefore, wantPostedBefore)
 			}
 			if len(store.matches) != len(tt.want) {
 				t.Fatalf("matches = %#v, want %#v", store.matches, tt.want)
@@ -322,8 +356,9 @@ func (f *fakeStarter) Start(_ context.Context, _ string, runID int64) error {
 }
 
 type fakeJobs struct {
-	jobs  []jobdata.Job
-	since time.Time
+	jobs         []jobdata.Job
+	since        time.Time
+	postedBefore time.Time
 }
 
 func (f *fakeJobs) ListFirstSeenSince(_ context.Context, since time.Time) ([]jobdata.Job, error) {
@@ -331,6 +366,18 @@ func (f *fakeJobs) ListFirstSeenSince(_ context.Context, since time.Time) ([]job
 	out := make([]jobdata.Job, 0, len(f.jobs))
 	for _, job := range f.jobs {
 		if job.FirstSeenAt.UTC().Before(since) {
+			continue
+		}
+		out = append(out, job)
+	}
+	return out, nil
+}
+
+func (f *fakeJobs) ListPostedBefore(_ context.Context, cutoff time.Time) ([]jobdata.Job, error) {
+	f.postedBefore = cutoff
+	out := make([]jobdata.Job, 0, len(f.jobs))
+	for _, job := range f.jobs {
+		if job.PostedAt.IsZero() || !job.PostedAt.UTC().Before(cutoff) {
 			continue
 		}
 		out = append(out, job)

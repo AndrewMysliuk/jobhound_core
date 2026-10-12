@@ -38,6 +38,7 @@ type runStore interface {
 
 type jobWindow interface {
 	ListFirstSeenSince(ctx context.Context, since time.Time) ([]jobdata.Job, error)
+	ListPostedBefore(ctx context.Context, cutoff time.Time) ([]jobdata.Job, error)
 }
 
 // New wires the profile file store, scoring persistence, the jobs repository, and the workflow starter.

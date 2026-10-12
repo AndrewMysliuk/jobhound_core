@@ -59,7 +59,18 @@ func ProfileRunWorkflow(ctx workflow.Context, in scoringschema.ProfileRunInput) 
 				if laneCtx.Err() != nil || failErr != nil {
 					return
 				}
-				err := runIngestChild(laneCtx, child)
+				out, err := runIngestChild(laneCtx, child)
+				if err == nil && out.Skipped {
+					if pubErr := noteSkipped(laneCtx, scoreMu, in.RunID, &skipped, &scoredN); pubErr != nil {
+						if temporal.IsCanceledError(pubErr) {
+							return
+						}
+						failErr = pubErr
+						cancelFan()
+						return
+					}
+					continue
+				}
 				if err == nil {
 					n, scoreErr := scoreAndPublish(laneCtx, scoreMu, in, &skipped)
 					if scoreErr != nil {
@@ -128,14 +139,15 @@ func ProfileRunWorkflow(ctx workflow.Context, in scoringschema.ProfileRunInput) 
 	return nil
 }
 
-func runIngestChild(ctx workflow.Context, child ingestschema.IngestSourceInput) error {
+func runIngestChild(ctx workflow.Context, child ingestschema.IngestSourceInput) (ingestschema.IngestSourceOutput, error) {
 	ctx = workflow.WithChildOptions(ctx, workflow.ChildWorkflowOptions{
 		WorkflowID:            IngestChildWorkflowID(child),
 		WorkflowIDReusePolicy: enumspb.WORKFLOW_ID_REUSE_POLICY_ALLOW_DUPLICATE,
 		ParentClosePolicy:     enumspb.PARENT_CLOSE_POLICY_TERMINATE,
 	})
 	var out ingestschema.IngestSourceOutput
-	return workflow.ExecuteChildWorkflow(ctx, ingest_workflows.IngestSourceWorkflow, child).Get(ctx, &out)
+	err := workflow.ExecuteChildWorkflow(ctx, ingest_workflows.IngestSourceWorkflow, child).Get(ctx, &out)
+	return out, err
 }
 
 func scoreAndPublish(ctx workflow.Context, mu workflow.Mutex, in scoringschema.ProfileRunInput, skipped *int) (int, error) {

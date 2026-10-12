@@ -14,6 +14,7 @@ import (
 const IngestSourceWorkflowName = "IngestSourceWorkflow"
 
 // IngestSourceWorkflow loads jobs from one source with Redis coordination (activity implements lock/cooldown/watermark).
+// Cooldown and a held lock complete the workflow with Skipped set. They are not failures.
 func IngestSourceWorkflow(ctx workflow.Context, in ingestschema.IngestSourceInput) (ingestschema.IngestSourceOutput, error) {
 	workflow.GetLogger(ctx).Info("ingest source workflow start",
 		logging.FieldWorkflow, IngestSourceWorkflowName,

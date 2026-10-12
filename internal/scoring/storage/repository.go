@@ -229,7 +229,7 @@ func (r *Repository) List(ctx context.Context, p schema.ListJobsParams) (schema.
 	var rows []listRow
 	err := r.listQuery(ctx, p.ProfileID, string(bucket), string(status)).
 		Select(`profile_matches.job_id, jobs.title, jobs.company, jobs.url, jobs.apply_url,
-			jobs.location, jobs.sources, jobs.posted_at, jobs.first_seen_at, jobs.last_seen_at,
+			jobs.location, jobs.openings, jobs.sources, jobs.posted_at, jobs.first_seen_at, jobs.last_seen_at,
 			profile_matches.bucket, profile_matches.score, profile_matches.signals, profile_matches.user_status`).
 		Order("profile_matches.score DESC, jobs.first_seen_at DESC").
 		Offset((page - 1) * limit).
@@ -275,6 +275,7 @@ type listRow struct {
 	URL         string     `gorm:"column:url"`
 	ApplyURL    *string    `gorm:"column:apply_url"`
 	Location    []byte     `gorm:"column:location"`
+	Openings    []byte     `gorm:"column:openings"`
 	Sources     []byte     `gorm:"column:sources"`
 	PostedAt    *time.Time `gorm:"column:posted_at"`
 	FirstSeenAt time.Time  `gorm:"column:first_seen_at"`
@@ -287,6 +288,10 @@ type listRow struct {
 
 func (row listRow) toListedJob() (schema.ListedJob, error) {
 	loc, err := decodeLocation(row.Location)
+	if err != nil {
+		return schema.ListedJob{}, err
+	}
+	openings, err := decodeOpenings(row.Openings)
 	if err != nil {
 		return schema.ListedJob{}, err
 	}
@@ -304,6 +309,7 @@ func (row listRow) toListedJob() (schema.ListedJob, error) {
 		Company:     row.Company,
 		URL:         row.URL,
 		Location:    loc,
+		Openings:    openings,
 		Sources:     sources,
 		FirstSeenAt: row.FirstSeenAt,
 		LastSeenAt:  row.LastSeenAt,
@@ -354,7 +360,7 @@ func (r *Repository) listedJob(ctx context.Context, profileID, jobID string) (sc
 		Table("profile_matches").
 		Joins("JOIN jobs ON jobs.id = profile_matches.job_id").
 		Select(`profile_matches.job_id, jobs.title, jobs.company, jobs.url, jobs.apply_url,
-			jobs.location, jobs.sources, jobs.posted_at, jobs.first_seen_at, jobs.last_seen_at,
+			jobs.location, jobs.openings, jobs.sources, jobs.posted_at, jobs.first_seen_at, jobs.last_seen_at,
 			profile_matches.bucket, profile_matches.score, profile_matches.signals, profile_matches.user_status`).
 		Where("profile_matches.profile_id = ? AND profile_matches.job_id = ?", profileID, jobID).
 		Take(&row).Error

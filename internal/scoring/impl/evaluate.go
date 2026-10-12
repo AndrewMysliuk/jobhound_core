@@ -3,6 +3,7 @@ package impl
 
 import (
 	"strings"
+	"time"
 	"unicode"
 	"unicode/utf8"
 
@@ -19,10 +20,20 @@ type Outcome struct {
 }
 
 // Evaluate applies one profile to one job. It does not read storage or the network.
-// Title excludes run first, then text excludes against the title, the description,
-// and the location line. Location countries and regions run after that.
-// A hit stops the pass. Otherwise the bucket is PASSED, including a score of 0 or below.
+// The clock is time.Now. Score passes the run start via evaluateAt.
+// A known posted_at older than PostedAtRejectDays rejects before phrase checks.
+// A zero posted_at is not a reject. Title excludes run next, then text excludes
+// against the title, the description, and the location line. Location countries
+// and regions run after that. A hit stops the pass. Otherwise the bucket is PASSED,
+// including a score of 0 or below.
 func Evaluate(profile profileschema.Profile, job jobdata.Job) Outcome {
+	return evaluateAt(profile, job, time.Now().UTC())
+}
+
+func evaluateAt(profile profileschema.Profile, job jobdata.Job, now time.Time) Outcome {
+	if postedAtStale(job.PostedAt, now) {
+		return rejected(schema.SignalCutPostedAt, job.PostedAt.UTC().Format(time.RFC3339))
+	}
 	if phrase, ok := firstMatch(profile.ExcludeTitle, job.Title); ok {
 		return rejected(schema.SignalCutExcludeTitle, phrase)
 	}
@@ -54,6 +65,14 @@ func Evaluate(profile profileschema.Profile, job jobdata.Job) Outcome {
 		score += schema.PenaltyPoints
 	}
 	return Outcome{Bucket: schema.BucketPassed, Score: score, Signals: signals}
+}
+
+func postedAtStale(posted, now time.Time) bool {
+	if posted.IsZero() || now.IsZero() {
+		return false
+	}
+	cutoff := now.UTC().Add(-time.Duration(schema.PostedAtRejectDays) * 24 * time.Hour)
+	return posted.UTC().Before(cutoff)
 }
 
 func rejected(code schema.SignalCode, terms ...string) Outcome {

@@ -24,6 +24,7 @@ type ListedJob struct {
 	URL         string
 	ApplyURL    string
 	Location    jobdata.Location
+	Openings    []jobdata.Opening
 	Sources     []string
 	PostedAt    time.Time
 	FirstSeenAt time.Time

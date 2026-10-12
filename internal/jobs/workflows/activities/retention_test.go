@@ -29,6 +29,10 @@ func (r *retentionJobsStub) ListFirstSeenSince(context.Context, time.Time) ([]jo
 	return nil, nil
 }
 
+func (r *retentionJobsStub) ListPostedBefore(context.Context, time.Time) ([]jobdata.Job, error) {
+	return nil, nil
+}
+
 func (r *retentionJobsStub) DeleteJobsLastSeenBeforeUTC(_ context.Context, cutoff time.Time) (int64, error) {
 	r.cutoff = cutoff
 	return r.n, nil

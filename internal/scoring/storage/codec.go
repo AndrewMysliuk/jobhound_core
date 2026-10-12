@@ -16,6 +16,12 @@ type locationJSON struct {
 	Raw       string   `json:"raw"`
 }
 
+type openingJSON struct {
+	Country  string `json:"country"`
+	URL      string `json:"url"`
+	ApplyURL string `json:"apply_url"`
+}
+
 func encodeSignals(signals []schema.Signal) ([]byte, error) {
 	if signals == nil {
 		signals = []schema.Signal{}
@@ -52,6 +58,28 @@ func decodeLocation(b []byte) (jobdata.Location, error) {
 		Timezone:  payload.Timezone,
 		Raw:       payload.Raw,
 	}, nil
+}
+
+func decodeOpenings(b []byte) ([]jobdata.Opening, error) {
+	if len(b) == 0 {
+		return []jobdata.Opening{}, nil
+	}
+	var payload []openingJSON
+	if err := json.Unmarshal(b, &payload); err != nil {
+		return nil, err
+	}
+	if len(payload) == 0 {
+		return []jobdata.Opening{}, nil
+	}
+	out := make([]jobdata.Opening, len(payload))
+	for i, item := range payload {
+		out[i] = jobdata.Opening{
+			Country:  item.Country,
+			URL:      item.URL,
+			ApplyURL: item.ApplyURL,
+		}
+	}
+	return out, nil
 }
 
 func decodeSources(b []byte) ([]string, error) {

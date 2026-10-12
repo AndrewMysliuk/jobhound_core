@@ -3,6 +3,7 @@ package ingest_activities
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -58,6 +59,10 @@ func (a *IngestActivities) RunIngestSource(ctx context.Context, in ingestschema.
 	explicit := in.ExplicitRefresh || a.DefaultExplicitRefresh
 	release, err := a.Redis.Begin(ctx, id, in.Query, explicit)
 	if err != nil {
+		if errors.Is(err, ingest.ErrCooldownActive) || errors.Is(err, ingest.ErrLockHeld) {
+			log.Info().Err(err).Msg("ingest skipped")
+			return &ingestschema.IngestSourceOutput{Skipped: true}, nil
+		}
 		log.Error().Err(err).Msg("redis begin")
 		return nil, err
 	}

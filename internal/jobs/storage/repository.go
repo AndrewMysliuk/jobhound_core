@@ -47,10 +47,7 @@ func (r *Repository) SaveIngest(ctx context.Context, job jobdata.Job) (skipped b
 		return false, err
 	}
 	if errors.Is(err, ErrNotFound) {
-		row := job
-		row.Sources = mergeSourceIDs(nil, job.Source, job.Sources)
-		row.FirstSeenAt = now
-		row.LastSeenAt = now
+		row := newIngestJob(job, now)
 		m := NewJobModel(row)
 		m.CreatedAt = now
 		m.UpdatedAt = now
@@ -94,6 +91,22 @@ func (r *Repository) ListFirstSeenSince(ctx context.Context, since time.Time) ([
 	var rows []Job
 	err := r.get().WithContext(ctx).
 		Where("first_seen_at >= ?", since.UTC()).
+		Find(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	out := make([]jobdata.Job, 0, len(rows))
+	for i := range rows {
+		out = append(out, rows[i].ToDomain())
+	}
+	return out, nil
+}
+
+// ListPostedBefore implements [jobs.JobRepository.ListPostedBefore].
+func (r *Repository) ListPostedBefore(ctx context.Context, cutoff time.Time) ([]jobdata.Job, error) {
+	var rows []Job
+	err := r.get().WithContext(ctx).
+		Where("posted_at IS NOT NULL AND posted_at < ?", cutoff.UTC()).
 		Find(&rows).Error
 	if err != nil {
 		return nil, err

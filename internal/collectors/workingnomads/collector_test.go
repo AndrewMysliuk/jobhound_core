@@ -88,7 +88,7 @@ func TestDecodeSearchJSON_toJob(t *testing.T) {
 	require.NotNil(t, j.Position)
 	require.Equal(t, "full-stack", *j.Position)
 	require.NotEmpty(t, j.ID)
-	require.Equal(t, domainutils.StableJobID(j.CompanyKey, j.Title, j.Location.Raw), j.ID)
+	require.Equal(t, domainutils.StableJobID(j.CompanyKey, j.Title), j.ID)
 }
 
 func TestHiringScope_locations(t *testing.T) {

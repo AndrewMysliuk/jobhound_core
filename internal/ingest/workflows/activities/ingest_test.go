@@ -40,6 +40,10 @@ func (m *memJobs) ListFirstSeenSince(context.Context, time.Time) ([]schema.Job, 
 	return nil, nil
 }
 
+func (m *memJobs) ListPostedBefore(context.Context, time.Time) ([]schema.Job, error) {
+	return nil, nil
+}
+
 func (m *memJobs) DeleteJobsLastSeenBeforeUTC(context.Context, time.Time) (int64, error) {
 	return 0, nil
 }
@@ -102,6 +106,49 @@ func TestRunIngestSource_savesEveryFetchedJob(t *testing.T) {
 	require.Equal(t, 2, mj.saved)
 }
 
+func TestRunIngestSource_cooldownCompletesAsSkip(t *testing.T) {
+	ctx := context.Background()
+	mr, err := miniredis.Run()
+	require.NoError(t, err)
+	t.Cleanup(mr.Close)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	t.Cleanup(func() { _ = rdb.Close() })
+
+	memName := strings.ReplaceAll(t.Name(), "/", "_")
+	db, err := gorm.Open(sqlite.Open("file:"+memName+"?mode=memory&cache=private"), &gorm.Config{})
+	require.NoError(t, err)
+	require.NoError(t, db.Exec(`
+		CREATE TABLE ingest_watermarks (
+			source_id TEXT NOT NULL,
+			cursor TEXT,
+			updated_at TIMESTAMP NOT NULL,
+			PRIMARY KEY (source_id)
+		)
+	`).Error)
+
+	src := "multisrc"
+	mj := &memJobs{}
+	acts := &IngestActivities{
+		Redis:      ingest.NewRedisCoordinator(rdb),
+		Jobs:       mj,
+		Watermarks: ingest.NewGormWatermarkStore(pgsql.NewGetter(db)),
+		Collectors: map[string]collectors.Collector{
+			ingest.NormalizeSourceID(src): stubMultiCollector{name: src},
+		},
+		Log: logging.Nop(),
+	}
+
+	first, err := acts.RunIngestSource(ctx, ingestschema.IngestSourceInput{SourceID: src})
+	require.NoError(t, err)
+	require.False(t, first.Skipped)
+	require.Equal(t, 2, mj.saved)
+
+	second, err := acts.RunIngestSource(ctx, ingestschema.IngestSourceInput{SourceID: src})
+	require.NoError(t, err)
+	require.True(t, second.Skipped)
+	require.Equal(t, 2, mj.saved)
+}
+
 func TestRunIngestSource_persistsJob(t *testing.T) {
 	ctx := context.Background()
 	mr, err := miniredis.Run()
@@ -127,6 +174,7 @@ func TestRunIngestSource_persistsJob(t *testing.T) {
 			description TEXT NOT NULL DEFAULT '',
 			posted_at TIMESTAMP,
 			location TEXT NOT NULL DEFAULT '{}',
+			openings TEXT NOT NULL DEFAULT '[]',
 			salary_raw TEXT NOT NULL DEFAULT '',
 			tags TEXT NOT NULL DEFAULT '[]',
 			position TEXT,

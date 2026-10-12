@@ -123,6 +123,67 @@ func TestGetProfileJobs(t *testing.T) {
 		if job.PostedAt == nil || !job.PostedAt.Equal(posted) || !job.FirstSeenAt.Equal(seen) || !job.LastSeenAt.Equal(seen) {
 			t.Fatalf("times posted %v first %s last %s", job.PostedAt, job.FirstSeenAt, job.LastSeenAt)
 		}
+		if job.Openings == nil || len(job.Openings) != 0 {
+			t.Fatalf("openings %#v", job.Openings)
+		}
+	})
+
+	t.Run("two openings", func(t *testing.T) {
+		api := &profileJobsScoring{page: scoringschema.JobPage{
+			Page:  1,
+			Limit: schema.DefaultJobListLimit,
+			Total: 1,
+			Jobs: []scoringschema.ListedJob{{
+				JobID:    "job-1",
+				Title:    "Backend",
+				Company:  "Acme",
+				URL:      "https://example.com/us",
+				ApplyURL: "https://example.com/us/apply",
+				Location: jobdata.Location{
+					Type:      jobdata.LocationRemote,
+					Countries: []string{"GR", "US"},
+					Raw:       "Greece, United States",
+				},
+				Openings: []jobdata.Opening{
+					{Country: "United States", URL: "https://example.com/us", ApplyURL: "https://example.com/us/apply"},
+					{Country: "Greece", URL: "https://example.com/gr", ApplyURL: ""},
+				},
+				FirstSeenAt: seen,
+				LastSeenAt:  seen,
+				Bucket:      scoringschema.BucketPassed,
+				UserStatus:  scoringschema.UserStatusNew,
+			}},
+		}}
+		h := NewHTTPHandler(nil, Deps{
+			Logger:   zerolog.Nop(),
+			Profiles: profileJobsStore{},
+			Scoring:  api,
+		})
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/profiles/andrew/jobs", nil)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status %d %s", rec.Code, rec.Body.String())
+		}
+		var got schema.ProfileJobPage
+		if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+			t.Fatal(err)
+		}
+		if len(got.Jobs) != 1 {
+			t.Fatalf("jobs %#v", got.Jobs)
+		}
+		job := got.Jobs[0]
+		if job.URL != "https://example.com/us" || job.ApplyURL != "https://example.com/us/apply" {
+			t.Fatalf("urls %#v", job)
+		}
+		if job.Location.Type != "remote" || job.Location.Raw != "Greece, United States" || len(job.Location.Countries) != 2 || job.Location.Countries[0] != "GR" || job.Location.Countries[1] != "US" {
+			t.Fatalf("location %#v", job.Location)
+		}
+		if len(job.Openings) != 2 ||
+			job.Openings[0].Country != "United States" || job.Openings[0].URL != "https://example.com/us" || job.Openings[0].ApplyURL != "https://example.com/us/apply" ||
+			job.Openings[1].Country != "Greece" || job.Openings[1].URL != "https://example.com/gr" || job.Openings[1].ApplyURL != "" {
+			t.Fatalf("openings %#v", job.Openings)
+		}
 	})
 
 	t.Run("rejected page", func(t *testing.T) {
