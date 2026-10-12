@@ -83,8 +83,8 @@ func TestFileStoreLoadsAndrew(t *testing.T) {
 		"IS", "LI", "NO", "CH", "GB",
 	}, got.LocationCountries)
 	require.Equal(t, []string{"WORLDWIDE", "EUROPE", "EMEA"}, got.LocationRegions)
-	require.Len(t, got.ExcludeTitle, 155)
-	require.Len(t, got.ExcludeText, 194)
+	require.Len(t, got.ExcludeTitle, 157)
+	require.Len(t, got.ExcludeText, 229)
 	require.Len(t, got.Penalties, 5)
 	require.Contains(t, got.ExcludeTitle, "recruiter")
 	require.Contains(t, got.ExcludeTitle, "manager")
