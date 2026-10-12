@@ -6,7 +6,8 @@ import "fmt"
 type Bucket string
 
 const (
-	BucketPassed   Bucket = "PASSED"
+	BucketTop      Bucket = "TOP"
+	BucketReview   Bucket = "REVIEW"
 	BucketRejected Bucket = "REJECTED"
 )
 
@@ -18,7 +19,7 @@ func (b Bucket) Pointer() *Bucket { return &b }
 
 func (b Bucket) FromValue(s string) (Bucket, error) {
 	switch Bucket(s) {
-	case BucketPassed, BucketRejected:
+	case BucketTop, BucketReview, BucketRejected:
 		return Bucket(s), nil
 	default:
 		return "", fmt.Errorf("unknown Bucket %q: valid values are %v", s, ValuesBucket())
@@ -26,7 +27,7 @@ func (b Bucket) FromValue(s string) (Bucket, error) {
 }
 
 func ValuesBucket() []Bucket {
-	return []Bucket{BucketPassed, BucketRejected}
+	return []Bucket{BucketTop, BucketReview, BucketRejected}
 }
 
 func FromStringBucket(s string) (Bucket, error) {

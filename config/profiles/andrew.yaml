@@ -48,47 +48,8 @@ wellfound_roles:
   - full-stack-engineer
   - backend-engineer
 
-location_countries:
-  - US
-  - AT
-  - BE
-  - BG
-  - CY
-  - CZ
-  - DE
-  - DK
-  - EE
-  - ES
-  - FI
-  - FR
-  - GR
-  - HR
-  - HU
-  - IE
-  - IT
-  - LT
-  - LU
-  - LV
-  - MT
-  - NL
-  - PL
-  - PT
-  - RO
-  - SE
-  - SI
-  - SK
-  - IS
-  - LI
-  - NO
-  - CH
-  - GB
 
-location_regions:
-  - WORLDWIDE
-  - EUROPE
-  - EMEA
-
-exclude_title:
+gate_role:
   - "sdr"
   - "appointment setter"
   - "operations assistant"
@@ -191,7 +152,6 @@ exclude_title:
   - "developer advocate"
   - "developer relations"
   - "developer engagement"
-  - "architect"
   - "professional services"
   - "technical specialist"
   - "consultant"
@@ -210,13 +170,11 @@ exclude_title:
   - "devsecops engineer"
   - "site reliability"
   - "sre"
-  - "platform engineer"
   - "infrastructure engineer"
   - "cloud engineer"
   - "release engineer"
   - "build engineer"
   - "engineering productivity"
-  - "developer experience"
   - "developer productivity"
   - "database engineer"
   - "dba"
@@ -227,159 +185,22 @@ exclude_title:
   - "desktop engineer"
   - "video engineer"
   - "streaming engineer"
-  - "staff engineer"
-  - "staff software"
-  - "principal engineer"
-  - "principal software"
-  - "tech lead"
-  - "technical lead"
-  - "team lead"
-  - "lead engineer"
   - "distinguished"
   - "vp of engineering"
   - "expert engineer"
-  - "forward deployed"
-  - "fde"
   - "design engineer"
   - "training engineer"
   - "llm engineer"
   - "genai engineer"
-  - "ai platform engineer"
   - "prompt engineer"
 
-exclude_text:
-  - "clinical safety"
-  - "computer vision"
-  - "reinforcement learning"
-  - "active inference"
-  - "pytorch"
-  - "tensorflow"
-  - "scikit-learn"
-  - "transformer architecture"
-  - "fine-tuning"
-  - "fine tuning"
-  - "finetuning"
-  - "knowledge automation"
-  - "semantic technologies"
-  - "spring boot"
-  - "spring framework"
-  - "hibernate"
-  - "kotlin"
-  - "php"
-  - "laravel"
-  - "wordpress"
-  - "salesforce"
-  - "workday"
-  - "c#"
-  - ".net"
-  - "asp.net"
-  - "dotnet"
-  - "django"
-  - "rust"
-  - "haskell"
-  - "power platform"
-  - "power apps"
-  - "power automate"
-  - "embedded systems"
-  - "avionics"
-  - "iso 26262"
-  - "apac timezone only"
-  - "audio transcription"
-  - "generative audio"
-  - "data collection"
-  - "growth analytics"
-  - "support teams"
-  - "clinical supply"
-  - "creative art"
-  - "test automation"
-  - "react native"
-  - "react-native"
-  - "flutter"
-  - "mobile design"
-  - "robotics"
-  - "ruby"
-  - "drupal"
-  - "symfony"
-  - "business analytics"
-  - "product analytics"
-  - "hardware"
-  - "automotive"
-  - "bare metal"
-  - "bug bounty"
-  - "future opportunities"
-  - "email deliverability"
-  - "pharma"
-  - "data science"
-  - "grants"
-  - "media monitoring"
-  - "application security"
-  - "appsec"
-  - "product security"
-  - "platform security"
-  - "cloud security"
-  - "information security"
-  - "infosec"
-  - "cybersecurity"
-  - "penetration test"
-  - "pen test"
-  - "vulnerability management"
-  - "threat detection"
-  - "threat model"
-  - "incident response"
-  - "siem"
-  - "edr"
-  - "cnapp"
-  - "identity and access"
-  - "kubernetes operator"
-  - "hpc"
-  - "slurm"
-  - "c++"
-  - "clojure"
-  - "scala"
-  - "elixir"
-  - "objective-c"
-  - "electron"
-  - "webrtc"
-  - "geospatial"
-  - "desktop app"
-  - "browser extension"
-  - "casino"
-  - "igaming"
-  - "gambling"
-  - "crypto"
-  - "web3"
-  - "defi"
-  - "healthtech"
-  - "edtech"
-  - "part-time"
-  - "part time"
-  - "contract-to-hire"
-  - "staff augmentation"
-  - "outsourcing"
-  - "bpo"
-  - "pacific time"
-  - "pacific or mountain time"
-  - "us pacific"
-  - "americas overlap"
+gate_hard:
   - "authorized to work in the united states"
   - "authorized to work in the u.s"
   - "authorized to work in the us"
   - "authorized to work in the usa"
   - "authorized to work lawfully"
   - "authorization to work in the us"
-  - "must reside in the us"
-  - "must reside in the eastern"
-  - "must be based in the us"
-  - "based in the united states"
-  - "based in the us"
-  - "reside in the united states"
-  - "located in the united states"
-  - "us based only"
-  - "hiring only within the u.s"
-  - "remote in the us"
-  - "remote in the usa"
-  - "remote in usa"
-  - "must live in the state"
   - "u.s. citizen"
   - "u.s. citizenship"
   - "us citizenship"
@@ -403,84 +224,329 @@ exclude_text:
   - "without sponsorship"
   - "no sponsorship needed"
   - "not eligible for visa sponsorship"
-  - "umowa o prac"
-  - "lpa"
-  - "ctc annually"
-  - "thrive under pressure"
-  - "hungry to achieve"
-  - "hustle"
-  - "extreme ownership"
-  - "work hard, play hard"
-  - "rockstar"
-  - "ninja"
   - "deferred compensation"
   - "no salary until"
   - "compensation will be deferred"
-  - "area applicants"
-  - "commuting distance"
-  - "commutable"
-  - "bay area"
-  - "west coast"
-  - "east coast"
-  - "western hemisphere"
-  - "must be based in"
-  - "must be located in"
-  - "must live in"
-  - "should already be based"
-  - "candidates who are residing in"
-  - "candidates residing in the us"
-  - "individuals living in"
-  - "may live in the following locations"
-  - "preference for candidates near"
-  - "open to relocation"
-  - "open to relocating"
-  - "reside or are open to"
-  - "relocate to"
-  - "willing and able to relocate"
-  - "is your home base"
-  - "anywhere in the us"
-  - "anywhere in the united states"
-  - "remote - united states"
-  - "remote - usa"
-  - "remote (us)"
-  - "remote, us"
-  - "remote us"
-  - "remote - us"
-  - "remote within canada or united states"
-  - "geographic zones"
-  - "in-office"
-  - "in office"
-  - "hybrid schedule"
-  - "hybrid work model"
-  - "hybrid role"
-  - "hybrid roles"
-  - "hybrid-first"
-  - "hybrid dynamic"
-  - "on-site presence"
-  - "onsite presence"
-  - "work onsite"
-  - "onsite a minimum"
-  - "5 days onsite"
-  - "onsite five days per week"
-  - "not remote/hybrid"
-  - "regular time on-site"
-  - "location type: on-site"
-  - "able to work on-site"
-  - "office attendance in"
-  - "week from the office"
-  - "week in the office"
-  - "days/week in office"
-  - "us hours"
-  - "us working hours"
-  - "us eastern time"
-  - "eastern standard time"
-  - "pacific standard time"
-  - "est zone"
-  - "time zone between"
 
-penalties:
-  - "right to work in germany"
-  - "must reside in switzerland"
-  - "right to work in the uk"
-  - "eligible to work in france"
-  - "work permit required"
+gate_location:
+  allow_countries:
+    - "US"
+    - "AT"
+    - "BE"
+    - "BG"
+    - "CY"
+    - "CZ"
+    - "DE"
+    - "DK"
+    - "EE"
+    - "ES"
+    - "FI"
+    - "FR"
+    - "GR"
+    - "HR"
+    - "HU"
+    - "IE"
+    - "IT"
+    - "LT"
+    - "LU"
+    - "LV"
+    - "MT"
+    - "NL"
+    - "PL"
+    - "PT"
+    - "RO"
+    - "SE"
+    - "SI"
+    - "SK"
+    - "IS"
+    - "LI"
+    - "NO"
+    - "CH"
+    - "GB"
+  allow_regions:
+    - "WORLDWIDE"
+    - "EUROPE"
+    - "EMEA"
+  reject_timezones:
+    - "apac timezone only"
+    - "pacific time"
+    - "pacific or mountain time"
+    - "us pacific"
+    - "americas overlap"
+    - "us hours"
+    - "us working hours"
+    - "us eastern time"
+    - "eastern standard time"
+    - "pacific standard time"
+    - "est zone"
+    - "time zone between"
+
+signals_plus:
+  title:
+    vue: 6
+    typescript: 4
+    react: 4
+    golang: 6
+    node: 4
+  text:
+    max_total: 4
+    terms:
+      vue: 2
+      typescript: 2
+      react: 2
+      golang: 2
+      node: 2
+  salary:
+    min_eur_year: 80000
+    min_usd_year: 120000
+    usd_per_eur: 1.1
+    bonus_if_above: 4
+    penalty_if_below: -4
+  freshness:
+    days_3: 2
+    days_7: 1
+
+penalties_soft:
+  foreign_stack:
+    weight: -4
+    min_occurrences: 2
+    check_negation: false
+    terms:
+      - "spring boot"
+      - "spring framework"
+      - "hibernate"
+      - "kotlin"
+      - "php"
+      - "laravel"
+      - "wordpress"
+      - "salesforce"
+      - "c#"
+      - ".net"
+      - "asp.net"
+      - "dotnet"
+      - "django"
+      - "rust"
+      - "haskell"
+      - "power platform"
+      - "power apps"
+      - "power automate"
+      - "react native"
+      - "react-native"
+      - "flutter"
+      - "ruby"
+      - "drupal"
+      - "symfony"
+      - "bare metal"
+      - "kubernetes operator"
+      - "hpc"
+      - "slurm"
+      - "c++"
+      - "clojure"
+      - "scala"
+      - "elixir"
+      - "objective-c"
+      - "electron"
+      - "webrtc"
+  foreign_domain:
+    weight: -3
+    min_occurrences: 1
+    check_negation: false
+    terms:
+      - "clinical safety"
+      - "workday"
+      - "embedded systems"
+      - "avionics"
+      - "iso 26262"
+      - "audio transcription"
+      - "generative audio"
+      - "data collection"
+      - "growth analytics"
+      - "support teams"
+      - "clinical supply"
+      - "creative art"
+      - "test automation"
+      - "mobile design"
+      - "robotics"
+      - "business analytics"
+      - "product analytics"
+      - "hardware"
+      - "automotive"
+      - "email deliverability"
+      - "pharma"
+      - "grants"
+      - "media monitoring"
+      - "geospatial"
+      - "desktop app"
+      - "browser extension"
+      - "healthtech"
+      - "edtech"
+  office_pressure:
+    weight: -3
+    min_occurrences: 1
+    check_negation: false
+    terms:
+      - "umowa o prac"
+      - "lpa"
+      - "ctc annually"
+      - "area applicants"
+      - "commuting distance"
+      - "commutable"
+      - "bay area"
+      - "west coast"
+      - "east coast"
+      - "western hemisphere"
+      - "must be based in"
+      - "must be located in"
+      - "must live in"
+      - "should already be based"
+      - "candidates who are residing in"
+      - "individuals living in"
+      - "may live in the following locations"
+      - "preference for candidates near"
+      - "open to relocation"
+      - "open to relocating"
+      - "reside or are open to"
+      - "relocate to"
+      - "willing and able to relocate"
+      - "is your home base"
+      - "geographic zones"
+      - "in-office"
+      - "in office"
+      - "hybrid schedule"
+      - "hybrid work model"
+      - "hybrid role"
+      - "hybrid roles"
+      - "hybrid-first"
+      - "hybrid dynamic"
+      - "on-site presence"
+      - "onsite presence"
+      - "work onsite"
+      - "onsite a minimum"
+      - "5 days onsite"
+      - "onsite five days per week"
+      - "not remote/hybrid"
+      - "regular time on-site"
+      - "location type: on-site"
+      - "able to work on-site"
+      - "office attendance in"
+      - "week from the office"
+      - "week in the office"
+      - "days/week in office"
+      - "right to work in germany"
+      - "must reside in switzerland"
+      - "right to work in the uk"
+      - "eligible to work in france"
+      - "work permit required"
+  agency:
+    weight: -3
+    min_occurrences: 1
+    check_negation: false
+    terms:
+      - "contract-to-hire"
+      - "staff augmentation"
+      - "outsourcing"
+      - "bpo"
+  culture_smell:
+    weight: -2
+    min_occurrences: 1
+    check_negation: false
+    terms:
+      - "future opportunities"
+      - "thrive under pressure"
+      - "hungry to achieve"
+      - "hustle"
+      - "extreme ownership"
+      - "work hard, play hard"
+      - "rockstar"
+      - "ninja"
+  gambling_crypto:
+    weight: -4
+    min_occurrences: 1
+    check_negation: false
+    terms:
+      - "casino"
+      - "igaming"
+      - "gambling"
+      - "crypto"
+      - "web3"
+      - "defi"
+  ambiguous_us:
+    weight: -3
+    min_occurrences: 1
+    check_negation: true
+    terms:
+      - "must reside in the us"
+      - "must reside in the eastern"
+      - "must be based in the us"
+      - "based in the united states"
+      - "based in the us"
+      - "reside in the united states"
+      - "located in the united states"
+      - "us based only"
+      - "hiring only within the u.s"
+      - "remote in the us"
+      - "remote in the usa"
+      - "remote in usa"
+      - "must live in the state"
+      - "candidates residing in the us"
+      - "anywhere in the us"
+      - "anywhere in the united states"
+      - "remote - united states"
+      - "remote - usa"
+      - "remote (us)"
+      - "remote, us"
+      - "remote us"
+      - "remote - us"
+      - "remote within canada or united states"
+  part_time:
+    weight: -3
+    min_occurrences: 1
+    check_negation: true
+    terms:
+      - "part-time"
+      - "part time"
+  security_domain:
+    weight: -3
+    min_occurrences: 1
+    check_negation: false
+    terms:
+      - "bug bounty"
+      - "application security"
+      - "appsec"
+      - "product security"
+      - "platform security"
+      - "cloud security"
+      - "information security"
+      - "infosec"
+      - "cybersecurity"
+      - "penetration test"
+      - "pen test"
+      - "vulnerability management"
+      - "threat detection"
+      - "threat model"
+      - "incident response"
+      - "siem"
+      - "edr"
+      - "cnapp"
+      - "identity and access"
+  ml_domain:
+    weight: -3
+    min_occurrences: 1
+    check_negation: false
+    terms:
+      - "computer vision"
+      - "reinforcement learning"
+      - "active inference"
+      - "pytorch"
+      - "tensorflow"
+      - "scikit-learn"
+      - "transformer architecture"
+      - "fine-tuning"
+      - "fine tuning"
+      - "finetuning"
+      - "knowledge automation"
+      - "semantic technologies"
+      - "data science"
+
+buckets:
+  top: 6

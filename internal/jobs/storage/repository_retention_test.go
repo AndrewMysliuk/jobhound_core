@@ -28,7 +28,7 @@ func testJobsDBWithMatchFK(t *testing.T) *gorm.DB {
 		`CREATE TABLE profile_matches (
 			profile_id TEXT NOT NULL,
 			job_id TEXT NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
-			bucket TEXT NOT NULL CHECK (bucket IN ('PASSED', 'REJECTED')),
+			bucket TEXT NOT NULL CHECK (bucket IN ('TOP', 'REVIEW', 'REJECTED')),
 			score INTEGER NOT NULL,
 			signals TEXT NOT NULL,
 			user_status TEXT NOT NULL DEFAULT 'NEW' CHECK (user_status IN ('NEW', 'HIDDEN')),
@@ -75,12 +75,12 @@ func TestRepository_DeleteJobsLastSeenBeforeUTC(t *testing.T) {
 	}
 	if err := db.Exec(`
 		INSERT INTO profile_matches (profile_id, job_id, bucket, score, signals, run_id, updated_at)
-		VALUES ('andrew', 'stale', 'PASSED', 1, '[]', 1, ?)`, now).Error; err != nil {
+		VALUES ('andrew', 'stale', 'REVIEW', 1, '[]', 1, ?)`, now).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Exec(`
 		INSERT INTO profile_matches (profile_id, job_id, bucket, score, signals, run_id, updated_at)
-		VALUES ('andrew', 'fresh', 'PASSED', 1, '[]', 1, ?)`, now).Error; err != nil {
+		VALUES ('andrew', 'fresh', 'REVIEW', 1, '[]', 1, ?)`, now).Error; err != nil {
 		t.Fatal(err)
 	}
 

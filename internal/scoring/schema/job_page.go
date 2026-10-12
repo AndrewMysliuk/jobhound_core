@@ -7,7 +7,7 @@ import (
 )
 
 // ListJobsParams filters API.ListJobs.
-// An empty Bucket means PASSED. An empty UserStatus means NEW.
+// An empty Bucket means TOP. An empty UserStatus means NEW.
 type ListJobsParams struct {
 	ProfileID  string
 	Bucket     Bucket

@@ -2,6 +2,10 @@
 package impl
 
 import (
+	"math"
+	"regexp"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -10,6 +14,19 @@ import (
 	jobdata "github.com/andrewmysliuk/jobhound_core/internal/domain/schema"
 	profileschema "github.com/andrewmysliuk/jobhound_core/internal/profiles/schema"
 	"github.com/andrewmysliuk/jobhound_core/internal/scoring/schema"
+)
+
+const (
+	negationWindowRunes = 50
+	// fullTimeHoursPerYear annualizes an hourly figure at 40 hours × 52 weeks.
+	fullTimeHoursPerYear = 40 * 52
+)
+
+var (
+	salaryLeadCurrency  = regexp.MustCompile(`(?i)(€|\$|£|\busd\b|\beur\b|\bgbp\b|us\$)\s*(\d{1,3}(?:[, ]\d{3})+|\d+(?:\.\d+)?)(\s*[kK])?(?:\s*(?:-|\bto\b)\s*(?:€|\$|£|\busd\b|\beur\b|\bgbp\b|us\$)?\s*(\d{1,3}(?:[, ]\d{3})+|\d+(?:\.\d+)?)(\s*[kK])?)?`)
+	salaryTrailCurrency = regexp.MustCompile(`(?i)(\d{1,3}(?:[, ]\d{3})+|\d+(?:\.\d+)?)(\s*[kK])?(?:\s*(?:-|\bto\b)\s*(\d{1,3}(?:[, ]\d{3})+|\d+(?:\.\d+)?)(\s*[kK])?)?\s*\+?\s*-?\s*(€|\$|£|\busd\b|\beur\b|\bgbp\b|us\$)`)
+	salaryPeriod        = regexp.MustCompile(`(?i)^\s*(?:/|\bper\b|\ba\b)?\s*(yearly|annual(?:ly)?|monthly|weekly|hourly|daily|year|month|week|hour|day)\b`)
+	salaryMagnitude     = regexp.MustCompile(`(?i)^\s*(?:million|billion|mm|mn|bn|m|b)\b`)
 )
 
 // Outcome is the score of one job. It does not set user status or a run id.
@@ -21,50 +38,445 @@ type Outcome struct {
 
 // Evaluate applies one profile to one job. It does not read storage or the network.
 // The clock is time.Now. Score passes the run start via evaluateAt.
-// A known posted_at older than PostedAtRejectDays rejects before phrase checks.
-// A zero posted_at is not a reject. Title excludes run next, then text excludes
-// against the title, the description, and the location line. Location countries
-// and regions run after that. A hit stops the pass. Otherwise the bucket is PASSED,
-// including a score of 0 or below.
+// All five steps run. The bucket is chosen only after the signals are collected.
 func Evaluate(profile profileschema.Profile, job jobdata.Job) Outcome {
 	return evaluateAt(profile, job, time.Now().UTC())
 }
 
 func evaluateAt(profile profileschema.Profile, job jobdata.Job, now time.Time) Outcome {
-	if postedAtStale(job.PostedAt, now) {
-		return rejected(schema.SignalCutPostedAt, job.PostedAt.UTC().Format(time.RFC3339))
-	}
-	if phrase, ok := firstMatch(profile.ExcludeTitle, job.Title); ok {
-		return rejected(schema.SignalCutExcludeTitle, phrase)
-	}
-	text := jobText(job.Title, job.Description)
-	excludeText := jobText(text, job.Location.Raw)
-	if phrase, ok := firstMatch(profile.ExcludeText, excludeText); ok {
-		return rejected(schema.SignalCutExcludeText, phrase)
-	}
-	if terms, ok := cutLocation(profile, job.Location); ok {
-		return rejected(schema.SignalCutLocation, terms...)
-	}
-
 	var signals []schema.Signal
-	score := 0
-	for _, phrase := range matchingPhrases(profile.Queries, text) {
-		signals = append(signals, schema.Signal{
-			Code:   schema.SignalQuery,
-			Points: schema.QueryPoints,
-			Terms:  []string{phrase},
-		})
-		score += schema.QueryPoints
+	signals = append(signals, matchPhrases(profile.GateRole, false, "gate_role", schema.SignalGateRole, job.Title)...)
+	signals = append(signals, matchPhrases(profile.GateHard, true, "gate_hard", schema.SignalGateHard, job.Title, job.Description, job.Location.Raw)...)
+	signals = append(signals, matchGateLocation(profile.GateLocation, job, now)...)
+	signals = append(signals, matchSignalsPlus(profile, job, now)...)
+	signals = append(signals, matchPenaltiesSoft(profile, job)...)
+	score := scoreOf(signals)
+	return Outcome{
+		Bucket:  chooseBucket(profile.Buckets.Top, score, signals),
+		Score:   score,
+		Signals: signals,
 	}
-	for _, phrase := range matchingPhrases(profile.Penalties, text) {
-		signals = append(signals, schema.Signal{
-			Code:   schema.SignalPenalty,
-			Points: schema.PenaltyPoints,
-			Terms:  []string{phrase},
-		})
-		score += schema.PenaltyPoints
+}
+
+func matchSignalsPlus(profile profileschema.Profile, job jobdata.Job, now time.Time) []schema.Signal {
+	plus := profile.SignalsPlus
+	var signals []schema.Signal
+	signals = append(signals, matchTermSignals(plus.Title, "signals_plus.title", 0, false, job.Title)...)
+	signals = append(signals, matchTermSignals(plus.Text.Terms, "signals_plus.text", plus.Text.MaxTotal, true, job.Description)...)
+	if signal, ok := salarySignal(plus.Salary, job); ok {
+		signals = append(signals, signal)
 	}
-	return Outcome{Bucket: schema.BucketPassed, Score: score, Signals: signals}
+	if signal, ok := freshnessSignal(plus.Freshness, job, now); ok {
+		signals = append(signals, signal)
+	}
+	return signals
+}
+
+func matchTermSignals(terms map[string]int, rule string, cap int, applyCap bool, fields ...string) []schema.Signal {
+	if len(terms) == 0 {
+		return nil
+	}
+	keys := make([]string, 0, len(terms))
+	for term := range terms {
+		keys = append(keys, term)
+	}
+	sort.Strings(keys)
+	remaining := cap
+	var signals []schema.Signal
+	for _, term := range keys {
+		if strings.TrimSpace(term) == "" {
+			continue
+		}
+		n := 0
+		for _, field := range fields {
+			n += activeHits(field, term, false)
+		}
+		if n == 0 {
+			continue
+		}
+		awarded := terms[term]
+		if applyCap {
+			awarded = clipBodyAward(awarded, &remaining)
+		}
+		signals = append(signals, schema.Signal{
+			Code:        schema.SignalPlus,
+			Rule:        rule,
+			Phrase:      term,
+			Delta:       awarded,
+			Occurrences: n,
+		})
+	}
+	return signals
+}
+
+// clipBodyAward returns the points a body term actually adds.
+// A positive weight is cut so the running total stays within max_total.
+// Once the cap is spent the term still fires with delta 0.
+func clipBodyAward(weight int, remaining *int) int {
+	if weight <= 0 {
+		return weight
+	}
+	if *remaining <= 0 {
+		return 0
+	}
+	if weight > *remaining {
+		weight = *remaining
+	}
+	*remaining -= weight
+	return weight
+}
+
+func salarySignal(cfg profileschema.SalarySignals, job jobdata.Job) (schema.Signal, bool) {
+	// The raw compensation field wins. Title, then description, are fallbacks.
+	for _, text := range []string{job.SalaryRaw, job.Title, job.Description} {
+		yearly, currency, ok := parseSalaryYearly(text)
+		if !ok {
+			continue
+		}
+		delta, ok := salaryDelta(cfg, yearly, currency)
+		if !ok {
+			continue
+		}
+		return schema.Signal{
+			Code:  schema.SignalPlus,
+			Rule:  "signals_plus.salary",
+			Delta: delta,
+		}, true
+	}
+	return schema.Signal{}, false
+}
+
+// salaryDelta applies BonusIfAbove or PenaltyIfBelow as stored.
+// The minimum is inclusive. A zero minimum on the posting's currency
+// defers to the other minimum after USDPerEUR.
+func salaryDelta(cfg profileschema.SalarySignals, yearly float64, currency string) (int, bool) {
+	comparable, threshold, ok := salaryComparable(cfg, yearly, currency)
+	if !ok {
+		return 0, false
+	}
+	if int(math.Round(comparable)) >= threshold {
+		return cfg.BonusIfAbove, true
+	}
+	return cfg.PenaltyIfBelow, true
+}
+
+func salaryComparable(cfg profileschema.SalarySignals, yearly float64, currency string) (float64, int, bool) {
+	switch currency {
+	case "EUR":
+		if cfg.MinEURYear != 0 || cfg.MinUSDYear == 0 {
+			return yearly, cfg.MinEURYear, true
+		}
+		if cfg.USDPerEUR <= 0 {
+			return 0, 0, false
+		}
+		return yearly * cfg.USDPerEUR, cfg.MinUSDYear, true
+	case "USD":
+		if cfg.MinUSDYear != 0 || cfg.MinEURYear == 0 {
+			return yearly, cfg.MinUSDYear, true
+		}
+		if cfg.USDPerEUR <= 0 {
+			return 0, 0, false
+		}
+		return yearly / cfg.USDPerEUR, cfg.MinEURYear, true
+	default:
+		return 0, 0, false
+	}
+}
+
+type salarySpan struct {
+	end      int
+	upper    float64
+	currency string
+}
+
+func parseSalaryYearly(text string) (float64, string, bool) {
+	text = normalizeSalaryText(text)
+	for len(text) > 0 {
+		span, ok := earliestSalary(text)
+		if !ok || span.end <= 0 {
+			return 0, "", false
+		}
+		rest := text[span.end:]
+		text = rest
+		if salaryRejected(rest) {
+			continue
+		}
+		currency := canonicalCurrency(span.currency)
+		if currency == "" {
+			continue
+		}
+		yearly := span.upper * salaryMultiplier(rest)
+		if yearly < 1000 {
+			continue
+		}
+		return yearly, currency, true
+	}
+	return 0, "", false
+}
+
+func earliestSalary(text string) (salarySpan, bool) {
+	lead := salaryLeadCurrency.FindStringSubmatchIndex(text)
+	trail := salaryTrailCurrency.FindStringSubmatchIndex(text)
+	switch {
+	case lead == nil && trail == nil:
+		return salarySpan{}, false
+	case trail == nil || (lead != nil && lead[0] <= trail[0]):
+		return spanFromLead(text, lead), true
+	default:
+		return spanFromTrail(text, trail), true
+	}
+}
+
+func spanFromLead(text string, idx []int) salarySpan {
+	first, ok := parseAmountToken(submatch(text, idx, 2), submatch(text, idx, 3))
+	if !ok {
+		return salarySpan{end: idx[1]}
+	}
+	second, secondOK := parseAmountToken(submatch(text, idx, 4), submatch(text, idx, 5))
+	return salarySpan{
+		end:      idx[1],
+		upper:    upperOf(first, second, secondOK),
+		currency: submatch(text, idx, 1),
+	}
+}
+
+func spanFromTrail(text string, idx []int) salarySpan {
+	first, ok := parseAmountToken(submatch(text, idx, 1), submatch(text, idx, 2))
+	if !ok {
+		return salarySpan{end: idx[1]}
+	}
+	second, secondOK := parseAmountToken(submatch(text, idx, 3), submatch(text, idx, 4))
+	return salarySpan{
+		end:      idx[1],
+		upper:    upperOf(first, second, secondOK),
+		currency: submatch(text, idx, 5),
+	}
+}
+
+func submatch(text string, idx []int, group int) string {
+	start, end := idx[group*2], idx[group*2+1]
+	if start < 0 || end < 0 || start > end || end > len(text) {
+		return ""
+	}
+	return text[start:end]
+}
+
+func parseAmountToken(raw, k string) (float64, bool) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return 0, false
+	}
+	raw = strings.ReplaceAll(raw, ",", "")
+	raw = strings.ReplaceAll(raw, " ", "")
+	n, err := strconv.ParseFloat(raw, 64)
+	if err != nil || math.IsNaN(n) || n < 0 {
+		return 0, false
+	}
+	if strings.ContainsAny(k, "kK") {
+		n *= 1000
+	}
+	return n, true
+}
+
+func upperOf(first, second float64, secondOK bool) float64 {
+	if secondOK && second > first {
+		return second
+	}
+	return first
+}
+
+func canonicalCurrency(token string) string {
+	switch strings.ToLower(strings.TrimSpace(token)) {
+	case "€", "eur":
+		return "EUR"
+	case "$", "usd", "us$":
+		return "USD"
+	default:
+		return ""
+	}
+}
+
+func salaryRejected(rest string) bool {
+	if salaryMagnitude.MatchString(rest) {
+		return true
+	}
+	if rest == "" {
+		return false
+	}
+	r, _ := utf8.DecodeRuneInString(rest)
+	return unicode.IsLetter(r)
+}
+
+func salaryMultiplier(rest string) float64 {
+	m := salaryPeriod.FindStringSubmatch(rest)
+	if m == nil {
+		return 1
+	}
+	switch strings.ToLower(m[1]) {
+	case "month", "monthly":
+		return 12
+	case "week", "weekly":
+		return 52
+	case "day", "daily":
+		return 5 * 52
+	case "hour", "hourly":
+		return fullTimeHoursPerYear
+	default:
+		return 1
+	}
+}
+
+func normalizeSalaryText(text string) string {
+	return strings.NewReplacer(
+		"\u2013", "-",
+		"\u2014", "-",
+		"\u2212", "-",
+		"\u00a0", " ",
+	).Replace(text)
+}
+
+func freshnessSignal(fresh profileschema.FreshnessSignals, job jobdata.Job, now time.Time) (schema.Signal, bool) {
+	ts, ok := freshnessClock(job)
+	if !ok {
+		return schema.Signal{}, false
+	}
+	age := now.Sub(ts)
+	var delta int
+	switch {
+	case age <= 3*24*time.Hour:
+		delta = fresh.Days3
+	case age <= 7*24*time.Hour:
+		delta = fresh.Days7
+	default:
+		return schema.Signal{}, false
+	}
+	if delta == 0 {
+		return schema.Signal{}, false
+	}
+	return schema.Signal{
+		Code:  schema.SignalPlus,
+		Rule:  "signals_plus.freshness",
+		Delta: delta,
+	}, true
+}
+
+func freshnessClock(job jobdata.Job) (time.Time, bool) {
+	if !job.PostedAt.IsZero() {
+		return job.PostedAt, true
+	}
+	if !job.FirstSeenAt.IsZero() {
+		return job.FirstSeenAt, true
+	}
+	return time.Time{}, false
+}
+
+func matchPenaltiesSoft(profile profileschema.Profile, job jobdata.Job) []schema.Signal {
+	var signals []schema.Signal
+	for _, group := range profile.PenaltiesSoft {
+		signal, ok := penaltySignal(group, job)
+		if !ok {
+			continue
+		}
+		signals = append(signals, signal)
+	}
+	return signals
+}
+
+// penaltySignal fires a group once, on the first term in slice order that qualifies.
+// A title hit qualifies even when the body is under the threshold.
+// Body hits qualify only at the threshold. MinOccurrences below 1 means one hit.
+// Occurrences is the count that met that bar. Negation runs only when the group asks.
+func penaltySignal(group profileschema.PenaltyGroup, job jobdata.Job) (schema.Signal, bool) {
+	need := group.MinOccurrences
+	if need < 1 {
+		need = 1
+	}
+	for _, term := range group.Terms {
+		term = strings.TrimSpace(term)
+		if term == "" {
+			continue
+		}
+		titleHits := activeHits(job.Title, term, group.CheckNegation)
+		bodyHits := activeHits(job.Description, term, group.CheckNegation)
+		occurrences, ok := penaltyOccurrences(titleHits, bodyHits, need)
+		if !ok {
+			continue
+		}
+		return schema.Signal{
+			Code:        schema.SignalPenalty,
+			Rule:        group.Name,
+			Phrase:      term,
+			Delta:       group.Weight,
+			Occurrences: occurrences,
+		}, true
+	}
+	return schema.Signal{}, false
+}
+
+func penaltyOccurrences(titleHits, bodyHits, need int) (int, bool) {
+	if titleHits > 0 && bodyHits < need {
+		return titleHits, true
+	}
+	if bodyHits >= need {
+		return bodyHits, true
+	}
+	return 0, false
+}
+
+func matchGateLocation(gate profileschema.GateLocation, job jobdata.Job, now time.Time) []schema.Signal {
+	var signals []schema.Signal
+	signals = append(signals, locationCuts(gate, job.Location)...)
+	signals = append(signals, matchPhrases(gate.RejectTimezones, true, "gate_location.reject_timezones", schema.SignalCutTimezone, job.Title, job.Description, job.Location.Raw, job.Location.Timezone)...)
+	signals = append(signals, postedAtCut(job.PostedAt, now)...)
+	return signals
+}
+
+func locationCuts(gate profileschema.GateLocation, loc jobdata.Location) []schema.Signal {
+	allowedCountries := compact(gate.AllowCountries)
+	allowedRegions := compact(gate.AllowRegions)
+	if len(allowedCountries) == 0 && len(allowedRegions) == 0 {
+		return nil
+	}
+	countries := compact(loc.Countries)
+	regions := compact(loc.Regions)
+	if len(countries) == 0 && len(regions) == 0 {
+		return nil
+	}
+	var signals []schema.Signal
+	for _, code := range countries {
+		if missesAllowLists(code, allowedCountries, allowedRegions) {
+			signals = append(signals, schema.Signal{
+				Code:   schema.SignalCutLocation,
+				Rule:   "gate_location.allow_countries",
+				Phrase: code,
+			})
+		}
+	}
+	for _, code := range regions {
+		if missesAllowLists(code, allowedCountries, allowedRegions) {
+			signals = append(signals, schema.Signal{
+				Code:   schema.SignalCutLocation,
+				Rule:   "gate_location.allow_regions",
+				Phrase: code,
+			})
+		}
+	}
+	return signals
+}
+
+func missesAllowLists(code string, countries, regions []string) bool {
+	return !containsFold(countries, code) && !containsFold(regions, code)
+}
+
+func postedAtCut(posted, now time.Time) []schema.Signal {
+	if !postedAtStale(posted, now) {
+		return nil
+	}
+	return []schema.Signal{{
+		Code:   schema.SignalCutPostedAt,
+		Rule:   "posted_at",
+		Phrase: posted.UTC().Format(time.RFC3339),
+	}}
 }
 
 func postedAtStale(posted, now time.Time) bool {
@@ -75,36 +487,111 @@ func postedAtStale(posted, now time.Time) bool {
 	return posted.UTC().Before(cutoff)
 }
 
-func rejected(code schema.SignalCode, terms ...string) Outcome {
-	return Outcome{
-		Bucket: schema.BucketRejected,
-		Signals: []schema.Signal{{
-			Code:  code,
-			Terms: terms,
-		}},
+func chooseBucket(top, score int, signals []schema.Signal) schema.Bucket {
+	for _, signal := range signals {
+		if isGate(signal.Code) {
+			return schema.BucketRejected
+		}
+	}
+	if score >= top {
+		return schema.BucketTop
+	}
+	return schema.BucketReview
+}
+
+func isGate(code schema.SignalCode) bool {
+	switch code {
+	case schema.SignalGateRole, schema.SignalGateHard, schema.SignalCutLocation, schema.SignalCutTimezone, schema.SignalCutPostedAt:
+		return true
+	default:
+		return false
 	}
 }
 
-// cutLocation rejects a known hiring scope that misses the profile lists.
-// Empty countries and regions stay. Empty profile lists turn the check off.
-func cutLocation(profile profileschema.Profile, loc jobdata.Location) ([]string, bool) {
-	allowedCountries := compact(profile.LocationCountries)
-	allowedRegions := compact(profile.LocationRegions)
-	if len(allowedCountries) == 0 && len(allowedRegions) == 0 {
-		return nil, false
+func scoreOf(signals []schema.Signal) int {
+	score := 0
+	for _, signal := range signals {
+		score += signal.Delta
 	}
-	countries := compact(loc.Countries)
-	regions := compact(loc.Regions)
-	if len(countries) == 0 && len(regions) == 0 {
-		return nil, false
+	return score
+}
+
+func matchPhrases(phrases []string, checkNegation bool, rule string, code schema.SignalCode, fields ...string) []schema.Signal {
+	var signals []schema.Signal
+	for _, phrase := range phrases {
+		phrase = strings.TrimSpace(phrase)
+		if phrase == "" {
+			continue
+		}
+		n := 0
+		for _, field := range fields {
+			n += activeHits(field, phrase, checkNegation)
+		}
+		if n == 0 {
+			continue
+		}
+		signals = append(signals, schema.Signal{
+			Code:        code,
+			Rule:        rule,
+			Phrase:      phrase,
+			Occurrences: n,
+		})
 	}
-	if overlaps(allowedCountries, countries) || overlaps(allowedRegions, regions) {
-		return nil, false
+	return signals
+}
+
+func activeHits(text, phrase string, checkNegation bool) int {
+	phrase = strings.TrimSpace(phrase)
+	if phrase == "" {
+		return 0
 	}
-	terms := make([]string, 0, len(countries)+len(regions))
-	terms = append(terms, countries...)
-	terms = append(terms, regions...)
-	return terms, true
+	hay := strings.ToLower(text)
+	needle := strings.ToLower(phrase)
+	if len(needle) > len(hay) {
+		return 0
+	}
+	n := 0
+	for start := 0; start <= len(hay)-len(needle); {
+		rel := strings.Index(hay[start:], needle)
+		if rel < 0 {
+			return n
+		}
+		abs := start + rel
+		if wordBounded(hay, abs, len(needle)) && (!checkNegation || !negated(hay, abs)) {
+			n++
+		}
+		start = abs + 1
+	}
+	return n
+}
+
+// negated reports whether the hit at start should be ignored.
+// The window is the 50 characters before the phrase, clamped at the previous
+// sentence boundary so a negation in an earlier sentence does not disarm it.
+func negated(hay string, start int) bool {
+	if strings.HasSuffix(hay[:start], "non-") {
+		return true
+	}
+	return negationIn(negationWindow(hay, start))
+}
+
+func negationWindow(hay string, start int) string {
+	prefix := []rune(hay[:start])
+	if len(prefix) > negationWindowRunes {
+		prefix = prefix[len(prefix)-negationWindowRunes:]
+	}
+	window := string(prefix)
+	if cut := strings.LastIndexAny(window, ".!?"); cut >= 0 {
+		window = window[cut+1:]
+	}
+	return window
+}
+
+func negationIn(window string) bool {
+	if strings.Contains(window, "n't") {
+		return true
+	}
+	return activeHits(window, "not", false) > 0 || activeHits(window, "no", false) > 0
 }
 
 func compact(values []string) []string {
@@ -119,69 +606,11 @@ func compact(values []string) []string {
 	return out
 }
 
-func overlaps(allowed, got []string) bool {
-	for _, code := range got {
-		for _, want := range allowed {
-			if strings.EqualFold(want, code) {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-func jobText(title, description string) string {
-	title = strings.TrimSpace(title)
-	description = strings.TrimSpace(description)
-	switch {
-	case title == "":
-		return description
-	case description == "":
-		return title
-	default:
-		return title + "\n" + description
-	}
-}
-
-func firstMatch(phrases []string, text string) (string, bool) {
-	for _, phrase := range phrases {
-		if containsPhrase(text, phrase) {
-			return strings.TrimSpace(phrase), true
-		}
-	}
-	return "", false
-}
-
-func matchingPhrases(phrases []string, text string) []string {
-	var hit []string
-	for _, phrase := range phrases {
-		if containsPhrase(text, phrase) {
-			hit = append(hit, strings.TrimSpace(phrase))
-		}
-	}
-	return hit
-}
-
-func containsPhrase(text, phrase string) bool {
-	phrase = strings.TrimSpace(phrase)
-	if phrase == "" {
-		return false
-	}
-	hay := strings.ToLower(text)
-	needle := strings.ToLower(phrase)
-	if len(needle) > len(hay) {
-		return false
-	}
-	for start := 0; start <= len(hay)-len(needle); {
-		rel := strings.Index(hay[start:], needle)
-		if rel < 0 {
-			return false
-		}
-		abs := start + rel
-		if wordBounded(hay, abs, len(needle)) {
+func containsFold(values []string, code string) bool {
+	for _, value := range values {
+		if strings.EqualFold(value, code) {
 			return true
 		}
-		start = abs + 1
 	}
 	return false
 }

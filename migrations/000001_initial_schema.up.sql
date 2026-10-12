@@ -51,7 +51,7 @@ CREATE TABLE profile_matches (
     run_id BIGINT NOT NULL REFERENCES profile_runs (id),
     updated_at TIMESTAMPTZ NOT NULL,
     PRIMARY KEY (profile_id, job_id),
-    CONSTRAINT profile_matches_bucket_check CHECK (bucket IN ('PASSED', 'REJECTED')),
+    CONSTRAINT profile_matches_bucket_check CHECK (bucket IN ('TOP', 'REVIEW', 'REJECTED')),
     CONSTRAINT profile_matches_user_status_check CHECK (user_status IN ('NEW', 'HIDDEN'))
 );
 

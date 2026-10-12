@@ -65,7 +65,11 @@ func TestProfileRunWorkflow_scoresKeepsHiddenAndSkipsMissingSource(t *testing.T)
 		Sources:        []string{"himalayas", "wellfound", "builtin"},
 		Queries:        []string{"vue"},
 		WellfoundRoles: []string{"frontend-engineer"},
-		ExcludeTitle:   []string{"recruiter"},
+		GateRole:       []string{"recruiter"},
+		SignalsPlus: profileschema.SignalsPlus{
+			Title: map[string]int{"vue": 1},
+		},
+		Buckets: profileschema.Buckets{Top: 1},
 	}
 	deps := Deps{
 		Profiles: staticProfiles{profile: profile},
@@ -87,8 +91,8 @@ func TestProfileRunWorkflow_scoresKeepsHiddenAndSkipsMissingSource(t *testing.T)
 	first := createRunning(t, runs, profile.ID)
 	runWorkflow(t, deps, ing, first.ID)
 	assertRun(t, db, first.ID, string(scoringschema.RunStatusSucceeded), 2, 1)
-	assertMatch(t, db, vueJob.ID, string(scoringschema.BucketPassed), 1, string(scoringschema.UserStatusNew), scoringschema.SignalQuery, "vue")
-	assertMatch(t, db, recruiterJob.ID, string(scoringschema.BucketRejected), 0, string(scoringschema.UserStatusNew), scoringschema.SignalCutExcludeTitle, "recruiter")
+	assertMatch(t, db, vueJob.ID, string(scoringschema.BucketTop), 1, string(scoringschema.UserStatusNew), scoringschema.SignalPlus, "vue")
+	assertMatch(t, db, recruiterJob.ID, string(scoringschema.BucketRejected), 0, string(scoringschema.UserStatusNew), scoringschema.SignalGateRole, "recruiter")
 
 	if err := db.Exec(
 		`UPDATE profile_matches SET user_status = ? WHERE profile_id = ? AND job_id = ?`,
@@ -101,8 +105,8 @@ func TestProfileRunWorkflow_scoresKeepsHiddenAndSkipsMissingSource(t *testing.T)
 	runWorkflow(t, deps, ing, second.ID)
 	// himalayas and wellfound are cooling down; builtin is still missing.
 	assertRun(t, db, second.ID, string(scoringschema.RunStatusSucceeded), 2, 3)
-	assertMatch(t, db, vueJob.ID, string(scoringschema.BucketPassed), 1, string(scoringschema.UserStatusHidden), scoringschema.SignalQuery, "vue")
-	assertMatch(t, db, recruiterJob.ID, string(scoringschema.BucketRejected), 0, string(scoringschema.UserStatusNew), scoringschema.SignalCutExcludeTitle, "recruiter")
+	assertMatch(t, db, vueJob.ID, string(scoringschema.BucketTop), 1, string(scoringschema.UserStatusHidden), scoringschema.SignalPlus, "vue")
+	assertMatch(t, db, recruiterJob.ID, string(scoringschema.BucketRejected), 0, string(scoringschema.UserStatusNew), scoringschema.SignalGateRole, "recruiter")
 
 	var n int64
 	if err := db.Model(&scoringstorage.ProfileMatch{}).Where("profile_id = ?", profile.ID).Count(&n).Error; err != nil {
@@ -162,7 +166,7 @@ func assertRun(t *testing.T, db *gorm.DB, id int64, status string, jobsScored, s
 	}
 }
 
-func assertMatch(t *testing.T, db *gorm.DB, jobID, bucket string, score int, userStatus string, code scoringschema.SignalCode, term string) {
+func assertMatch(t *testing.T, db *gorm.DB, jobID, bucket string, score int, userStatus string, code scoringschema.SignalCode, phrase string) {
 	t.Helper()
 	var row scoringstorage.ProfileMatch
 	if err := db.Where("job_id = ?", jobID).First(&row).Error; err != nil {
@@ -175,9 +179,12 @@ func assertMatch(t *testing.T, db *gorm.DB, jobID, bucket string, score int, use
 	if err := json.Unmarshal(row.Signals, &signals); err != nil {
 		t.Fatal(err)
 	}
-	if len(signals) != 1 || signals[0].Code != code || len(signals[0].Terms) != 1 || signals[0].Terms[0] != term {
-		t.Fatalf("job %s signals %#v", jobID, signals)
+	for _, signal := range signals {
+		if signal.Code == code && signal.Phrase == phrase {
+			return
+		}
 	}
+	t.Fatalf("job %s signals %#v", jobID, signals)
 }
 
 type staticProfiles struct {
@@ -259,7 +266,7 @@ func testRunDB(t *testing.T) *gorm.DB {
 		`CREATE TABLE profile_matches (
 			profile_id TEXT NOT NULL,
 			job_id TEXT NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
-			bucket TEXT NOT NULL CHECK (bucket IN ('PASSED', 'REJECTED')),
+			bucket TEXT NOT NULL CHECK (bucket IN ('TOP', 'REVIEW', 'REJECTED')),
 			score INTEGER NOT NULL,
 			signals TEXT NOT NULL,
 			user_status TEXT NOT NULL DEFAULT 'NEW' CHECK (user_status IN ('NEW', 'HIDDEN')),

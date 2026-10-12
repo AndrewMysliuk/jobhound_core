@@ -6,12 +6,13 @@ import "fmt"
 type SignalCode string
 
 const (
-	SignalQuery           SignalCode = "QUERY"
-	SignalPenalty         SignalCode = "PENALTY"
-	SignalCutExcludeTitle SignalCode = "CUT_EXCLUDE_TITLE"
-	SignalCutExcludeText  SignalCode = "CUT_EXCLUDE_TEXT"
-	SignalCutLocation     SignalCode = "CUT_LOCATION"
-	SignalCutPostedAt     SignalCode = "CUT_POSTED_AT"
+	SignalGateRole    SignalCode = "GATE_ROLE"
+	SignalGateHard    SignalCode = "GATE_HARD"
+	SignalCutLocation SignalCode = "CUT_LOCATION"
+	SignalCutTimezone SignalCode = "CUT_TIMEZONE"
+	SignalCutPostedAt SignalCode = "CUT_POSTED_AT"
+	SignalPlus        SignalCode = "PLUS"
+	SignalPenalty     SignalCode = "PENALTY"
 )
 
 func (c SignalCode) String() string { return string(c) }
@@ -22,7 +23,7 @@ func (c SignalCode) Pointer() *SignalCode { return &c }
 
 func (c SignalCode) FromValue(s string) (SignalCode, error) {
 	switch SignalCode(s) {
-	case SignalQuery, SignalPenalty, SignalCutExcludeTitle, SignalCutExcludeText, SignalCutLocation, SignalCutPostedAt:
+	case SignalGateRole, SignalGateHard, SignalCutLocation, SignalCutTimezone, SignalCutPostedAt, SignalPlus, SignalPenalty:
 		return SignalCode(s), nil
 	default:
 		return "", fmt.Errorf("unknown SignalCode %q: valid values are %v", s, ValuesSignalCode())
@@ -30,7 +31,7 @@ func (c SignalCode) FromValue(s string) (SignalCode, error) {
 }
 
 func ValuesSignalCode() []SignalCode {
-	return []SignalCode{SignalQuery, SignalPenalty, SignalCutExcludeTitle, SignalCutExcludeText, SignalCutLocation, SignalCutPostedAt}
+	return []SignalCode{SignalGateRole, SignalGateHard, SignalCutLocation, SignalCutTimezone, SignalCutPostedAt, SignalPlus, SignalPenalty}
 }
 
 func FromStringSignalCode(s string) (SignalCode, error) {
@@ -38,9 +39,11 @@ func FromStringSignalCode(s string) (SignalCode, error) {
 	return z.FromValue(s)
 }
 
-// Signal is one fired phrase with its contribution.
+// Signal is one fired rule with its contribution. Delta is 0 for gates.
 type Signal struct {
-	Code   SignalCode `json:"code"`
-	Points int        `json:"points"`
-	Terms  []string   `json:"terms,omitempty"`
+	Code        SignalCode `json:"code"`
+	Rule        string     `json:"rule"`
+	Phrase      string     `json:"phrase,omitempty"`
+	Delta       int        `json:"delta"`
+	Occurrences int        `json:"occurrences,omitempty"`
 }

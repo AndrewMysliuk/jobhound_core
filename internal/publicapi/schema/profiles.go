@@ -46,11 +46,13 @@ type ProfileJobOpening struct {
 	ApplyURL string `json:"apply_url"`
 }
 
-// ProfileJobSignal is one fired phrase on a scored job.
+// ProfileJobSignal is one fired rule on a scored job.
 type ProfileJobSignal struct {
-	Code   string   `json:"code"`
-	Points int      `json:"points"`
-	Terms  []string `json:"terms,omitempty"`
+	Code        string `json:"code"`
+	Rule        string `json:"rule"`
+	Phrase      string `json:"phrase,omitempty"`
+	Delta       int    `json:"delta"`
+	Occurrences int    `json:"occurrences,omitempty"`
 }
 
 // ProfileJob is one job entry in the profile job page and the PATCH 200 body.

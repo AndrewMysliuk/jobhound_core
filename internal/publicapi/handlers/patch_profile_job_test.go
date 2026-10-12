@@ -39,12 +39,14 @@ func TestPatchProfileJob(t *testing.T) {
 		PostedAt:    posted,
 		FirstSeenAt: seen,
 		LastSeenAt:  seen,
-		Bucket:      scoringschema.BucketPassed,
+		Bucket:      scoringschema.BucketTop,
 		Score:       1,
 		Signals: []scoringschema.Signal{{
-			Code:   scoringschema.SignalQuery,
-			Points: 1,
-			Terms:  []string{"vue"},
+			Code:        scoringschema.SignalPlus,
+			Rule:        "signals_plus.title",
+			Phrase:      "vue",
+			Delta:       1,
+			Occurrences: 1,
 		}},
 		UserStatus: scoringschema.UserStatusNew,
 	}
@@ -78,11 +80,14 @@ func TestPatchProfileJob(t *testing.T) {
 		if got.PostedAt == nil || !got.PostedAt.Equal(posted) || !got.FirstSeenAt.Equal(seen) || !got.LastSeenAt.Equal(seen) {
 			t.Fatalf("times posted %v first %s last %s", got.PostedAt, got.FirstSeenAt, got.LastSeenAt)
 		}
-		if got.Bucket != scoringschema.BucketPassed.String() || got.Score != 1 || got.UserStatus != scoringschema.UserStatusHidden.String() {
+		if got.Bucket != scoringschema.BucketTop.String() || got.Score != 1 || got.UserStatus != scoringschema.UserStatusHidden.String() {
 			t.Fatalf("score %#v", got)
 		}
-		if len(got.Signals) != 1 || got.Signals[0].Code != scoringschema.SignalQuery.String() || got.Signals[0].Points != 1 {
+		if len(got.Signals) != 1 || got.Signals[0].Code != scoringschema.SignalPlus.String() || got.Signals[0].Rule != "signals_plus.title" || got.Signals[0].Phrase != "vue" || got.Signals[0].Delta != 1 || got.Signals[0].Occurrences != 1 {
 			t.Fatalf("signals %#v", got.Signals)
+		}
+		if strings.Contains(rec.Body.String(), `"points"`) || strings.Contains(rec.Body.String(), `"terms"`) {
+			t.Fatalf("old signal fields in body %s", rec.Body.String())
 		}
 		if got.Openings == nil || len(got.Openings) != 0 {
 			t.Fatalf("openings %#v", got.Openings)

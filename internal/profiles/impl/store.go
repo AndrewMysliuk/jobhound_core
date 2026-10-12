@@ -37,17 +37,60 @@ func NewFileStore(dir string, knownSourceIDs []string) *FileStore {
 var _ profiles.Store = (*FileStore)(nil)
 
 type fileProfile struct {
-	ID                string   `yaml:"id"`
-	Name              string   `yaml:"name"`
-	Domain            string   `yaml:"domain"`
-	Sources           []string `yaml:"sources"`
-	Queries           []string `yaml:"queries"`
-	WellfoundRoles    []string `yaml:"wellfound_roles"`
-	LocationCountries []string `yaml:"location_countries"`
-	LocationRegions   []string `yaml:"location_regions"`
-	ExcludeTitle      []string `yaml:"exclude_title"`
-	ExcludeText       []string `yaml:"exclude_text"`
-	Penalties         []string `yaml:"penalties"`
+	ID             string                      `yaml:"id"`
+	Name           string                      `yaml:"name"`
+	Domain         string                      `yaml:"domain"`
+	Sources        []string                    `yaml:"sources"`
+	Queries        []string                    `yaml:"queries"`
+	WellfoundRoles []string                    `yaml:"wellfound_roles"`
+	GateRole       []string                    `yaml:"gate_role"`
+	GateHard       []string                    `yaml:"gate_hard"`
+	GateLocation   fileGateLocation            `yaml:"gate_location"`
+	SignalsPlus    fileSignalsPlus             `yaml:"signals_plus"`
+	PenaltiesSoft  map[string]filePenaltyGroup `yaml:"penalties_soft"`
+	Buckets        fileBuckets                 `yaml:"buckets"`
+}
+
+type fileGateLocation struct {
+	AllowCountries  []string `yaml:"allow_countries"`
+	AllowRegions    []string `yaml:"allow_regions"`
+	RejectTimezones []string `yaml:"reject_timezones"`
+}
+
+type fileSignalsPlus struct {
+	Title     map[string]int       `yaml:"title"`
+	Text      fileTextSignals      `yaml:"text"`
+	Salary    fileSalarySignals    `yaml:"salary"`
+	Freshness fileFreshnessSignals `yaml:"freshness"`
+}
+
+type fileTextSignals struct {
+	Terms    map[string]int `yaml:"terms"`
+	MaxTotal int            `yaml:"max_total"`
+}
+
+type fileSalarySignals struct {
+	MinEURYear     int     `yaml:"min_eur_year"`
+	MinUSDYear     int     `yaml:"min_usd_year"`
+	USDPerEUR      float64 `yaml:"usd_per_eur"`
+	BonusIfAbove   int     `yaml:"bonus_if_above"`
+	PenaltyIfBelow int     `yaml:"penalty_if_below"`
+}
+
+type fileFreshnessSignals struct {
+	Days3 int `yaml:"days_3"`
+	Days7 int `yaml:"days_7"`
+}
+
+type filePenaltyGroup struct {
+	Weight         int      `yaml:"weight"`
+	MinOccurrences int      `yaml:"min_occurrences"`
+	CheckNegation  bool     `yaml:"check_negation"`
+	Terms          []string `yaml:"terms"`
+}
+
+type fileBuckets struct {
+	Top int `yaml:"top"`
 }
 
 func (s *FileStore) List(ctx context.Context) ([]schema.Profile, error) {
@@ -110,18 +153,63 @@ func (s *FileStore) load(path, wantID string) (schema.Profile, error) {
 		}
 	}
 	return schema.Profile{
-		ID:                raw.ID,
-		Name:              raw.Name,
-		Domain:            domain,
-		Sources:           raw.Sources,
-		Queries:           raw.Queries,
-		WellfoundRoles:    raw.WellfoundRoles,
-		LocationCountries: raw.LocationCountries,
-		LocationRegions:   raw.LocationRegions,
-		ExcludeTitle:      raw.ExcludeTitle,
-		ExcludeText:       raw.ExcludeText,
-		Penalties:         raw.Penalties,
+		ID:             raw.ID,
+		Name:           raw.Name,
+		Domain:         domain,
+		Sources:        raw.Sources,
+		Queries:        raw.Queries,
+		WellfoundRoles: raw.WellfoundRoles,
+		GateRole:       raw.GateRole,
+		GateHard:       raw.GateHard,
+		GateLocation: schema.GateLocation{
+			AllowCountries:  raw.GateLocation.AllowCountries,
+			AllowRegions:    raw.GateLocation.AllowRegions,
+			RejectTimezones: raw.GateLocation.RejectTimezones,
+		},
+		SignalsPlus: schema.SignalsPlus{
+			Title: raw.SignalsPlus.Title,
+			Text: schema.TextSignals{
+				Terms:    raw.SignalsPlus.Text.Terms,
+				MaxTotal: raw.SignalsPlus.Text.MaxTotal,
+			},
+			Salary: schema.SalarySignals{
+				MinEURYear:     raw.SignalsPlus.Salary.MinEURYear,
+				MinUSDYear:     raw.SignalsPlus.Salary.MinUSDYear,
+				USDPerEUR:      raw.SignalsPlus.Salary.USDPerEUR,
+				BonusIfAbove:   raw.SignalsPlus.Salary.BonusIfAbove,
+				PenaltyIfBelow: raw.SignalsPlus.Salary.PenaltyIfBelow,
+			},
+			Freshness: schema.FreshnessSignals{
+				Days3: raw.SignalsPlus.Freshness.Days3,
+				Days7: raw.SignalsPlus.Freshness.Days7,
+			},
+		},
+		PenaltiesSoft: flattenPenalties(raw.PenaltiesSoft),
+		Buckets:       schema.Buckets{Top: raw.Buckets.Top},
 	}, nil
+}
+
+func flattenPenalties(raw map[string]filePenaltyGroup) []schema.PenaltyGroup {
+	if len(raw) == 0 {
+		return nil
+	}
+	names := make([]string, 0, len(raw))
+	for name := range raw {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	out := make([]schema.PenaltyGroup, 0, len(names))
+	for _, name := range names {
+		group := raw[name]
+		out = append(out, schema.PenaltyGroup{
+			Name:           name,
+			Weight:         group.Weight,
+			MinOccurrences: group.MinOccurrences,
+			CheckNegation:  group.CheckNegation,
+			Terms:          group.Terms,
+		})
+	}
+	return out
 }
 
 func decodeProfile(data []byte) (fileProfile, error) {

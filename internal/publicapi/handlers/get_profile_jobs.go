@@ -60,7 +60,7 @@ type profileJobsQuery struct {
 func (h *HTTPHandler) parseProfileJobsQuery(r *http.Request) (profileJobsQuery, bool) {
 	values := r.URL.Query()
 	out := profileJobsQuery{
-		bucket:     scoringschema.BucketPassed,
+		bucket:     scoringschema.BucketTop,
 		userStatus: scoringschema.UserStatusNew,
 		page:       1,
 		limit:      schema.DefaultJobListLimit,
@@ -143,9 +143,11 @@ func (h *HTTPHandler) profileJobPage(page scoringschema.JobPage) schema.ProfileJ
 		signals := make([]schema.ProfileJobSignal, 0, len(job.Signals))
 		for _, signal := range job.Signals {
 			signals = append(signals, schema.ProfileJobSignal{
-				Code:   signal.Code.String(),
-				Points: signal.Points,
-				Terms:  signal.Terms,
+				Code:        signal.Code.String(),
+				Rule:        signal.Rule,
+				Phrase:      signal.Phrase,
+				Delta:       signal.Delta,
+				Occurrences: signal.Occurrences,
 			})
 		}
 		openings := make([]schema.ProfileJobOpening, 0, len(job.Openings))

@@ -192,8 +192,7 @@ func (r *Repository) UpsertMatch(ctx context.Context, m schema.Match) error {
 }
 
 // List returns one page of matches for the profile.
-// An empty bucket means PASSED. An empty user status means NEW.
-// A PASSED list omits score 0 and below. REJECTED does not.
+// An empty bucket means TOP. An empty user status means NEW.
 // Page less than 1 is 1. Limit less than 1 is 50, and limit above 100 is 100.
 // Order is score DESC, jobs.first_seen_at DESC.
 func (r *Repository) List(ctx context.Context, p schema.ListJobsParams) (schema.JobPage, error) {
@@ -202,7 +201,7 @@ func (r *Repository) List(ctx context.Context, p schema.ListJobsParams) (schema.
 	}
 	bucket := p.Bucket
 	if bucket == "" {
-		bucket = schema.BucketPassed
+		bucket = schema.BucketTop
 	}
 	status := p.UserStatus
 	if status == "" {
@@ -262,9 +261,6 @@ func (r *Repository) listQuery(ctx context.Context, profileID, bucket, status st
 		Where("profile_matches.profile_id = ?", profileID).
 		Where("profile_matches.bucket = ?", bucket).
 		Where("profile_matches.user_status = ?", status)
-	if bucket == string(schema.BucketPassed) {
-		q = q.Where("profile_matches.score > ?", 0)
-	}
 	return q
 }
 

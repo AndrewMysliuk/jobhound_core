@@ -151,8 +151,23 @@ func TestMigrationsProfileRunsAndMatches_integration(t *testing.T) {
 		t.Fatalf("profile_matches_list: got %q", indexdef)
 	}
 
+	var bucketDef string
+	err = sqlDB.QueryRowContext(ctx, `
+		SELECT pg_get_constraintdef(oid) FROM pg_constraint
+		WHERE conname = $1`, "profile_matches_bucket_check").Scan(&bucketDef)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, value := range []string{"TOP", "REVIEW", "REJECTED"} {
+		if !strings.Contains(bucketDef, value) {
+			t.Fatalf("profile_matches_bucket_check: got %q, want %s", bucketDef, value)
+		}
+	}
+	if strings.Contains(bucketDef, "PASSED") {
+		t.Fatalf("profile_matches_bucket_check accepts PASSED: %q", bucketDef)
+	}
+
 	checks := map[string][2]string{
-		"profile_matches_bucket_check":      {"PASSED", "REJECTED"},
 		"profile_matches_user_status_check": {"NEW", "HIDDEN"},
 	}
 	for name, pair := range checks {
@@ -214,7 +229,7 @@ func TestMigrationsProfileRunsAndMatches_integration(t *testing.T) {
 	}
 	if _, err := tx.ExecContext(ctx, `
 		INSERT INTO profile_matches (profile_id, job_id, bucket, score, signals, run_id, updated_at)
-		VALUES ('andrew', 'm1-job', 'PASSED', 0, '[]'::jsonb, $1, NOW())`, runID); err != nil {
+		VALUES ('andrew', 'm1-job', 'REVIEW', 0, '[]'::jsonb, $1, NOW())`, runID); err != nil {
 		t.Fatal(err)
 	}
 	var status string

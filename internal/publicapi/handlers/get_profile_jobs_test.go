@@ -25,6 +25,7 @@ func TestGetProfileJobs(t *testing.T) {
 
 	t.Run("bad query", func(t *testing.T) {
 		for _, rawURL := range []string{
+			"/api/v1/profiles/andrew/jobs?bucket=PASSED",
 			"/api/v1/profiles/andrew/jobs?bucket=BOTH",
 			"/api/v1/profiles/andrew/jobs?user_status=ALL",
 			"/api/v1/profiles/andrew/jobs?user_status=NEW&user_status=HIDDEN",
@@ -57,7 +58,7 @@ func TestGetProfileJobs(t *testing.T) {
 		}
 	})
 
-	t.Run("default passed and new", func(t *testing.T) {
+	t.Run("default top and new", func(t *testing.T) {
 		api := &profileJobsScoring{page: scoringschema.JobPage{
 			Page:  1,
 			Limit: schema.DefaultJobListLimit,
@@ -73,10 +74,16 @@ func TestGetProfileJobs(t *testing.T) {
 				PostedAt:    posted,
 				FirstSeenAt: seen,
 				LastSeenAt:  seen,
-				Bucket:      scoringschema.BucketPassed,
+				Bucket:      scoringschema.BucketTop,
 				Score:       0,
-				Signals:     []scoringschema.Signal{{Code: scoringschema.SignalQuery, Points: 1, Terms: []string{"golang"}}},
-				UserStatus:  scoringschema.UserStatusNew,
+				Signals: []scoringschema.Signal{{
+					Code:        scoringschema.SignalPlus,
+					Rule:        "signals_plus.title",
+					Phrase:      "golang",
+					Delta:       1,
+					Occurrences: 1,
+				}},
+				UserStatus: scoringschema.UserStatusNew,
 			}},
 		}}
 		h := NewHTTPHandler(nil, Deps{
@@ -91,7 +98,7 @@ func TestGetProfileJobs(t *testing.T) {
 			t.Fatalf("status %d %s", rec.Code, rec.Body.String())
 		}
 		if api.listParams.ProfileID != "andrew" ||
-			api.listParams.Bucket != scoringschema.BucketPassed ||
+			api.listParams.Bucket != scoringschema.BucketTop ||
 			api.listParams.UserStatus != scoringschema.UserStatusNew ||
 			api.listParams.Page != 1 ||
 			api.listParams.Limit != schema.DefaultJobListLimit {
@@ -108,7 +115,7 @@ func TestGetProfileJobs(t *testing.T) {
 			t.Fatalf("page %#v", got)
 		}
 		job := got.Jobs[0]
-		if job.JobID != "job-1" || job.Bucket != "PASSED" || job.Score != 0 || job.UserStatus != "NEW" {
+		if job.JobID != "job-1" || job.Bucket != "TOP" || job.Score != 0 || job.UserStatus != "NEW" {
 			t.Fatalf("job %#v", job)
 		}
 		if job.Location.Type != "remote" || job.Location.Raw != "Remote" || len(job.Location.Regions) != 0 || len(job.Location.Countries) != 0 {
@@ -117,8 +124,11 @@ func TestGetProfileJobs(t *testing.T) {
 		if len(job.Sources) != 1 || job.Sources[0] != "himalayas" {
 			t.Fatalf("sources %#v", job.Sources)
 		}
-		if len(job.Signals) != 1 || job.Signals[0].Code != "QUERY" || job.Signals[0].Points != 1 || len(job.Signals[0].Terms) != 1 || job.Signals[0].Terms[0] != "golang" {
+		if len(job.Signals) != 1 || job.Signals[0].Code != "PLUS" || job.Signals[0].Rule != "signals_plus.title" || job.Signals[0].Phrase != "golang" || job.Signals[0].Delta != 1 || job.Signals[0].Occurrences != 1 {
 			t.Fatalf("signals %#v", job.Signals)
+		}
+		if strings.Contains(rec.Body.String(), `"points"`) || strings.Contains(rec.Body.String(), `"terms"`) {
+			t.Fatalf("old signal fields in body %s", rec.Body.String())
 		}
 		if job.PostedAt == nil || !job.PostedAt.Equal(posted) || !job.FirstSeenAt.Equal(seen) || !job.LastSeenAt.Equal(seen) {
 			t.Fatalf("times posted %v first %s last %s", job.PostedAt, job.FirstSeenAt, job.LastSeenAt)
@@ -150,7 +160,7 @@ func TestGetProfileJobs(t *testing.T) {
 				},
 				FirstSeenAt: seen,
 				LastSeenAt:  seen,
-				Bucket:      scoringschema.BucketPassed,
+				Bucket:      scoringschema.BucketTop,
 				UserStatus:  scoringschema.UserStatusNew,
 			}},
 		}}
@@ -186,6 +196,27 @@ func TestGetProfileJobs(t *testing.T) {
 		}
 	})
 
+	t.Run("review bucket", func(t *testing.T) {
+		api := &profileJobsScoring{page: scoringschema.JobPage{
+			Page:  1,
+			Limit: schema.DefaultJobListLimit,
+		}}
+		h := NewHTTPHandler(nil, Deps{
+			Logger:   zerolog.Nop(),
+			Profiles: profileJobsStore{},
+			Scoring:  api,
+		})
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/profiles/andrew/jobs?bucket=REVIEW", nil)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status %d %s", rec.Code, rec.Body.String())
+		}
+		if api.listParams.Bucket != scoringschema.BucketReview {
+			t.Fatalf("params %#v", api.listParams)
+		}
+	})
+
 	t.Run("rejected page", func(t *testing.T) {
 		api := &profileJobsScoring{page: scoringschema.JobPage{
 			Page:  2,
@@ -202,8 +233,14 @@ func TestGetProfileJobs(t *testing.T) {
 				LastSeenAt:  seen,
 				Bucket:      scoringschema.BucketRejected,
 				Score:       -10,
-				Signals:     []scoringschema.Signal{{Code: scoringschema.SignalCutExcludeTitle, Points: 0, Terms: []string{"intern"}}},
-				UserStatus:  scoringschema.UserStatusNew,
+				Signals: []scoringschema.Signal{{
+					Code:        scoringschema.SignalGateRole,
+					Rule:        "gate_role",
+					Phrase:      "intern",
+					Delta:       0,
+					Occurrences: 1,
+				}},
+				UserStatus: scoringschema.UserStatusNew,
 			}},
 		}}
 		h := NewHTTPHandler(nil, Deps{
@@ -234,7 +271,7 @@ func TestGetProfileJobs(t *testing.T) {
 		if job.Bucket != "REJECTED" || job.Score != -10 || job.UserStatus != "NEW" || job.PostedAt != nil {
 			t.Fatalf("job %#v", job)
 		}
-		if job.Sources == nil || job.Signals == nil || len(job.Signals) != 1 || job.Signals[0].Code != "CUT_EXCLUDE_TITLE" {
+		if job.Sources == nil || job.Signals == nil || len(job.Signals) != 1 || job.Signals[0].Code != "GATE_ROLE" || job.Signals[0].Rule != "gate_role" || job.Signals[0].Phrase != "intern" || job.Signals[0].Delta != 0 || job.Signals[0].Occurrences != 1 {
 			t.Fatalf("lists sources %#v signals %#v", job.Sources, job.Signals)
 		}
 	})

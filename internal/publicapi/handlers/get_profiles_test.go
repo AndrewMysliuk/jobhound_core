@@ -19,14 +19,17 @@ func TestGetProfilesReturnsListInStoreOrder(t *testing.T) {
 		Logger: zerolog.Nop(),
 		Profiles: fakeProfileStore{list: []profileschema.Profile{
 			{
-				ID:           "andrew",
-				Name:         "Andrew",
-				Domain:       profileschema.DomainSoftware,
-				Sources:      []string{"himalayas", "wellfound"},
-				Queries:      []string{"golang"},
-				ExcludeTitle: []string{"intern"},
-				ExcludeText:  []string{"clearance"},
-				Penalties:    []string{"php"},
+				ID:       "andrew",
+				Name:     "Andrew",
+				Domain:   profileschema.DomainSoftware,
+				Sources:  []string{"himalayas", "wellfound"},
+				Queries:  []string{"golang"},
+				GateRole: []string{"intern"},
+				GateHard: []string{"clearance"},
+				PenaltiesSoft: []profileschema.PenaltyGroup{{
+					Name:  "foreign_stack",
+					Terms: []string{"php"},
+				}},
 			},
 			{
 				ID:     "zeta",

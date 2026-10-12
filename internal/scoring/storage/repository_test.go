@@ -60,7 +60,7 @@ func testScoringDB(t *testing.T) *gorm.DB {
 		`CREATE TABLE profile_matches (
 			profile_id TEXT NOT NULL,
 			job_id TEXT NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
-			bucket TEXT NOT NULL CHECK (bucket IN ('PASSED', 'REJECTED')),
+			bucket TEXT NOT NULL CHECK (bucket IN ('TOP', 'REVIEW', 'REJECTED')),
 			score INTEGER NOT NULL,
 			signals TEXT NOT NULL,
 			user_status TEXT NOT NULL DEFAULT 'NEW' CHECK (user_status IN ('NEW', 'HIDDEN')),
@@ -129,9 +129,9 @@ func TestRepository_UpsertMatch_overwritesScoreKeepsHidden(t *testing.T) {
 	err = repo.UpsertMatch(ctx, schema.Match{
 		ProfileID:  "andrew",
 		JobID:      "job-1",
-		Bucket:     schema.BucketPassed,
+		Bucket:     schema.Bucket("REVIEW"),
 		Score:      4,
-		Signals:    []schema.Signal{{Code: schema.SignalQuery, Points: 1, Terms: []string{"vue"}}},
+		Signals:    []schema.Signal{{Code: schema.SignalPlus, Rule: "signals_plus.title", Phrase: "vue", Delta: 1}},
 		UserStatus: schema.UserStatusHidden,
 		RunID:      firstRun.ID,
 	})
@@ -144,7 +144,7 @@ func TestRepository_UpsertMatch_overwritesScoreKeepsHidden(t *testing.T) {
 		JobID:      "job-1",
 		Bucket:     schema.BucketRejected,
 		Score:      0,
-		Signals:    []schema.Signal{{Code: schema.SignalCutExcludeTitle, Points: 0, Terms: []string{"recruiter"}}},
+		Signals:    []schema.Signal{{Code: schema.SignalGateRole, Rule: "gate_role", Phrase: "recruiter"}},
 		UserStatus: schema.UserStatusNew,
 		RunID:      secondRun.ID,
 	})
@@ -172,7 +172,7 @@ func TestRepository_UpsertMatch_overwritesScoreKeepsHidden(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(signals) != 1 || signals[0].Code != schema.SignalCutExcludeTitle || len(signals[0].Terms) != 1 || signals[0].Terms[0] != "recruiter" {
+	if len(signals) != 1 || signals[0].Code != schema.SignalGateRole || signals[0].Phrase != "recruiter" {
 		t.Fatalf("signals = %#v", signals)
 	}
 }
@@ -248,6 +248,9 @@ func TestRepository_List_filtersAndSorts(t *testing.T) {
 	insertJob(t, db, "job-tie-old", "Tie old", older)
 	insertJob(t, db, "job-zero", "Zero", latest)
 	insertJob(t, db, "job-negative", "Negative", latest)
+	insertJob(t, db, "job-top", "Top", latest)
+	insertJob(t, db, "job-top-zero", "Top zero", latest)
+	insertJob(t, db, "job-top-negative", "Top negative", latest)
 	insertJob(t, db, "job-hidden", "Hidden", latest)
 	insertJob(t, db, "job-hidden-zero", "Hidden zero", latest)
 	insertJob(t, db, "job-rejected", "Rejected", latest)
@@ -256,17 +259,20 @@ func TestRepository_List_filtersAndSorts(t *testing.T) {
 	insertJob(t, db, "job-other", "Other", latest)
 
 	seeds := []schema.Match{
-		{ProfileID: "andrew", JobID: "job-high", Bucket: schema.BucketPassed, Score: 9, UserStatus: schema.UserStatusNew, RunID: run.ID},
-		{ProfileID: "andrew", JobID: "job-tie-new", Bucket: schema.BucketPassed, Score: 5, UserStatus: schema.UserStatusNew, RunID: run.ID},
-		{ProfileID: "andrew", JobID: "job-tie-old", Bucket: schema.BucketPassed, Score: 5, UserStatus: schema.UserStatusNew, RunID: run.ID},
-		{ProfileID: "andrew", JobID: "job-zero", Bucket: schema.BucketPassed, Score: 0, UserStatus: schema.UserStatusNew, RunID: run.ID},
-		{ProfileID: "andrew", JobID: "job-negative", Bucket: schema.BucketPassed, Score: -9, UserStatus: schema.UserStatusNew, RunID: run.ID},
-		{ProfileID: "andrew", JobID: "job-hidden", Bucket: schema.BucketPassed, Score: 50, UserStatus: schema.UserStatusHidden, RunID: run.ID},
-		{ProfileID: "andrew", JobID: "job-hidden-zero", Bucket: schema.BucketPassed, Score: 0, UserStatus: schema.UserStatusHidden, RunID: run.ID},
+		{ProfileID: "andrew", JobID: "job-high", Bucket: schema.Bucket("REVIEW"), Score: 9, UserStatus: schema.UserStatusNew, RunID: run.ID},
+		{ProfileID: "andrew", JobID: "job-tie-new", Bucket: schema.Bucket("REVIEW"), Score: 5, UserStatus: schema.UserStatusNew, RunID: run.ID},
+		{ProfileID: "andrew", JobID: "job-tie-old", Bucket: schema.Bucket("REVIEW"), Score: 5, UserStatus: schema.UserStatusNew, RunID: run.ID},
+		{ProfileID: "andrew", JobID: "job-zero", Bucket: schema.Bucket("REVIEW"), Score: 0, UserStatus: schema.UserStatusNew, RunID: run.ID},
+		{ProfileID: "andrew", JobID: "job-negative", Bucket: schema.Bucket("REVIEW"), Score: -9, UserStatus: schema.UserStatusNew, RunID: run.ID},
+		{ProfileID: "andrew", JobID: "job-top", Bucket: schema.BucketTop, Score: 7, UserStatus: schema.UserStatusNew, RunID: run.ID},
+		{ProfileID: "andrew", JobID: "job-top-zero", Bucket: schema.BucketTop, Score: 0, UserStatus: schema.UserStatusNew, RunID: run.ID},
+		{ProfileID: "andrew", JobID: "job-top-negative", Bucket: schema.BucketTop, Score: -4, UserStatus: schema.UserStatusNew, RunID: run.ID},
+		{ProfileID: "andrew", JobID: "job-hidden", Bucket: schema.Bucket("REVIEW"), Score: 50, UserStatus: schema.UserStatusHidden, RunID: run.ID},
+		{ProfileID: "andrew", JobID: "job-hidden-zero", Bucket: schema.Bucket("REVIEW"), Score: 0, UserStatus: schema.UserStatusHidden, RunID: run.ID},
 		{ProfileID: "andrew", JobID: "job-rejected", Bucket: schema.BucketRejected, Score: 100, UserStatus: schema.UserStatusNew, RunID: run.ID},
 		{ProfileID: "andrew", JobID: "job-rejected-zero", Bucket: schema.BucketRejected, Score: 0, UserStatus: schema.UserStatusNew, RunID: run.ID},
 		{ProfileID: "andrew", JobID: "job-rejected-hidden", Bucket: schema.BucketRejected, Score: 100, UserStatus: schema.UserStatusHidden, RunID: run.ID},
-		{ProfileID: "other", JobID: "job-other", Bucket: schema.BucketPassed, Score: 1000, UserStatus: schema.UserStatusNew, RunID: run.ID},
+		{ProfileID: "other", JobID: "job-other", Bucket: schema.Bucket("REVIEW"), Score: 1000, UserStatus: schema.UserStatusNew, RunID: run.ID},
 	}
 	for _, m := range seeds {
 		if err := repo.UpsertMatch(ctx, m); err != nil {
@@ -274,22 +280,49 @@ func TestRepository_List_filtersAndSorts(t *testing.T) {
 		}
 	}
 
-	defaultPage, err := repo.List(ctx, schema.ListJobsParams{ProfileID: "andrew", Page: 1, Limit: 10})
+	topPage, err := repo.List(ctx, schema.ListJobsParams{ProfileID: "andrew", Page: 1, Limit: 10})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if defaultPage.Total != 3 || len(defaultPage.Jobs) != 3 {
-		t.Fatalf("default total=%d len=%d", defaultPage.Total, len(defaultPage.Jobs))
+	if topPage.Total != 3 || len(topPage.Jobs) != 3 {
+		t.Fatalf("top total=%d len=%d", topPage.Total, len(topPage.Jobs))
 	}
-	gotIDs := []string{defaultPage.Jobs[0].JobID, defaultPage.Jobs[1].JobID, defaultPage.Jobs[2].JobID}
-	wantIDs := []string{"job-high", "job-tie-new", "job-tie-old"}
+	topIDs := []string{topPage.Jobs[0].JobID, topPage.Jobs[1].JobID, topPage.Jobs[2].JobID}
+	wantTop := []string{"job-top", "job-top-zero", "job-top-negative"}
+	for i := range wantTop {
+		if topIDs[i] != wantTop[i] || topPage.Jobs[i].Bucket != schema.BucketTop {
+			t.Fatalf("top order = %v, want %v", topIDs, wantTop)
+		}
+	}
+	explicitTop, err := repo.List(ctx, schema.ListJobsParams{ProfileID: "andrew", Bucket: schema.BucketTop, Page: 1, Limit: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if explicitTop.Total != topPage.Total || len(explicitTop.Jobs) != len(topPage.Jobs) {
+		t.Fatalf("explicit top = %#v", explicitTop.Jobs)
+	}
+	for i := range wantTop {
+		if explicitTop.Jobs[i].JobID != wantTop[i] || explicitTop.Jobs[i].Score != topPage.Jobs[i].Score {
+			t.Fatalf("explicit top = %#v", explicitTop.Jobs)
+		}
+	}
+
+	defaultPage, err := repo.List(ctx, schema.ListJobsParams{ProfileID: "andrew", Bucket: schema.Bucket("REVIEW"), Page: 1, Limit: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if defaultPage.Total != 5 || len(defaultPage.Jobs) != 5 {
+		t.Fatalf("review total=%d len=%d", defaultPage.Total, len(defaultPage.Jobs))
+	}
+	gotIDs := []string{defaultPage.Jobs[0].JobID, defaultPage.Jobs[1].JobID, defaultPage.Jobs[2].JobID, defaultPage.Jobs[3].JobID, defaultPage.Jobs[4].JobID}
+	wantIDs := []string{"job-high", "job-tie-new", "job-tie-old", "job-zero", "job-negative"}
 	for i := range wantIDs {
 		if gotIDs[i] != wantIDs[i] {
 			t.Fatalf("order = %v, want %v", gotIDs, wantIDs)
 		}
 	}
 	high := defaultPage.Jobs[0]
-	if high.Title != "High" || high.Company != "Acme" || high.Score != 9 || high.Bucket != schema.BucketPassed || high.UserStatus != schema.UserStatusNew {
+	if high.Title != "High" || high.Company != "Acme" || high.Score != 9 || high.Bucket != schema.Bucket("REVIEW") || high.UserStatus != schema.UserStatusNew {
 		t.Fatalf("high = %#v", high)
 	}
 	if high.Location.Raw != "Berlin" || high.Location.Type != "remote" || len(high.Sources) != 1 || high.Sources[0] != "himalayas" {
@@ -314,6 +347,7 @@ func TestRepository_List_filtersAndSorts(t *testing.T) {
 
 	hidden, err := repo.List(ctx, schema.ListJobsParams{
 		ProfileID:  "andrew",
+		Bucket:     schema.Bucket("REVIEW"),
 		UserStatus: schema.UserStatusHidden,
 		Page:       1,
 		Limit:      10,
@@ -321,22 +355,22 @@ func TestRepository_List_filtersAndSorts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if hidden.Total != 1 || len(hidden.Jobs) != 1 || hidden.Jobs[0].JobID != "job-hidden" || hidden.Jobs[0].UserStatus != schema.UserStatusHidden {
+	if hidden.Total != 2 || len(hidden.Jobs) != 2 || hidden.Jobs[0].JobID != "job-hidden" || hidden.Jobs[1].JobID != "job-hidden-zero" || hidden.Jobs[0].UserStatus != schema.UserStatusHidden {
 		t.Fatalf("hidden = %#v", hidden.Jobs)
 	}
 
-	page1, err := repo.List(ctx, schema.ListJobsParams{ProfileID: "andrew", Page: 1, Limit: 2})
+	page1, err := repo.List(ctx, schema.ListJobsParams{ProfileID: "andrew", Bucket: schema.Bucket("REVIEW"), Page: 1, Limit: 2})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if page1.Total != 3 || len(page1.Jobs) != 2 || page1.Jobs[0].JobID != "job-high" || page1.Jobs[1].JobID != "job-tie-new" {
+	if page1.Total != 5 || len(page1.Jobs) != 2 || page1.Jobs[0].JobID != "job-high" || page1.Jobs[1].JobID != "job-tie-new" {
 		t.Fatalf("page1 = %#v total %d", page1.Jobs, page1.Total)
 	}
-	page2, err := repo.List(ctx, schema.ListJobsParams{ProfileID: "andrew", Page: 2, Limit: 2})
+	page2, err := repo.List(ctx, schema.ListJobsParams{ProfileID: "andrew", Bucket: schema.Bucket("REVIEW"), Page: 2, Limit: 2})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if page2.Total != 3 || len(page2.Jobs) != 1 || page2.Jobs[0].JobID != "job-tie-old" {
+	if page2.Total != 5 || len(page2.Jobs) != 2 || page2.Jobs[0].JobID != "job-tie-old" || page2.Jobs[1].JobID != "job-zero" {
 		t.Fatalf("page2 = %#v total %d", page2.Jobs, page2.Total)
 	}
 }
@@ -374,7 +408,7 @@ func TestRepository_RunLookupAndSetUserStatus(t *testing.T) {
 	if err := repo.UpsertMatch(ctx, schema.Match{
 		ProfileID:  "andrew",
 		JobID:      "job-1",
-		Bucket:     schema.BucketPassed,
+		Bucket:     schema.Bucket("REVIEW"),
 		Score:      2,
 		UserStatus: schema.UserStatusNew,
 		RunID:      newer.ID,
@@ -437,15 +471,15 @@ func TestRepository_List_decodesOpenings(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, m := range []schema.Match{
-		{ProfileID: "andrew", JobID: "job-two", Bucket: schema.BucketPassed, Score: 4, UserStatus: schema.UserStatusNew, RunID: run.ID},
-		{ProfileID: "andrew", JobID: "job-empty", Bucket: schema.BucketPassed, Score: 1, UserStatus: schema.UserStatusNew, RunID: run.ID},
+		{ProfileID: "andrew", JobID: "job-two", Bucket: schema.Bucket("REVIEW"), Score: 4, UserStatus: schema.UserStatusNew, RunID: run.ID},
+		{ProfileID: "andrew", JobID: "job-empty", Bucket: schema.Bucket("REVIEW"), Score: 1, UserStatus: schema.UserStatusNew, RunID: run.ID},
 	} {
 		if err := repo.UpsertMatch(ctx, m); err != nil {
 			t.Fatal(err)
 		}
 	}
 
-	page, err := repo.List(ctx, schema.ListJobsParams{ProfileID: "andrew", Page: 1, Limit: 10})
+	page, err := repo.List(ctx, schema.ListJobsParams{ProfileID: "andrew", Bucket: schema.Bucket("REVIEW"), Page: 1, Limit: 10})
 	if err != nil {
 		t.Fatal(err)
 	}

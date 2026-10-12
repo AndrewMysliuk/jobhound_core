@@ -102,8 +102,31 @@ func TestListJobs_defaults(t *testing.T) {
 	if _, err := svc.ListJobs(context.Background(), schema.ListJobsParams{ProfileID: "andrew"}); err != nil {
 		t.Fatal(err)
 	}
-	if store.listed.Bucket != schema.BucketPassed || store.listed.UserStatus != schema.UserStatusNew {
+	if store.listed.Bucket != schema.BucketTop || store.listed.UserStatus != schema.UserStatusNew {
 		t.Fatalf("params = %#v", store.listed)
+	}
+}
+
+func TestListJobs_returnsNonPositiveScores(t *testing.T) {
+	store := &fakeRuns{page: schema.JobPage{
+		Total: 2,
+		Jobs: []schema.ListedJob{
+			{JobID: "zero", Score: 0},
+			{JobID: "negative", Score: -9},
+		},
+	}}
+	svc := newTestService(store, &fakeStarter{}, time.Now().UTC())
+	for _, bucket := range []schema.Bucket{schema.BucketReview, schema.BucketTop} {
+		got, err := svc.ListJobs(context.Background(), schema.ListJobsParams{ProfileID: "andrew", Bucket: bucket})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if store.listed.Bucket != bucket {
+			t.Fatalf("listed bucket = %s", store.listed.Bucket)
+		}
+		if got.Total != 2 || len(got.Jobs) != 2 || got.Jobs[0].Score != 0 || got.Jobs[1].Score != -9 {
+			t.Fatalf("bucket %s page = %#v", bucket, got)
+		}
 	}
 }
 
@@ -119,10 +142,11 @@ func TestScore(t *testing.T) {
 	started := time.Date(2026, 10, 10, 12, 0, 0, 0, time.UTC)
 	window := time.Duration(schema.ScoreWindowDays) * 24 * time.Hour
 	profile := profileschema.Profile{
-		ID:           "andrew",
-		Name:         "Andrew",
-		ExcludeTitle: []string{"recruiter"},
-		Queries:      []string{"vue"},
+		ID:       "andrew",
+		Name:     "Andrew",
+		GateRole: []string{"recruiter"},
+		Queries:  []string{"vue"},
+		Buckets:  profileschema.Buckets{Top: 1},
 	}
 	old := jobdata.Job{
 		ID:          "old",
@@ -151,7 +175,7 @@ func TestScore(t *testing.T) {
 	hidden := schema.Match{
 		ProfileID:  "andrew",
 		JobID:      fresh.ID,
-		Bucket:     schema.BucketPassed,
+		Bucket:     schema.BucketReview,
 		Score:      4,
 		UserStatus: schema.UserStatusHidden,
 		RunID:      1,
@@ -172,8 +196,8 @@ func TestScore(t *testing.T) {
 			wantN: 1,
 			want: []schema.Match{{
 				JobID:      edge.ID,
-				Bucket:     schema.BucketPassed,
-				Score:      1,
+				Bucket:     schema.BucketReview,
+				Score:      0,
 				UserStatus: schema.UserStatusNew,
 			}},
 		},
@@ -192,8 +216,8 @@ func TestScore(t *testing.T) {
 				Bucket:     schema.BucketRejected,
 				UserStatus: schema.UserStatusNew,
 				Signals: []schema.Signal{{
-					Code:  schema.SignalCutPostedAt,
-					Terms: []string{started.Add(-time.Duration(schema.PostedAtRejectDays) * 24 * time.Hour).Add(-time.Second).Format(time.RFC3339)},
+					Code:   schema.SignalCutPostedAt,
+					Phrase: started.Add(-time.Duration(schema.PostedAtRejectDays) * 24 * time.Hour).Add(-time.Second).Format(time.RFC3339),
 				}},
 			}},
 		},
@@ -217,8 +241,8 @@ func TestScore(t *testing.T) {
 				Score:      0,
 				UserStatus: schema.UserStatusNew,
 				Signals: []schema.Signal{{
-					Code:  schema.SignalCutExcludeTitle,
-					Terms: []string{"recruiter"},
+					Code:   schema.SignalGateRole,
+					Phrase: "recruiter",
 				}},
 			}},
 		},
@@ -229,8 +253,8 @@ func TestScore(t *testing.T) {
 			wantN: 1,
 			want: []schema.Match{{
 				JobID:      fresh.ID,
-				Bucket:     schema.BucketPassed,
-				Score:      1,
+				Bucket:     schema.BucketReview,
+				Score:      0,
 				UserStatus: schema.UserStatusHidden,
 			}},
 		},
@@ -242,7 +266,7 @@ func TestScore(t *testing.T) {
 			wantErr:   true,
 			want: []schema.Match{{
 				JobID:      fresh.ID,
-				Bucket:     schema.BucketPassed,
+				Bucket:     schema.BucketReview,
 				Score:      4,
 				UserStatus: schema.UserStatusHidden,
 				RunID:      1,
@@ -307,13 +331,8 @@ func sameSignals(got, want []schema.Signal) bool {
 		return false
 	}
 	for i := range want {
-		if got[i].Code != want[i].Code || len(got[i].Terms) != len(want[i].Terms) {
+		if got[i].Code != want[i].Code || got[i].Phrase != want[i].Phrase {
 			return false
-		}
-		for j := range want[i].Terms {
-			if got[i].Terms[j] != want[i].Terms[j] {
-				return false
-			}
 		}
 	}
 	return true
@@ -390,6 +409,7 @@ type fakeRuns struct {
 	matches   []schema.Match
 	nextID    int64
 	listed    schema.ListJobsParams
+	page      schema.JobPage
 	upsertErr error
 }
 
@@ -489,7 +509,7 @@ func (f *fakeRuns) UpsertMatch(_ context.Context, m schema.Match) error {
 
 func (f *fakeRuns) List(_ context.Context, p schema.ListJobsParams) (schema.JobPage, error) {
 	f.listed = p
-	return schema.JobPage{}, nil
+	return f.page, nil
 }
 
 func (f *fakeRuns) SetUserStatus(context.Context, string, string, schema.UserStatus) (schema.ListedJob, error) {

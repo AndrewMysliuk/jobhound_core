@@ -2,6 +2,7 @@ package impl
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -13,25 +14,46 @@ import (
 func TestEvaluate(t *testing.T) {
 	t.Parallel()
 
-	query := func(terms ...string) schema.Signal {
-		return schema.Signal{Code: schema.SignalQuery, Points: schema.QueryPoints, Terms: terms}
+	now := time.Date(2026, 10, 12, 12, 0, 0, 0, time.UTC)
+	month := time.Duration(schema.PostedAtRejectDays) * 24 * time.Hour
+	stale := now.Add(-month).Add(-time.Second)
+	review := profileschema.Buckets{Top: 1}
+	signal := func(code schema.SignalCode, rule, phrase string, occurrences int) schema.Signal {
+		return schema.Signal{Code: code, Rule: rule, Phrase: phrase, Occurrences: occurrences}
 	}
-	penalty := func(terms ...string) schema.Signal {
-		return schema.Signal{Code: schema.SignalPenalty, Points: schema.PenaltyPoints, Terms: terms}
+	role := func(phrase string, occurrences int) schema.Signal {
+		return signal(schema.SignalGateRole, "gate_role", phrase, occurrences)
 	}
-	cutTitle := func(phrase string) schema.Signal {
-		return schema.Signal{Code: schema.SignalCutExcludeTitle, Terms: []string{phrase}}
+	hard := func(phrase string, occurrences int) schema.Signal {
+		return signal(schema.SignalGateHard, "gate_hard", phrase, occurrences)
 	}
-	cutText := func(phrase string) schema.Signal {
-		return schema.Signal{Code: schema.SignalCutExcludeText, Terms: []string{phrase}}
+	country := func(code string) schema.Signal {
+		return signal(schema.SignalCutLocation, "gate_location.allow_countries", code, 0)
 	}
-	cutLocation := func(terms ...string) schema.Signal {
-		return schema.Signal{Code: schema.SignalCutLocation, Terms: terms}
+	region := func(code string) schema.Signal {
+		return signal(schema.SignalCutLocation, "gate_location.allow_regions", code, 0)
 	}
+	timezone := func(phrase string, occurrences int) schema.Signal {
+		return signal(schema.SignalCutTimezone, "gate_location.reject_timezones", phrase, occurrences)
+	}
+	plus := func(rule, phrase string, delta, occurrences int) schema.Signal {
+		return schema.Signal{Code: schema.SignalPlus, Rule: rule, Phrase: phrase, Delta: delta, Occurrences: occurrences}
+	}
+	penalty := func(rule, phrase string, delta, occurrences int) schema.Signal {
+		return schema.Signal{Code: schema.SignalPenalty, Rule: rule, Phrase: phrase, Delta: delta, Occurrences: occurrences}
+	}
+	soft := func(name string, weight, min int, check bool, terms ...string) profileschema.PenaltyGroup {
+		return profileschema.PenaltyGroup{
+			Name: name, Weight: weight, MinOccurrences: min, CheckNegation: check, Terms: terms,
+		}
+	}
+	day := 24 * time.Hour
 	locations := profileschema.Profile{
-		LocationCountries: []string{"US", "DE", "RO", "GB"},
-		LocationRegions:   []string{"WORLDWIDE", "EUROPE", "EMEA"},
-		Queries:           []string{"vue"},
+		GateLocation: profileschema.GateLocation{
+			AllowCountries: []string{"US", "DE", "RO", "GB"},
+			AllowRegions:   []string{"WORLDWIDE", "EUROPE", "EMEA"},
+		},
+		Buckets: review,
 	}
 
 	tests := []struct {
@@ -41,363 +63,735 @@ func TestEvaluate(t *testing.T) {
 		want    Outcome
 	}{
 		{
-			name: "title exclude first",
+			name:    "not part-time does not count",
+			profile: profileschema.Profile{GateHard: []string{"part-time"}, Buckets: review},
+			job:     jobdata.Job{Description: "not part-time"},
+			want:    Outcome{Bucket: schema.BucketReview},
+		},
+		{
+			name:    "no US authorization required does not count",
+			profile: profileschema.Profile{GateHard: []string{"US authorization required"}, Buckets: review},
+			job:     jobdata.Job{Description: "no US authorization required"},
+			want:    Outcome{Bucket: schema.BucketReview},
+		},
+		{
+			name:    "you won't need to relocate does not count",
+			profile: profileschema.Profile{GateHard: []string{"relocate"}, Buckets: review},
+			job:     jobdata.Job{Description: "you won't need to relocate"},
+			want:    Outcome{Bucket: schema.BucketReview},
+		},
+		{
+			name:    "non-hybrid does not count",
+			profile: profileschema.Profile{GateHard: []string{"hybrid"}, Buckets: review},
+			job:     jobdata.Job{Description: "non-hybrid"},
+			want:    Outcome{Bucket: schema.BucketReview},
+		},
+		{
+			name:    "negation in the previous sentence still rejects",
+			profile: profileschema.Profile{GateHard: []string{"security clearance"}, Buckets: review},
+			job:     jobdata.Job{Description: "We are not a huge company. Security clearance required."},
+			want: Outcome{
+				Bucket:  schema.BucketRejected,
+				Signals: []schema.Signal{hard("security clearance", 1)},
+			},
+		},
+		{
+			name: "negation more than 50 characters away still rejects",
 			profile: profileschema.Profile{
-				ExcludeTitle: []string{"intern", "recruiter"},
-				ExcludeText:  []string{"php"},
-				Queries:      []string{"vue"},
-				Penalties:    []string{"work permit required"},
+				GateHard: []string{"part-time"},
+			},
+			job: jobdata.Job{Description: "not " + strings.Repeat("x", 50) + " part-time"},
+			want: Outcome{
+				Bucket:  schema.BucketRejected,
+				Signals: []schema.Signal{hard("part-time", 1)},
+			},
+		},
+		{
+			name: "gate role is title only and ignores negation",
+			profile: profileschema.Profile{
+				GateRole: []string{"recruiter"},
 			},
 			job: jobdata.Job{
-				Title:       "RECRUITER",
-				Description: "php, vue, and work permit required",
+				Title:       "not Recruiter recruiter",
+				Description: "a recruiter will call",
 			},
 			want: Outcome{
 				Bucket:  schema.BucketRejected,
-				Signals: []schema.Signal{cutTitle("recruiter")},
+				Signals: []schema.Signal{role("recruiter", 2)},
 			},
 		},
 		{
-			name: "exclude title ignores the description",
+			name: "gate role ignores the description",
 			profile: profileschema.Profile{
-				ExcludeTitle: []string{"recruiter"},
-				Queries:      []string{"vue"},
+				GateRole: []string{"recruiter"},
+				Buckets:  review,
 			},
-			job: jobdata.Job{
-				Title:       "Engineer",
-				Description: "a recruiter will send the vue test",
-			},
-			want: Outcome{
-				Bucket:  schema.BucketPassed,
-				Score:   schema.QueryPoints,
-				Signals: []schema.Signal{query("vue")},
-			},
+			job:  jobdata.Job{Title: "Engineer", Description: "a recruiter will call"},
+			want: Outcome{Bucket: schema.BucketReview},
 		},
 		{
-			name: "text exclude",
+			name: "hard gate counts title description and the location line",
 			profile: profileschema.Profile{
-				ExcludeTitle: []string{"recruiter"},
-				ExcludeText:  []string{"php"},
-				Queries:      []string{"vue"},
+				GateHard: []string{"clearance"},
 			},
 			job: jobdata.Job{
-				Title:       "Backend Engineer",
-				Description: "Experience with php and vue",
+				Title:       "clearance",
+				Description: "clearance",
+				Location:    jobdata.Location{Raw: "clearance", Timezone: "clearance"},
 			},
 			want: Outcome{
 				Bucket:  schema.BucketRejected,
-				Signals: []schema.Signal{cutText("php")},
-			},
-		},
-		{
-			name: "text exclude in the title",
-			profile: profileschema.Profile{
-				ExcludeTitle: []string{"recruiter"},
-				ExcludeText:  []string{"php"},
-			},
-			job: jobdata.Job{Title: "PHP Developer"},
-			want: Outcome{
-				Bucket:  schema.BucketRejected,
-				Signals: []schema.Signal{cutText("php")},
-			},
-		},
-		{
-			name: "penalty keeps passed",
-			profile: profileschema.Profile{
-				Penalties: []string{"work permit required"},
-				Queries:   []string{"vue"},
-			},
-			job: jobdata.Job{
-				Title:       "Backend Engineer",
-				Description: "Work permit required. Work permit required. vue",
-			},
-			want: Outcome{
-				Bucket:  schema.BucketPassed,
-				Score:   schema.QueryPoints + schema.PenaltyPoints,
-				Signals: []schema.Signal{query("vue"), penalty("work permit required")},
-			},
-		},
-		{
-			name: "each query phrase once",
-			profile: profileschema.Profile{
-				Queries: []string{"vue", "react", "golang"},
-			},
-			job: jobdata.Job{
-				Title:       "Vue Vue Engineer",
-				Description: "react and react and vue",
-			},
-			want: Outcome{
-				Bucket:  schema.BucketPassed,
-				Score:   2 * schema.QueryPoints,
-				Signals: []schema.Signal{query("vue"), query("react")},
-			},
-		},
-		{
-			name: "case fold",
-			profile: profileschema.Profile{
-				Queries: []string{"AI native"},
-			},
-			job: jobdata.Job{
-				Title:       "Engineer",
-				Description: "Building an ai native product",
-			},
-			want: Outcome{
-				Bucket:  schema.BucketPassed,
-				Score:   schema.QueryPoints,
-				Signals: []schema.Signal{query("AI native")},
+				Signals: []schema.Signal{hard("clearance", 3)},
 			},
 		},
 		{
 			name: "java does not match javascript",
 			profile: profileschema.Profile{
-				ExcludeText: []string{"java"},
-				Queries:     []string{"java"},
+				GateHard: []string{"java"},
+				Buckets:  review,
 			},
-			job: jobdata.Job{
-				Title:       "Engineer",
-				Description: "We use javascript",
-			},
-			want: Outcome{Bucket: schema.BucketPassed},
+			job:  jobdata.Job{Description: "We use javascript"},
+			want: Outcome{Bucket: schema.BucketReview},
 		},
 		{
 			name: "java matches a bounded word",
 			profile: profileschema.Profile{
-				ExcludeText: []string{"java"},
-				Queries:     []string{"java"},
+				GateHard: []string{"java"},
 			},
-			job: jobdata.Job{
-				Title:       "Engineer",
-				Description: "We use Java.",
-			},
+			job: jobdata.Job{Description: "We use Java."},
 			want: Outcome{
 				Bucket:  schema.BucketRejected,
-				Signals: []schema.Signal{cutText("java")},
+				Signals: []schema.Signal{hard("java", 1)},
 			},
 		},
 		{
-			name: "frontend adds nothing",
-			profile: profileschema.Profile{
-				Queries:        []string{"vue", "typescript", "react", "golang", "node"},
-				WellfoundRoles: []string{"frontend-engineer"},
-			},
-			job: jobdata.Job{
-				Title:       "Frontend Engineer",
-				Description: "frontend-engineer, frontend work",
-			},
-			want: Outcome{Bucket: schema.BucketPassed},
-		},
-		{
-			name: "frontend scores when it is a query",
-			profile: profileschema.Profile{
-				Queries: []string{"frontend"},
-			},
-			job: jobdata.Job{Title: "Frontend Engineer"},
-			want: Outcome{
-				Bucket:  schema.BucketPassed,
-				Score:   schema.QueryPoints,
-				Signals: []schema.Signal{query("frontend")},
-			},
-		},
-		{
-			name: "location raw is an exclude",
-			profile: profileschema.Profile{
-				ExcludeText: []string{"india"},
-				Queries:     []string{"vue"},
-			},
-			job: jobdata.Job{
-				Title:       "Frontend Engineer",
-				Description: "vue",
-				Location:    jobdata.Location{Raw: "India"},
-			},
-			want: Outcome{
-				Bucket:  schema.BucketRejected,
-				Signals: []schema.Signal{cutText("india")},
-			},
-		},
-		{
-			name:    "empty location stays",
+			name:    "empty location is not rejected",
 			profile: locations,
+			job:     jobdata.Job{Title: "Frontend Engineer"},
+			want:    Outcome{Bucket: schema.BucketReview},
+		},
+		{
+			name: "empty allow lists are not a reject",
+			profile: profileschema.Profile{
+				Buckets: review,
+			},
 			job: jobdata.Job{
-				Title:       "Frontend Engineer",
-				Description: "vue",
+				Location: jobdata.Location{Countries: []string{"BR"}, Regions: []string{"LATAM"}},
 			},
-			want: Outcome{
-				Bucket:  schema.BucketPassed,
-				Score:   schema.QueryPoints,
-				Signals: []schema.Signal{query("vue")},
-			},
+			want: Outcome{Bucket: schema.BucketReview},
 		},
 		{
 			name:    "allowed country stays",
 			profile: locations,
-			job: jobdata.Job{
-				Title:       "Frontend Engineer",
-				Description: "vue and an office in India",
-				Location:    jobdata.Location{Countries: []string{"DE", "BR"}},
-			},
-			want: Outcome{
-				Bucket:  schema.BucketPassed,
-				Score:   schema.QueryPoints,
-				Signals: []schema.Signal{query("vue")},
-			},
+			job:     jobdata.Job{Location: jobdata.Location{Countries: []string{"DE"}}},
+			want:    Outcome{Bucket: schema.BucketReview},
 		},
 		{
 			name:    "allowed region stays",
 			profile: locations,
-			job: jobdata.Job{
-				Title:       "Frontend Engineer",
-				Description: "vue",
-				Location:    jobdata.Location{Regions: []string{"EMEA"}},
-			},
-			want: Outcome{
-				Bucket:  schema.BucketPassed,
-				Score:   schema.QueryPoints,
-				Signals: []schema.Signal{query("vue")},
-			},
+			job:     jobdata.Job{Location: jobdata.Location{Regions: []string{"emea"}}},
+			want:    Outcome{Bucket: schema.BucketReview},
 		},
 		{
-			name:    "worldwide stays",
+			name:    "disallowed codes are one cut each",
 			profile: locations,
 			job: jobdata.Job{
-				Title:       "Frontend Engineer",
-				Description: "vue",
-				Location:    jobdata.Location{Regions: []string{"worldwide"}},
-			},
-			want: Outcome{
-				Bucket:  schema.BucketPassed,
-				Score:   schema.QueryPoints,
-				Signals: []schema.Signal{query("vue")},
-			},
-		},
-		{
-			name:    "location outside the lists is rejected",
-			profile: locations,
-			job: jobdata.Job{
-				Title:       "Frontend Engineer",
-				Description: "vue",
-				Location:    jobdata.Location{Countries: []string{"BR", "AR"}, Regions: []string{"LATAM"}},
+				Location: jobdata.Location{Countries: []string{"BR", "AR"}, Regions: []string{"LATAM"}},
 			},
 			want: Outcome{
 				Bucket:  schema.BucketRejected,
-				Signals: []schema.Signal{cutLocation("BR", "AR", "LATAM")},
+				Signals: []schema.Signal{country("BR"), country("AR"), region("LATAM")},
 			},
 		},
 		{
-			name: "text exclude still wins over an allowed country",
-			profile: profileschema.Profile{
-				LocationCountries: []string{"DE"},
-				ExcludeText:       []string{"php"},
-				Queries:           []string{"vue"},
-			},
-			job: jobdata.Job{
-				Title:       "Backend Engineer",
-				Description: "php and vue",
-				Location:    jobdata.Location{Countries: []string{"DE"}},
-			},
+			name:    "a disallowed country is a cut when another country is allowed",
+			profile: locations,
+			job:     jobdata.Job{Location: jobdata.Location{Countries: []string{"DE", "BR"}}},
 			want: Outcome{
 				Bucket:  schema.BucketRejected,
-				Signals: []schema.Signal{cutText("php")},
+				Signals: []schema.Signal{country("BR")},
 			},
 		},
 		{
-			name: "empty location lists skip the check",
+			name: "timezone phrase",
 			profile: profileschema.Profile{
-				Queries: []string{"vue"},
+				GateLocation: profileschema.GateLocation{RejectTimezones: []string{"EST"}},
 			},
-			job: jobdata.Job{
-				Title:       "Frontend Engineer",
-				Description: "vue",
-				Location:    jobdata.Location{Countries: []string{"BR"}},
-			},
+			job: jobdata.Job{Location: jobdata.Location{Timezone: "EST"}},
 			want: Outcome{
-				Bucket:  schema.BucketPassed,
-				Score:   schema.QueryPoints,
-				Signals: []schema.Signal{query("vue")},
+				Bucket:  schema.BucketRejected,
+				Signals: []schema.Signal{timezone("EST", 1)},
 			},
 		},
 		{
-			name: "score 0 is passed",
+			name: "negated timezone does not count",
 			profile: profileschema.Profile{
-				Queries:      []string{"vue"},
-				ExcludeTitle: []string{"recruiter"},
-				ExcludeText:  []string{"php"},
-				Penalties:    []string{"work permit required"},
+				GateLocation: profileschema.GateLocation{RejectTimezones: []string{"EST"}},
+				Buckets:      review,
 			},
-			job: jobdata.Job{
-				Title:       "Platform Engineer",
-				Description: "Build internal tools",
-			},
-			want: Outcome{Bucket: schema.BucketPassed},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			got := Evaluate(tt.profile, tt.job)
-			if got.Bucket != tt.want.Bucket || got.Score != tt.want.Score || !reflect.DeepEqual(got.Signals, tt.want.Signals) {
-				t.Fatalf("got %+v\nwant %+v", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestEvaluate_postedAt(t *testing.T) {
-	t.Parallel()
-
-	now := time.Date(2026, 10, 12, 12, 0, 0, 0, time.UTC)
-	month := time.Duration(schema.PostedAtRejectDays) * 24 * time.Hour
-	profile := profileschema.Profile{
-		ExcludeTitle: []string{"recruiter"},
-		Queries:      []string{"vue"},
-	}
-	passed := Outcome{
-		Bucket:  schema.BucketPassed,
-		Score:   schema.QueryPoints,
-		Signals: []schema.Signal{{Code: schema.SignalQuery, Points: schema.QueryPoints, Terms: []string{"vue"}}},
-	}
-
-	tests := []struct {
-		name string
-		job  jobdata.Job
-		want Outcome
-	}{
-		{
-			name: "unknown posted_at is scored",
-			job:  jobdata.Job{Title: "Vue Engineer", Description: "vue"},
-			want: passed,
+			job:  jobdata.Job{Description: "you won't need EST hours"},
+			want: Outcome{Bucket: schema.BucketReview},
 		},
 		{
-			name: "posted inside a month is scored",
-			job: jobdata.Job{
-				Title:       "Vue Engineer",
-				Description: "vue",
-				PostedAt:    now.Add(-month).Add(time.Second),
+			name: "zero posted_at is not a reject",
+			profile: profileschema.Profile{
+				Buckets: review,
 			},
-			want: passed,
+			job:  jobdata.Job{Title: "Engineer"},
+			want: Outcome{Bucket: schema.BucketReview},
 		},
 		{
-			name: "posted exactly a month ago is scored",
-			job: jobdata.Job{
-				Title:       "Vue Engineer",
-				Description: "vue",
-				PostedAt:    now.Add(-month),
+			name: "posted exactly at the cutoff is not a reject",
+			profile: profileschema.Profile{
+				Buckets: review,
 			},
-			want: passed,
+			job:  jobdata.Job{PostedAt: now.Add(-month)},
+			want: Outcome{Bucket: schema.BucketReview},
 		},
 		{
-			name: "posted older than a month is rejected before title excludes",
-			job: jobdata.Job{
-				Title:       "Recruiter",
-				Description: "vue",
-				PostedAt:    now.Add(-month).Add(-time.Second),
+			name: "stale posted_at is rejected",
+			profile: profileschema.Profile{
+				Buckets: profileschema.Buckets{Top: 0},
 			},
+			job: jobdata.Job{PostedAt: stale},
 			want: Outcome{
 				Bucket: schema.BucketRejected,
 				Signals: []schema.Signal{{
-					Code:  schema.SignalCutPostedAt,
-					Terms: []string{now.Add(-month).Add(-time.Second).Format(time.RFC3339)},
+					Code:   schema.SignalCutPostedAt,
+					Rule:   "posted_at",
+					Phrase: stale.UTC().Format(time.RFC3339),
 				}},
+			},
+		},
+		{
+			name: "score at the top cutoff is top",
+			profile: profileschema.Profile{
+				Buckets: profileschema.Buckets{Top: 0},
+			},
+			job:  jobdata.Job{Title: "Engineer"},
+			want: Outcome{Bucket: schema.BucketTop},
+		},
+		{
+			name: "every gate is recorded",
+			profile: profileschema.Profile{
+				GateRole: []string{"recruiter"},
+				GateHard: []string{"security clearance"},
+				GateLocation: profileschema.GateLocation{
+					AllowCountries:  []string{"DE"},
+					RejectTimezones: []string{"EST"},
+				},
+				Buckets: profileschema.Buckets{Top: 0},
+			},
+			job: jobdata.Job{
+				Title:       "Recruiter",
+				Description: "security clearance EST",
+				Location:    jobdata.Location{Countries: []string{"BR"}},
+				PostedAt:    stale,
+			},
+			want: Outcome{
+				Bucket: schema.BucketRejected,
+				Signals: []schema.Signal{
+					role("recruiter", 1),
+					hard("security clearance", 1),
+					country("BR"),
+					timezone("EST", 1),
+					{
+						Code:   schema.SignalCutPostedAt,
+						Rule:   "posted_at",
+						Phrase: stale.UTC().Format(time.RFC3339),
+					},
+				},
+			},
+		},
+		{
+			name: "title terms keep the key and walk in sorted order",
+			profile: profileschema.Profile{
+				SignalsPlus: profileschema.SignalsPlus{Title: map[string]int{"Vue": 3, "go": 2}},
+				Buckets:     review,
+			},
+			job: jobdata.Job{Title: "go Vue"},
+			want: Outcome{
+				Bucket: schema.BucketTop,
+				Score:  5,
+				Signals: []schema.Signal{
+					plus("signals_plus.title", "Vue", 3, 1),
+					plus("signals_plus.title", "go", 2, 1),
+				},
+			},
+		},
+		{
+			name: "title weight is awarded once",
+			profile: profileschema.Profile{
+				SignalsPlus: profileschema.SignalsPlus{Title: map[string]int{"go": 2}},
+				Buckets:     review,
+			},
+			job: jobdata.Job{Title: "Go go", Description: "go"},
+			want: Outcome{
+				Bucket:  schema.BucketTop,
+				Score:   2,
+				Signals: []schema.Signal{plus("signals_plus.title", "go", 2, 2)},
+			},
+		},
+		{
+			name: "go does not match golang",
+			profile: profileschema.Profile{
+				SignalsPlus: profileschema.SignalsPlus{Title: map[string]int{"go": 2}},
+				Buckets:     review,
+			},
+			job:  jobdata.Job{Title: "Golang Developer"},
+			want: Outcome{Bucket: schema.BucketReview},
+		},
+		{
+			name: "body terms do not read the title",
+			profile: profileschema.Profile{
+				SignalsPlus: profileschema.SignalsPlus{
+					Text: profileschema.TextSignals{Terms: map[string]int{"vue": 3}, MaxTotal: 10},
+				},
+				Buckets: review,
+			},
+			job:  jobdata.Job{Title: "Vue"},
+			want: Outcome{Bucket: schema.BucketReview},
+		},
+		{
+			name: "body cap awards the points that fit and then zero",
+			profile: profileschema.Profile{
+				SignalsPlus: profileschema.SignalsPlus{
+					Text: profileschema.TextSignals{
+						Terms:    map[string]int{"go": 4, "rust": 4, "vue": 3},
+						MaxTotal: 5,
+					},
+				},
+				Buckets: review,
+			},
+			job: jobdata.Job{Description: "We use Go, Rust, and Vue."},
+			want: Outcome{
+				Bucket: schema.BucketTop,
+				Score:  5,
+				Signals: []schema.Signal{
+					plus("signals_plus.text", "go", 4, 1),
+					plus("signals_plus.text", "rust", 1, 1),
+					plus("signals_plus.text", "vue", 0, 1),
+				},
+			},
+		},
+		{
+			name: "a spent body cap still emits the term",
+			profile: profileschema.Profile{
+				SignalsPlus: profileschema.SignalsPlus{
+					Text: profileschema.TextSignals{Terms: map[string]int{"go": 4}, MaxTotal: 0},
+				},
+				Buckets: review,
+			},
+			job: jobdata.Job{Description: "Go"},
+			want: Outcome{
+				Bucket:  schema.BucketReview,
+				Signals: []schema.Signal{plus("signals_plus.text", "go", 0, 1)},
+			},
+		},
+		{
+			name: "plus terms ignore negation",
+			profile: profileschema.Profile{
+				SignalsPlus: profileschema.SignalsPlus{
+					Text: profileschema.TextSignals{Terms: map[string]int{"vue": 4}, MaxTotal: 10},
+				},
+				Buckets: review,
+			},
+			job: jobdata.Job{Description: "not vue"},
+			want: Outcome{
+				Bucket:  schema.BucketTop,
+				Score:   4,
+				Signals: []schema.Signal{plus("signals_plus.text", "vue", 4, 1)},
+			},
+		},
+		{
+			name: "missing salary does not apply the below penalty",
+			profile: profileschema.Profile{
+				SignalsPlus: profileschema.SignalsPlus{
+					Salary: profileschema.SalarySignals{
+						MinEURYear: 80000, MinUSDYear: 90000, USDPerEUR: 1.1,
+						BonusIfAbove: 6, PenaltyIfBelow: -9,
+					},
+				},
+				Buckets: review,
+			},
+			job:  jobdata.Job{Title: "Engineer", Description: "No compensation listed"},
+			want: Outcome{Bucket: schema.BucketReview},
+		},
+		{
+			name: "unparseable salary does not apply the below penalty",
+			profile: profileschema.Profile{
+				SignalsPlus: profileschema.SignalsPlus{
+					Salary: profileschema.SalarySignals{
+						MinEURYear: 80000, BonusIfAbove: 6, PenaltyIfBelow: -9,
+					},
+				},
+				Buckets: review,
+			},
+			job:  jobdata.Job{SalaryRaw: "competitive", Description: "paid well"},
+			want: Outcome{Bucket: schema.BucketReview},
+		},
+		{
+			name: "eur upper bound at the minimum earns the bonus",
+			profile: profileschema.Profile{
+				SignalsPlus: profileschema.SignalsPlus{
+					Salary: profileschema.SalarySignals{
+						MinEURYear: 90000, MinUSDYear: 200000, USDPerEUR: 2,
+						BonusIfAbove: 6, PenaltyIfBelow: -4,
+					},
+				},
+				Buckets: review,
+			},
+			job: jobdata.Job{SalaryRaw: "€70k – €90k"},
+			want: Outcome{
+				Bucket:  schema.BucketTop,
+				Score:   6,
+				Signals: []schema.Signal{plus("signals_plus.salary", "", 6, 0)},
+			},
+		},
+		{
+			name: "yearly eur below the minimum keeps the stored penalty",
+			profile: profileschema.Profile{
+				SignalsPlus: profileschema.SignalsPlus{
+					Salary: profileschema.SalarySignals{
+						MinEURYear: 200000, BonusIfAbove: 6, PenaltyIfBelow: -4,
+					},
+				},
+				Buckets: review,
+			},
+			job: jobdata.Job{SalaryRaw: "90,000–110,000 EUR/year"},
+			want: Outcome{
+				Bucket:  schema.BucketReview,
+				Score:   -4,
+				Signals: []schema.Signal{plus("signals_plus.salary", "", -4, 0)},
+			},
+		},
+		{
+			name: "usd salary uses the usd minimum and the upper bound",
+			profile: profileschema.Profile{
+				SignalsPlus: profileschema.SignalsPlus{
+					Salary: profileschema.SalarySignals{
+						MinEURYear: 200000, MinUSDYear: 150000, USDPerEUR: 2,
+						BonusIfAbove: 6, PenaltyIfBelow: -4,
+					},
+				},
+				Buckets: review,
+			},
+			job: jobdata.Job{SalaryRaw: "120000-180000 USD"},
+			want: Outcome{
+				Bucket:  schema.BucketTop,
+				Score:   6,
+				Signals: []schema.Signal{plus("signals_plus.salary", "", 6, 0)},
+			},
+		},
+		{
+			name: "usd salary converts through usd per eur when the usd minimum is unset",
+			profile: profileschema.Profile{
+				SignalsPlus: profileschema.SignalsPlus{
+					Salary: profileschema.SalarySignals{
+						MinEURYear: 60000, USDPerEUR: 2,
+						BonusIfAbove: 6, PenaltyIfBelow: -4,
+					},
+				},
+				Buckets: review,
+			},
+			job: jobdata.Job{SalaryRaw: "USD 100000"},
+			want: Outcome{
+				Bucket:  schema.BucketReview,
+				Score:   -4,
+				Signals: []schema.Signal{plus("signals_plus.salary", "", -4, 0)},
+			},
+		},
+		{
+			name: "one sided eur salary uses that bound",
+			profile: profileschema.Profile{
+				SignalsPlus: profileschema.SignalsPlus{
+					Salary: profileschema.SalarySignals{
+						MinEURYear: 80000, BonusIfAbove: 6, PenaltyIfBelow: -4,
+					},
+				},
+				Buckets: review,
+			},
+			job: jobdata.Job{SalaryRaw: "100000- EUR"},
+			want: Outcome{
+				Bucket:  schema.BucketTop,
+				Score:   6,
+				Signals: []schema.Signal{plus("signals_plus.salary", "", 6, 0)},
+			},
+		},
+		{
+			name: "monthly eur is annualized",
+			profile: profileschema.Profile{
+				SignalsPlus: profileschema.SignalsPlus{
+					Salary: profileschema.SalarySignals{
+						MinEURYear: 50000, BonusIfAbove: 6, PenaltyIfBelow: -4,
+					},
+				},
+				Buckets: review,
+			},
+			job: jobdata.Job{Description: "5,000 EUR/month"},
+			want: Outcome{
+				Bucket:  schema.BucketTop,
+				Score:   6,
+				Signals: []schema.Signal{plus("signals_plus.salary", "", 6, 0)},
+			},
+		},
+		{
+			name: "hourly usd is annualized at a full-time year",
+			profile: profileschema.Profile{
+				SignalsPlus: profileschema.SignalsPlus{
+					Salary: profileschema.SalarySignals{
+						MinUSDYear: 60 * fullTimeHoursPerYear, BonusIfAbove: 6, PenaltyIfBelow: -4,
+					},
+				},
+				Buckets: review,
+			},
+			job: jobdata.Job{Title: "$60/hour"},
+			want: Outcome{
+				Bucket:  schema.BucketTop,
+				Score:   6,
+				Signals: []schema.Signal{plus("signals_plus.salary", "", 6, 0)},
+			},
+		},
+		{
+			name: "salary raw wins over a description amount",
+			profile: profileschema.Profile{
+				SignalsPlus: profileschema.SignalsPlus{
+					Salary: profileschema.SalarySignals{
+						MinEURYear: 80000, MinUSDYear: 200000, USDPerEUR: 2,
+						BonusIfAbove: 6, PenaltyIfBelow: -4,
+					},
+				},
+				Buckets: review,
+			},
+			job: jobdata.Job{SalaryRaw: "€90k", Description: "$5,000 signing"},
+			want: Outcome{
+				Bucket:  schema.BucketTop,
+				Score:   6,
+				Signals: []schema.Signal{plus("signals_plus.salary", "", 6, 0)},
+			},
+		},
+		{
+			name: "title salary is used when the raw field is empty",
+			profile: profileschema.Profile{
+				SignalsPlus: profileschema.SignalsPlus{
+					Salary: profileschema.SalarySignals{
+						MinEURYear: 80000, MinUSDYear: 200000, USDPerEUR: 2,
+						BonusIfAbove: 6, PenaltyIfBelow: -4,
+					},
+				},
+				Buckets: review,
+			},
+			job: jobdata.Job{Title: "Frontend €90k", Description: "$5,000 signing"},
+			want: Outcome{
+				Bucket:  schema.BucketTop,
+				Score:   6,
+				Signals: []schema.Signal{plus("signals_plus.salary", "", 6, 0)},
+			},
+		},
+		{
+			name: "posted within 3 days adds days 3",
+			profile: profileschema.Profile{
+				SignalsPlus: profileschema.SignalsPlus{Freshness: profileschema.FreshnessSignals{Days3: 4, Days7: 1}},
+				Buckets:     review,
+			},
+			job: jobdata.Job{PostedAt: now.Add(-3 * day), FirstSeenAt: now.Add(-8 * day)},
+			want: Outcome{
+				Bucket:  schema.BucketTop,
+				Score:   4,
+				Signals: []schema.Signal{plus("signals_plus.freshness", "", 4, 0)},
+			},
+		},
+		{
+			name: "posted within 7 days adds days 7",
+			profile: profileschema.Profile{
+				SignalsPlus: profileschema.SignalsPlus{Freshness: profileschema.FreshnessSignals{Days3: 4, Days7: 1}},
+				Buckets:     review,
+			},
+			job: jobdata.Job{PostedAt: now.Add(-7 * day)},
+			want: Outcome{
+				Bucket:  schema.BucketTop,
+				Score:   1,
+				Signals: []schema.Signal{plus("signals_plus.freshness", "", 1, 0)},
+			},
+		},
+		{
+			name: "zero freshness awards no signal",
+			profile: profileschema.Profile{
+				SignalsPlus: profileschema.SignalsPlus{Freshness: profileschema.FreshnessSignals{}},
+				Buckets:     review,
+			},
+			job:  jobdata.Job{PostedAt: now.Add(-2 * day)},
+			want: Outcome{Bucket: schema.BucketReview},
+		},
+		{
+			name: "posted older than 7 days adds no freshness",
+			profile: profileschema.Profile{
+				SignalsPlus: profileschema.SignalsPlus{Freshness: profileschema.FreshnessSignals{Days3: 4, Days7: 1}},
+				Buckets:     review,
+			},
+			job:  jobdata.Job{PostedAt: now.Add(-7*day - time.Second), FirstSeenAt: now.Add(-day)},
+			want: Outcome{Bucket: schema.BucketReview},
+		},
+		{
+			name: "freshness falls back to first seen",
+			profile: profileschema.Profile{
+				SignalsPlus: profileschema.SignalsPlus{Freshness: profileschema.FreshnessSignals{Days3: 4, Days7: 1}},
+				Buckets:     review,
+			},
+			job: jobdata.Job{FirstSeenAt: now.Add(-2 * day)},
+			want: Outcome{
+				Bucket:  schema.BucketTop,
+				Score:   4,
+				Signals: []schema.Signal{plus("signals_plus.freshness", "", 4, 0)},
+			},
+		},
+		{
+			name: "plus signals run title text salary freshness",
+			profile: profileschema.Profile{
+				SignalsPlus: profileschema.SignalsPlus{
+					Title: map[string]int{"go": 8},
+					Text:  profileschema.TextSignals{Terms: map[string]int{"vue": 5}, MaxTotal: 3},
+					Salary: profileschema.SalarySignals{
+						MinEURYear: 80000, BonusIfAbove: 6, PenaltyIfBelow: -4,
+					},
+					Freshness: profileschema.FreshnessSignals{Days3: 4, Days7: 1},
+				},
+				Buckets: review,
+			},
+			job: jobdata.Job{
+				Title:       "Go",
+				Description: "Vue",
+				SalaryRaw:   "€90k",
+				PostedAt:    now.Add(-2 * day),
+			},
+			want: Outcome{
+				Bucket: schema.BucketTop,
+				Score:  21,
+				Signals: []schema.Signal{
+					plus("signals_plus.title", "go", 8, 1),
+					plus("signals_plus.text", "vue", 3, 1),
+					plus("signals_plus.salary", "", 6, 0),
+					plus("signals_plus.freshness", "", 4, 0),
+				},
+			},
+		},
+		{
+			name: "one ruby in the body scores nothing",
+			profile: profileschema.Profile{
+				PenaltiesSoft: []profileschema.PenaltyGroup{soft("foreign_stack", -3, 2, false, "ruby")},
+				Buckets:       review,
+			},
+			job:  jobdata.Job{Description: "We use Ruby."},
+			want: Outcome{Bucket: schema.BucketReview},
+		},
+		{
+			name: "two ruby hits apply the weight once",
+			profile: profileschema.Profile{
+				PenaltiesSoft: []profileschema.PenaltyGroup{soft("foreign_stack", -3, 2, false, "ruby")},
+				Buckets:       review,
+			},
+			job: jobdata.Job{Description: "Ruby and ruby"},
+			want: Outcome{
+				Bucket:  schema.BucketReview,
+				Score:   -3,
+				Signals: []schema.Signal{penalty("foreign_stack", "ruby", -3, 2)},
+			},
+		},
+		{
+			name: "ruby in the title applies the weight once",
+			profile: profileschema.Profile{
+				PenaltiesSoft: []profileschema.PenaltyGroup{soft("foreign_stack", -3, 2, false, "ruby")},
+				Buckets:       review,
+			},
+			job: jobdata.Job{Title: "Ruby Ruby Ruby", Description: "ruby"},
+			want: Outcome{
+				Bucket:  schema.BucketReview,
+				Score:   -3,
+				Signals: []schema.Signal{penalty("foreign_stack", "ruby", -3, 3)},
+			},
+		},
+		{
+			name: "penalty min occurrences of zero means one body hit",
+			profile: profileschema.Profile{
+				PenaltiesSoft: []profileschema.PenaltyGroup{soft("office_pressure", -2, 0, false, "hybrid")},
+				Buckets:       review,
+			},
+			job: jobdata.Job{Description: "Hybrid"},
+			want: Outcome{
+				Bucket:  schema.BucketReview,
+				Score:   -2,
+				Signals: []schema.Signal{penalty("office_pressure", "hybrid", -2, 1)},
+			},
+		},
+		{
+			name: "a negated penalty term does not count when the group asks",
+			profile: profileschema.Profile{
+				PenaltiesSoft: []profileschema.PenaltyGroup{soft("part_time", -4, 1, true, "part-time")},
+				Buckets:       review,
+			},
+			job:  jobdata.Job{Description: "not part-time"},
+			want: Outcome{Bucket: schema.BucketReview},
+		},
+		{
+			name: "a negated penalty term counts when the group does not ask",
+			profile: profileschema.Profile{
+				PenaltiesSoft: []profileschema.PenaltyGroup{soft("foreign_stack", -3, 1, false, "ruby")},
+				Buckets:       review,
+			},
+			job: jobdata.Job{Description: "not ruby"},
+			want: Outcome{
+				Bucket:  schema.BucketReview,
+				Score:   -3,
+				Signals: []schema.Signal{penalty("foreign_stack", "ruby", -3, 1)},
+			},
+		},
+		{
+			name: "the first qualifying term fires the group once",
+			profile: profileschema.Profile{
+				PenaltiesSoft: []profileschema.PenaltyGroup{soft("foreign_stack", -3, 2, false, "ruby", "php")},
+				Buckets:       review,
+			},
+			job: jobdata.Job{Description: "php php and ruby"},
+			want: Outcome{
+				Bucket:  schema.BucketReview,
+				Score:   -3,
+				Signals: []schema.Signal{penalty("foreign_stack", "php", -3, 2)},
+			},
+		},
+		{
+			name: "penalty groups stay in slice order",
+			profile: profileschema.Profile{
+				PenaltiesSoft: []profileschema.PenaltyGroup{
+					soft("agency", -2, 1, false, "recruiting"),
+					soft("foreign_stack", -3, 2, false, "ruby"),
+				},
+				Buckets: review,
+			},
+			job: jobdata.Job{Title: "Recruiting", Description: "ruby ruby"},
+			want: Outcome{
+				Bucket: schema.BucketReview,
+				Score:  -5,
+				Signals: []schema.Signal{
+					penalty("agency", "recruiting", -2, 1),
+					penalty("foreign_stack", "ruby", -3, 2),
+				},
+			},
+		},
+		{
+			name: "a gate role with a high score stays rejected",
+			profile: profileschema.Profile{
+				GateRole:    []string{"recruiter"},
+				SignalsPlus: profileschema.SignalsPlus{Title: map[string]int{"vue": 5}},
+				Buckets:     review,
+			},
+			job: jobdata.Job{Title: "Vue Recruiter"},
+			want: Outcome{
+				Bucket: schema.BucketRejected,
+				Score:  5,
+				Signals: []schema.Signal{
+					role("recruiter", 1),
+					plus("signals_plus.title", "vue", 5, 1),
+				},
 			},
 		},
 	}
@@ -405,7 +799,7 @@ func TestEvaluate_postedAt(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			got := evaluateAt(profile, tt.job, now)
+			got := evaluateAt(tt.profile, tt.job, now)
 			if got.Bucket != tt.want.Bucket || got.Score != tt.want.Score || !reflect.DeepEqual(got.Signals, tt.want.Signals) {
 				t.Fatalf("got %+v\nwant %+v", got, tt.want)
 			}
