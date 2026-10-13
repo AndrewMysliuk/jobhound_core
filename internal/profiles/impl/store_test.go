@@ -200,7 +200,25 @@ func TestFileStoreLoadsAndrew(t *testing.T) {
 
 	listed, err := store.List(context.Background())
 	require.NoError(t, err)
-	require.Equal(t, []schema.Profile{got}, listed)
+	require.Len(t, listed, 2)
+	require.Equal(t, got, listed[0])
+
+	lada, err := store.Get(context.Background(), "lada")
+	require.NoError(t, err)
+	require.Equal(t, listed[1], lada)
+	require.Equal(t, "Lada", lada.Name)
+	require.Equal(t, schema.DomainArchitecture, lada.Domain)
+	require.Empty(t, lada.Sources)
+	require.Empty(t, lada.Queries)
+	require.Equal(t, map[string]int{
+		"architectural assistant": 6,
+		"architectural designer":  6,
+		"landscape designer":      6,
+		"junior architect":        4,
+	}, lada.SignalsPlus.Title)
+	for _, phrase := range []string{"designer", "architect", "assistant", "landscape", "junior"} {
+		require.NotContains(t, lada.GateRole, phrase)
+	}
 }
 
 func TestFileStoreDecodesFiveBlocks(t *testing.T) {

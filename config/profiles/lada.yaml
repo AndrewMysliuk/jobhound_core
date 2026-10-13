@@ -1,0 +1,282 @@
+id: lada
+name: Lada
+domain: architecture
+
+# Boards are not wired yet. An empty list does not search Andrew's sources.
+sources: []
+
+# Category slugs belong on each board, not in this shared list.
+queries: []
+
+wellfound_roles: []
+
+# Title-only reject. Do not add designer, architect, assistant, landscape, or junior:
+# those words sit inside the roles this profile wants.
+gate_role:
+  - "software engineer"
+  - "frontend"
+  - "backend"
+  - "full stack"
+  - "full-stack"
+  - "developer"
+  - "recruiter"
+  - "talent acquisition"
+  - "interior designer"
+  - "graphic designer"
+  - "ux designer"
+  - "ui designer"
+  - "product designer"
+  - "web designer"
+  - "project manager"
+  - "construction manager"
+  - "quantity surveyor"
+  - "intern"
+  - "internship"
+  - "director"
+  - "head of"
+  - "sales"
+  - "marketing"
+  - "accountant"
+
+gate_hard:
+  - "authorized to work in the united states"
+  - "authorized to work in the u.s"
+  - "authorized to work in the us"
+  - "authorized to work in the usa"
+  - "authorized to work lawfully"
+  - "authorization to work in the us"
+  - "u.s. citizen"
+  - "u.s. citizenship"
+  - "us citizenship"
+  - "us work authorization"
+  - "department of defense"
+  - "department of war"
+  - "security clearance"
+  - "secret clearance"
+  - "clearance eligible"
+  - "clearance eligibility"
+  - "top secret"
+  - "ts/sci"
+  - "classified environment"
+  - "itar"
+  - "u.s. person"
+  - "us person"
+  - "govcloud"
+  - "no visa sponsorship"
+  - "visa sponsorship is not available"
+  - "visa sponsorship: none"
+  - "without sponsorship"
+  - "no sponsorship needed"
+  - "not eligible for visa sponsorship"
+  - "deferred compensation"
+  - "no salary until"
+  - "compensation will be deferred"
+
+gate_location:
+  allow_countries:
+    - "US"
+    - "AT"
+    - "BE"
+    - "BG"
+    - "CY"
+    - "CZ"
+    - "DE"
+    - "DK"
+    - "EE"
+    - "ES"
+    - "FI"
+    - "FR"
+    - "GR"
+    - "HR"
+    - "HU"
+    - "IE"
+    - "IT"
+    - "LT"
+    - "LU"
+    - "LV"
+    - "MT"
+    - "NL"
+    - "PL"
+    - "PT"
+    - "RO"
+    - "SE"
+    - "SI"
+    - "SK"
+    - "IS"
+    - "LI"
+    - "NO"
+    - "CH"
+    - "GB"
+  allow_regions:
+    - "WORLDWIDE"
+    - "EUROPE"
+    - "EMEA"
+  reject_timezones:
+    - "apac timezone only"
+    - "pacific time"
+    - "pacific or mountain time"
+    - "us pacific"
+    - "americas overlap"
+    - "us hours"
+    - "us working hours"
+    - "us eastern time"
+    - "eastern standard time"
+    - "pacific standard time"
+    - "est zone"
+    - "time zone between"
+
+signals_plus:
+  title:
+    architectural designer: 6
+    architectural assistant: 6
+    landscape designer: 6
+    junior architect: 4
+  text:
+    max_total: 4
+    terms:
+      revit: 2
+      archicad: 2
+      autocad: 2
+      civil 3d: 2
+      land f/x: 2
+      rhinoceros: 2
+      grasshopper: 2
+      twinmotion: 2
+      3ds max: 2
+      schematic design: 2
+      design development: 2
+      construction documentation: 2
+      construction documents: 2
+      construction administration: 2
+      permit package: 2
+      landscape design: 2
+      town planning: 2
+  # Junior. No floor and no penalty: low pay does not cut the match.
+  salary:
+    min_eur_year: 0
+    min_usd_year: 0
+    usd_per_eur: 1.1
+    bonus_if_above: 0
+    penalty_if_below: 0
+  freshness:
+    days_3: 2
+    days_7: 1
+
+penalties_soft:
+  office_pressure:
+    weight: -3
+    min_occurrences: 1
+    check_negation: false
+    terms:
+      - "umowa o prac"
+      - "lpa"
+      - "ctc annually"
+      - "area applicants"
+      - "commuting distance"
+      - "commutable"
+      - "bay area"
+      - "west coast"
+      - "east coast"
+      - "western hemisphere"
+      - "must be based in"
+      - "must be located in"
+      - "must live in"
+      - "should already be based"
+      - "candidates who are residing in"
+      - "individuals living in"
+      - "may live in the following locations"
+      - "preference for candidates near"
+      - "open to relocation"
+      - "open to relocating"
+      - "reside or are open to"
+      - "relocate to"
+      - "willing and able to relocate"
+      - "is your home base"
+      - "geographic zones"
+      - "in-office"
+      - "in office"
+      - "hybrid schedule"
+      - "hybrid work model"
+      - "hybrid role"
+      - "hybrid roles"
+      - "hybrid-first"
+      - "hybrid dynamic"
+      - "on-site presence"
+      - "onsite presence"
+      - "work onsite"
+      - "onsite a minimum"
+      - "5 days onsite"
+      - "onsite five days per week"
+      - "not remote/hybrid"
+      - "regular time on-site"
+      - "location type: on-site"
+      - "able to work on-site"
+      - "office attendance in"
+      - "week from the office"
+      - "week in the office"
+      - "days/week in office"
+      - "right to work in germany"
+      - "must reside in switzerland"
+      - "right to work in the uk"
+      - "eligible to work in france"
+      - "work permit required"
+  agency:
+    weight: -3
+    min_occurrences: 1
+    check_negation: false
+    terms:
+      - "contract-to-hire"
+      - "staff augmentation"
+      - "outsourcing"
+      - "bpo"
+  culture_smell:
+    weight: -2
+    min_occurrences: 1
+    check_negation: false
+    terms:
+      - "future opportunities"
+      - "thrive under pressure"
+      - "hungry to achieve"
+      - "hustle"
+      - "extreme ownership"
+      - "work hard, play hard"
+      - "rockstar"
+      - "ninja"
+  ambiguous_us:
+    weight: -3
+    min_occurrences: 1
+    check_negation: true
+    terms:
+      - "must reside in the us"
+      - "must reside in the eastern"
+      - "must be based in the us"
+      - "based in the united states"
+      - "based in the us"
+      - "reside in the united states"
+      - "located in the united states"
+      - "us based only"
+      - "hiring only within the u.s"
+      - "remote in the us"
+      - "remote in the usa"
+      - "remote in usa"
+      - "must live in the state"
+      - "candidates residing in the us"
+      - "anywhere in the us"
+      - "anywhere in the united states"
+      - "remote - united states"
+      - "remote - usa"
+      - "remote (us)"
+      - "remote, us"
+      - "remote us"
+      - "remote - us"
+      - "remote within canada or united states"
+  part_time:
+    weight: -3
+    min_occurrences: 1
+    check_negation: true
+    terms:
+      - "part-time"
+      - "part time"
+
+buckets:
+  top: 6

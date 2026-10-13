@@ -404,6 +404,14 @@ func TestEvaluate(t *testing.T) {
 			},
 		},
 		{
+			name: "unset salary does not score a parsed amount",
+			profile: profileschema.Profile{
+				Buckets: review,
+			},
+			job:  jobdata.Job{SalaryRaw: "€70k – €90k"},
+			want: Outcome{Bucket: schema.BucketReview},
+		},
+		{
 			name: "missing salary does not apply the below penalty",
 			profile: profileschema.Profile{
 				SignalsPlus: profileschema.SignalsPlus{

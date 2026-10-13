@@ -127,6 +127,9 @@ func clipBodyAward(weight int, remaining *int) int {
 }
 
 func salarySignal(cfg profileschema.SalarySignals, job jobdata.Job) (schema.Signal, bool) {
+	if !salaryConfigured(cfg) {
+		return schema.Signal{}, false
+	}
 	// The raw compensation field wins. Title, then description, are fallbacks.
 	for _, text := range []string{job.SalaryRaw, job.Title, job.Description} {
 		yearly, currency, ok := parseSalaryYearly(text)
@@ -144,6 +147,12 @@ func salarySignal(cfg profileschema.SalarySignals, job jobdata.Job) (schema.Sign
 		}, true
 	}
 	return schema.Signal{}, false
+}
+
+// salaryConfigured reports whether the profile sets a salary rule.
+// An omitted block is all zeros and does not score.
+func salaryConfigured(cfg profileschema.SalarySignals) bool {
+	return cfg.MinEURYear != 0 || cfg.MinUSDYear != 0 || cfg.BonusIfAbove != 0 || cfg.PenaltyIfBelow != 0
 }
 
 // salaryDelta applies BonusIfAbove or PenaltyIfBelow as stored.
