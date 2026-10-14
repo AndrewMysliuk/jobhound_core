@@ -25,20 +25,20 @@ func TestFetchWithQuery_suffixesPaginationAndMapping(t *testing.T) {
 	var urls []string
 	var agents []string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.URL.Path == "/locuri-de-munca/arhitect+proiectant-in-romania":
+		switch r.URL.Path {
+		case "/locuri-de-munca/arhitect+proiectant-in-romania":
 			writeHTML(t, w, listPageProps(
 				"arhitect+proiectant-in-romania",
 				"c-ro",
 				[]string{"landscape"},
 			))
-		case r.URL.Path == "/locuri-de-munca/arhitect+proiectant-in-remote":
+		case "/locuri-de-munca/arhitect+proiectant-in-remote":
 			writeHTML(t, w, listPageProps(
 				"arhitect+proiectant-in-remote",
 				"c-remote",
 				[]string{"landscape", "hybrid-role"},
 			))
-		case r.URL.Path == "/api/proxy/v2/jobs":
+		case "/api/proxy/v2/jobs":
 			q := r.URL.Query()
 			require.NotContains(t, q, "_lat")
 			require.NotContains(t, q, "_lon")
@@ -68,13 +68,13 @@ func TestFetchWithQuery_suffixesPaginationAndMapping(t *testing.T) {
 				t.Errorf("unexpected cursor %q", q.Get("cursor"))
 				http.NotFound(w, r)
 			}
-		case r.URL.Path == "/loc-de-munca/landscape":
+		case "/loc-de-munca/landscape":
 			writeHTML(t, w, detailPage(detailFixture{
 				title: "Junior Landscape Designer", company: "Riviera Gardens",
 				description: "<p>Studio <b>work</b></p>", remote: true,
 				estimated: "960 - 1060", apply: "jobs@firm.ro",
 			}))
-		case r.URL.Path == "/loc-de-munca/office-role":
+		case "/loc-de-munca/office-role":
 			writeHTML(t, w, detailPage(detailFixture{
 				title: "Inginer proiectant", company: "DEConstruct AG SRL",
 				description: "<p>Office</p>", salary: "900 - 1000 €/luna",
@@ -83,11 +83,11 @@ func TestFetchWithQuery_suffixesPaginationAndMapping(t *testing.T) {
 					"name": "Cluj-Napoca", "tooltip": "Cluj-Napoca, România",
 				}},
 			}))
-		case r.URL.Path == "/loc-de-munca/hybrid-role":
+		case "/loc-de-munca/hybrid-role":
 			writeHTML(t, w, detailPage(detailFixture{
 				title: "Arhitect", partial: true, apply: "firm.ro",
 			}))
-		case r.URL.Path == "/loc-de-munca/later-remote":
+		case "/loc-de-munca/later-remote":
 			writeHTML(t, w, detailPage(detailFixture{
 				title: "Peisagist", company: "Studio", remote: true,
 			}))

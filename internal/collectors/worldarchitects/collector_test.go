@@ -34,8 +34,8 @@ func TestFetch_catalogStopsOnRepeatedSlugs(t *testing.T) {
 			return
 		}
 		http.SetCookie(w, &http.Cookie{Name: "session", Value: "term"})
-		switch {
-		case r.URL.Path == listPath:
+		switch r.URL.Path {
+		case listPath:
 			switch r.URL.Query().Get("page") {
 			case "":
 				_, _ = w.Write([]byte(listPage1))
@@ -47,11 +47,11 @@ func TestFetch_catalogStopsOnRepeatedSlugs(t *testing.T) {
 				t.Errorf("page %s", r.URL.RawQuery)
 				http.NotFound(w, r)
 			}
-		case r.URL.Path == listPath+"/alpha":
+		case listPath + "/alpha":
 			_, _ = w.Write([]byte(detailNamed))
-		case r.URL.Path == listPath+"/beta":
+		case listPath + "/beta":
 			_, _ = w.Write([]byte(detailConfidential))
-		case r.URL.Path == listPath+"/gamma":
+		case listPath + "/gamma":
 			_, _ = w.Write([]byte(detailGermany))
 		default:
 			t.Errorf("unexpected %s", r.URL.RequestURI())

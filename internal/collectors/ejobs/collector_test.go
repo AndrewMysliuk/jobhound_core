@@ -279,7 +279,9 @@ func (f *seqFetcher) FetchNavigated(_ context.Context, rawURL string) (browserfe
 	}
 	page := 1
 	if i := strings.LastIndex(u.Path, "/pagina"); i >= 0 {
-		fmt.Sscanf(u.Path[i:], "/pagina%d", &page)
+		if _, scanErr := fmt.Sscanf(u.Path[i:], "/pagina%d", &page); scanErr != nil {
+			page = 1
+		}
 	}
 	base := strings.TrimRight(strings.TrimSuffix(u.Path, fmt.Sprintf("/pagina%d", page)), "/")
 	id := strings.ReplaceAll(strings.Trim(base, "/"), "/", "-")
