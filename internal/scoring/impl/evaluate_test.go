@@ -864,6 +864,47 @@ func TestEvaluate(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "architecture body-only score stays review",
+			profile: profileschema.Profile{
+				Domain: profileschema.DomainArchitecture,
+				SignalsPlus: profileschema.SignalsPlus{
+					Text: profileschema.TextSignals{
+						MaxTotal: 4,
+						Terms:    map[string]int{"revit": 2, "autocad": 2, "proiectare": 1},
+					},
+				},
+				Buckets: profileschema.Buckets{Top: 6},
+			},
+			job: jobdata.Job{Title: "BIM Manager", Description: "revit autocad proiectare"},
+			want: Outcome{
+				Bucket: schema.BucketReview,
+				Score:  4,
+				Signals: []schema.Signal{
+					plus("signals_plus.text", "autocad", 2, 1),
+					plus("signals_plus.text", "proiectare", 1, 1),
+					plus("signals_plus.text", "revit", 1, 1),
+				},
+			},
+		},
+		{
+			name: "architecture stale posted_at uses ninety day cutoff",
+			profile: profileschema.Profile{
+				Domain:  profileschema.DomainArchitecture,
+				Buckets: review,
+			},
+			job: jobdata.Job{
+				PostedAt: now.Add(-time.Duration(schema.PostedAtRejectDaysArchitecture) * 24 * time.Hour).Add(-time.Second),
+			},
+			want: Outcome{
+				Bucket: schema.BucketRejected,
+				Signals: []schema.Signal{{
+					Code:   schema.SignalCutPostedAt,
+					Rule:   "posted_at",
+					Phrase: now.Add(-time.Duration(schema.PostedAtRejectDaysArchitecture) * 24 * time.Hour).Add(-time.Second).Format(time.RFC3339),
+				}},
+			},
+		},
 	}
 
 	for _, tt := range tests {

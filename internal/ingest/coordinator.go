@@ -40,23 +40,6 @@ const (
 	architectureIngestCooldownTTL = 43200 * time.Second
 )
 
-// architectureSourceIDs use a fixed twelve-hour cooldown. Every other source keeps c.cooldownTTL.
-var architectureSourceIDs = map[string]struct{}{
-	"bestjobs":            {},
-	"hipo":                {},
-	"ejobs":               {},
-	"olx_ro":              {},
-	"dezeen_jobs":         {},
-	"riba_jobs":           {},
-	"landscape_institute": {},
-	"archgee":             {},
-	"archinect":           {},
-	"competitionline":     {},
-	"baunetz":             {},
-	"bdla":                {},
-	"world_architects":    {},
-}
-
 func querySegment(query string) string {
 	q := NormalizeSourceID(query)
 	if q == "" {

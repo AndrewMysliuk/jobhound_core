@@ -212,7 +212,6 @@ func TestFileStoreLoadsAndrew(t *testing.T) {
 		"bestjobs",
 		"hipo",
 		"ejobs",
-		"olx_ro",
 		"dezeen_jobs",
 		"riba_jobs",
 		"landscape_institute",
@@ -227,11 +226,9 @@ func TestFileStoreLoadsAndrew(t *testing.T) {
 		require.Contains(t, known, id)
 	}
 	require.Equal(t, []string{
-		"arhitect",
 		"arhitect proiectant",
 		"peisagist",
 		"urbanist",
-		"desenator tehnic",
 	}, lada.Queries)
 	require.Equal(t, map[string][]string{
 		"hipo":                {"Arhitectura-Design-Proiectare"},
@@ -247,7 +244,6 @@ func TestFileStoreLoadsAndrew(t *testing.T) {
 	}, lada.Children)
 	require.NotContains(t, lada.Children, "bestjobs")
 	require.NotContains(t, lada.Children, "ejobs")
-	require.NotContains(t, lada.Children, "olx_ro")
 	require.Equal(t, map[string]int{
 		"architectural designer":     6,
 		"architectural assistant":    6,
@@ -263,8 +259,8 @@ func TestFileStoreLoadsAndrew(t *testing.T) {
 		"urbanist":                   3,
 		"desenator tehnic":           3,
 	}, lada.SignalsPlus.Title)
-	require.Equal(t, 6, lada.SignalsPlus.Text.MaxTotal)
-	require.Equal(t, 5, lada.Buckets.Top)
+	require.Equal(t, 4, lada.SignalsPlus.Text.MaxTotal)
+	require.Equal(t, 6, lada.Buckets.Top)
 	require.NotContains(t, lada.GateLocation.AllowCountries, "US")
 	require.Empty(t, lada.WellfoundRoles)
 	require.NotContains(t, lada.GateRole, "intern")

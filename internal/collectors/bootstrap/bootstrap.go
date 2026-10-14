@@ -29,7 +29,6 @@ import (
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/himalayas"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/hipo"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/landscapeinstitute"
-	"github.com/andrewmysliuk/jobhound_core/internal/collectors/olxro"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/remotifyeurope"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/riba"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/utils"
@@ -51,19 +50,19 @@ import (
 // browserCfg from config.Load().Browser (JOBHOUND_BROWSER_*); Enabled defaults true unless JOBHOUND_BROWSER_ENABLED=0.
 // When Enabled and builtinCfg.UseBrowserForHTML, a rod-backed fetcher is shared by Built In and Golang Cafe.
 // considerBoards and getroBoards are one collector per Tenants() row, sharing httpClient and the country resolver.
-func MVPCollectors(ctx context.Context, httpClient *http.Client, dataDir string, builtinCfg config.BuiltinCollectorConfig, himCfg config.HimalayasCollectorConfig, browserCfg config.BrowserConfig, erCfg config.EuropeRemotelyConfig) (europeRemotely, workingNomads, builtIn, himal, remotifyEurope, weWorkRemotely, wellfoundColl, vueJobs, golangCafe, bestJobs, hipoColl, ejobsColl, olxColl, dezeenColl, ribaColl, landscapeColl, archgeeColl, archinectColl, competitionlineColl, baunetzColl, bdlaColl, worldArchitectsColl collectors.Collector, considerBoards, getroBoards []collectors.Collector, err error) {
+func MVPCollectors(ctx context.Context, httpClient *http.Client, dataDir string, builtinCfg config.BuiltinCollectorConfig, himCfg config.HimalayasCollectorConfig, browserCfg config.BrowserConfig, erCfg config.EuropeRemotelyConfig) (europeRemotely, workingNomads, builtIn, himal, remotifyEurope, weWorkRemotely, wellfoundColl, vueJobs, golangCafe, bestJobs, hipoColl, ejobsColl, dezeenColl, ribaColl, landscapeColl, archgeeColl, archinectColl, competitionlineColl, baunetzColl, bdlaColl, worldArchitectsColl collectors.Collector, considerBoards, getroBoards []collectors.Collector, err error) {
 	if httpClient == nil {
 		httpClient = utils.NewHTTPClient()
 	}
 	cr, err := loadCountryResolver(dataDir)
 	if err != nil {
-		return nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, err
 	}
 	erHTTP := httpClient
 	if proxy := strings.TrimSpace(erCfg.ProxyURL); proxy != "" {
 		c, perr := utils.HTTPClientWithProxy(httpClient, proxy)
 		if perr != nil {
-			return nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, fmt.Errorf("collectors bootstrap: europe remotely proxy: %w", perr)
+			return nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, fmt.Errorf("collectors bootstrap: europe remotely proxy: %w", perr)
 		}
 		erHTTP = c
 	}
@@ -73,7 +72,7 @@ func MVPCollectors(ctx context.Context, httpClient *http.Client, dataDir string,
 	}
 	siteBase, err := europeremotely.DefaultSiteBase()
 	if err != nil {
-		return nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, err
 	}
 	feedForm := url.Values{
 		"action":  {"erj_ajax_search"},
@@ -103,7 +102,7 @@ func MVPCollectors(ctx context.Context, httpClient *http.Client, dataDir string,
 			NoSandbox:   browserCfg.NoSandbox,
 		})
 		if ferr != nil {
-			return nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, fmt.Errorf("collectors bootstrap: browser fetcher: %w", ferr)
+			return nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, fmt.Errorf("collectors bootstrap: browser fetcher: %w", ferr)
 		}
 		rodFetch = f
 	}
@@ -160,12 +159,7 @@ func MVPCollectors(ctx context.Context, httpClient *http.Client, dataDir string,
 	bj := &bestjobs.BestJobs{HTTPClient: httpClient, Countries: cr}
 	hp := &hipo.Hipo{HTTPClient: httpClient}
 	ej := &ejobs.Ejobs{}
-	ox := &olxro.Olx{}
-	if rodFetch != nil {
-		ej.Fetcher = rodFetch
-		ox.Fetcher = rodFetch
-	}
-	dz := &dezeen.Dezeen{HTTPClient: httpClient}
+	dz := &dezeen.Dezeen{}
 	rb := &riba.Riba{HTTPClient: httpClient}
 	li := &landscapeinstitute.LandscapeInstitute{HTTPClient: httpClient}
 	ag := &archgee.Archgee{HTTPClient: httpClient}
@@ -173,8 +167,13 @@ func MVPCollectors(ctx context.Context, httpClient *http.Client, dataDir string,
 	cl := &competitionline.Competitionline{HTTPClient: httpClient}
 	bn := &baunetz.Baunetz{HTTPClient: httpClient}
 	bd := &bdla.Bdla{HTTPClient: httpClient}
-	wa := &worldarchitects.WorldArchitects{HTTPClient: httpClient}
-	return er, wn, builtinColl, him, re, wwr, wf, vj, gc, bj, hp, ej, ox, dz, rb, li, ag, an, cl, bn, bd, wa, considerColls, getroColls, nil
+	wa := &worldarchitects.WorldArchitects{}
+	if rodFetch != nil {
+		ej.Fetcher = rodFetch
+		dz.Fetcher = rodFetch
+		wa.Fetcher = rodFetch
+	}
+	return er, wn, builtinColl, him, re, wwr, wf, vj, gc, bj, hp, ej, dz, rb, li, ag, an, cl, bn, bd, wa, considerColls, getroColls, nil
 }
 
 func loadCountryResolver(dataDir string) (*utils.CountryResolver, error) {

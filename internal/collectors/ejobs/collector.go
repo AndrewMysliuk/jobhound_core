@@ -11,7 +11,9 @@ import (
 	"time"
 
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/browserfetch"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/utils"
 	"github.com/andrewmysliuk/jobhound_core/internal/domain/schema"
+	scoringschema "github.com/andrewmysliuk/jobhound_core/internal/scoring/schema"
 )
 
 // SourceName is the normative Job.Source value.
@@ -84,6 +86,8 @@ func pageURL(base string, page int) string {
 
 func (c *Ejobs) fetchBase(ctx context.Context, base string, seen map[string]struct{}, calls *int) ([]schema.Job, error) {
 	var out []schema.Job
+	rejectDays := scoringschema.PostedAtRejectDaysArchitecture
+	now := time.Now().UTC()
 	for page := 1; page <= maxListPage; page++ {
 		rawURL := pageURL(base, page)
 		doc, err := c.fetch(ctx, rawURL, calls)
@@ -97,16 +101,48 @@ func (c *Ejobs) fetchBase(ctx context.Context, base string, seen map[string]stru
 		if err != nil {
 			return nil, err
 		}
-		jobs, err := c.jobsFromCards(ctx, list.Cards, seen, calls)
-		if err != nil {
-			return nil, err
+		if list.FromList {
+			if listPageTooOldByPostedAt(list.Jobs, now, rejectDays) {
+				return out, nil
+			}
+			for _, job := range list.Jobs {
+				if utils.PostedBeforeCutoff(job.PostedAt, now, rejectDays) {
+					continue
+				}
+				if _, dup := seen[job.URL]; dup {
+					continue
+				}
+				seen[job.URL] = struct{}{}
+				out = append(out, job)
+			}
+		} else {
+			jobs, err := c.jobsFromCards(ctx, list.Cards, seen, calls)
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, jobs...)
 		}
-		out = append(out, jobs...)
 		if list.Count < pageSize {
 			return out, nil
 		}
 	}
 	return out, nil
+}
+
+func listPageTooOldByPostedAt(jobs []schema.Job, now time.Time, rejectDays int) bool {
+	if len(jobs) == 0 {
+		return false
+	}
+	var newest time.Time
+	for _, job := range jobs {
+		if job.PostedAt.After(newest) {
+			newest = job.PostedAt
+		}
+	}
+	if newest.IsZero() {
+		return false
+	}
+	return utils.PostedBeforeCutoff(newest, now, rejectDays)
 }
 
 func (c *Ejobs) jobsFromCards(ctx context.Context, cards []listCard, seen map[string]struct{}, calls *int) ([]schema.Job, error) {

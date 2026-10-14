@@ -18,7 +18,6 @@ import (
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/himalayas"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/hipo"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/landscapeinstitute"
-	"github.com/andrewmysliuk/jobhound_core/internal/collectors/olxro"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/remotifyeurope"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/riba"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/vuejobs"
@@ -43,7 +42,6 @@ func KnownSourceIDs() []string {
 		bestjobs.SourceName,
 		hipo.SourceName,
 		ejobs.SourceName,
-		olxro.SourceName,
 		dezeen.SourceName,
 		riba.SourceName,
 		landscapeinstitute.SourceName,

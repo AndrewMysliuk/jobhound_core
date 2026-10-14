@@ -3,17 +3,14 @@ name: Lada
 domain: architecture
 
 queries:
-  - arhitect
   - arhitect proiectant
   - peisagist
   - urbanist
-  - desenator tehnic
 
 sources:
   - bestjobs
   - hipo
   - ejobs
-  - olx_ro
   - dezeen_jobs
   - riba_jobs
   - landscape_institute
@@ -56,8 +53,6 @@ children:
   world_architects:
     - catalog
 
-wellfound_roles: []
-
 # Title-only reject. Do not add designer, architect, assistant, landscape, or junior:
 # those words sit inside the roles this profile wants.
 gate_role:
@@ -97,6 +92,20 @@ gate_role:
   - "information architect"
   - "integration architect"
   - "platform architect"
+  - "civil engineer"
+  - "structural engineer"
+  - "plumbing design engineer"
+  - "bim coordinator"
+  - "bim manager"
+  - "mep coordinator"
+  - "sales engineer"
+  - "cad engineer"
+  - "inginer constructor"
+  - "inginer proiectant"
+  - "inginer calcul"
+  - "inginer instalat"
+  - "inginer automat"
+  - "electronist"
 
 gate_hard:
   - "no visa sponsorship"
@@ -109,8 +118,13 @@ gate_hard:
   - "no salary until"
   - "compensation will be deferred"
   - "right to work in the uk"
+  - "eligible to work in the uk"
   - "right to work in germany"
+  - "eligible to work in germany"
+  - "right to work in france"
   - "eligible to work in france"
+  - "right to work in ireland"
+  - "eligible to work in ireland"
   - "must reside in switzerland"
   - "drept de semnatura"
   - "drept de semnătură"
@@ -183,7 +197,7 @@ signals_plus:
     urbanist: 3
     desenator tehnic: 3
   text:
-    max_total: 6
+    max_total: 4
     terms:
       revit: 2
       archicad: 2
@@ -253,4 +267,4 @@ penalties_soft:
       - "part time"
 
 buckets:
-  top: 5
+  top: 6

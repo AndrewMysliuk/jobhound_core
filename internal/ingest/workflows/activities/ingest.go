@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors"
 	"github.com/andrewmysliuk/jobhound_core/internal/domain/schema"
@@ -104,7 +105,12 @@ func (a *IngestActivities) RunIngestSource(ctx context.Context, in ingestschema.
 	}
 
 	out := &ingestschema.IngestSourceOutput{}
+	now := time.Now().UTC()
 	for _, j := range list {
+		if ingest.SkipIngestByPostedAt(id, j.PostedAt, now) {
+			out.JobsSkipped++
+			continue
+		}
 		skipped, err := a.Jobs.SaveIngest(ctx, j)
 		if err != nil {
 			log.Error().Err(err).Str("job_id", j.ID).Msg("save ingest")

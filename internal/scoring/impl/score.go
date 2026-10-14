@@ -26,7 +26,7 @@ func (s *Service) Score(ctx context.Context, profileID string, runID int64) (int
 	}
 	started := run.StartedAt.UTC()
 	since := started.Add(-time.Duration(schema.ScoreWindowDays) * 24 * time.Hour)
-	postedBefore := started.Add(-time.Duration(schema.PostedAtRejectDays) * 24 * time.Hour)
+	postedBefore := started.Add(-time.Duration(PostedAtRejectDaysForProfile(profile)) * 24 * time.Hour)
 	listed, err := s.jobs.ListFirstSeenSince(ctx, since)
 	if err != nil {
 		return 0, err
@@ -35,9 +35,10 @@ func (s *Service) Score(ctx context.Context, profileID string, runID int64) (int
 	if err != nil {
 		return 0, err
 	}
+	rejectDays := PostedAtRejectDaysForProfile(profile)
 	scored := 0
 	for _, job := range scoreJobs(listed, stale) {
-		if job.FirstSeenAt.UTC().Before(since) && !postedAtStale(job.PostedAt, started) {
+		if job.FirstSeenAt.UTC().Before(since) && !postedAtStale(job.PostedAt, started, rejectDays) {
 			continue
 		}
 		if err := s.runs.UpsertMatch(ctx, matchFrom(profileID, runID, job, evaluateAt(profile, job, started))); err != nil {

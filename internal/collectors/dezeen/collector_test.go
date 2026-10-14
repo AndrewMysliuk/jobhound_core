@@ -2,47 +2,35 @@ package dezeen
 
 import (
 	"context"
-	"net/http"
-	"net/http/httptest"
-	"net/url"
+	"fmt"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/andrewmysliuk/jobhound_core/internal/collectors/utils"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/browserfetch"
 	"github.com/andrewmysliuk/jobhound_core/internal/domain/schema"
 	domainutils "github.com/andrewmysliuk/jobhound_core/internal/domain/utils"
 )
 
 func TestFetchWithQuery_stopsOnEmptyListAndReadsSalaryFromHTML(t *testing.T) {
 	const slug = "architectural-designer"
-	var mu sync.Mutex
+	base := siteOrigin + "/job-category/" + slug + "/"
 	var urls []string
-	var agents []string
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			t.Errorf("method %s", r.Method)
-			http.Error(w, "method", http.StatusMethodNotAllowed)
-			return
-		}
-		switch r.URL.Path {
-		case "/job-category/" + slug + "/":
-			writePage(t, w, listPage([]card{
+	c := &Dezeen{Fetcher: &fakeFetcher{
+		urls: &urls,
+		pages: map[string]string{
+			base: listPage([]card{
 				{id: "48291", slug: "senior-architectural-designer", title: "Short", location: "london", locationText: "London"},
 				{id: "48292", slug: "assistant", title: "Assistant", location: "remote", locationText: "Remote"},
-			}, slug+"/feed/"))
-		case "/job-category/" + slug + "/page/2/":
-			writePage(t, w, listPage([]card{
+			}, slug+"/feed/"),
+			base + "page/2/": listPage([]card{
 				{id: "48291", slug: "senior-architectural-designer", title: "Short", location: "london", locationText: "London"},
 				{id: "1002", slug: "landscape-architect-paris", title: "Paris", location: "paris", locationText: "Paris"},
-			}, slug+"/page/3/"))
-		case "/job-category/" + slug + "/page/3/":
-			writePage(t, w, emptyPage(slug+"/page/4/"))
-		case "/job/senior-architectural-designer-48291":
-			writePage(t, w, detailPage(detailFixture{
+			}, slug+"/page/3/"),
+			base + "page/3/": emptyPage(slug + "/page/4/"),
+			siteOrigin + "/job/senior-architectural-designer-48291": detailPage(detailFixture{
 				title: "Senior Architectural Designer", company: "Foster + Partners",
 				city: "London", country: "GB", posted: "2026-10-01",
 				description: "<p>Design the <b>facade</b></p>",
@@ -50,32 +38,24 @@ func TestFetchWithQuery_stopsOnEmptyListAndReadsSalaryFromHTML(t *testing.T) {
 				salaryLD:    `{"currency":"USD","value":"choose_my_own"}`,
 				telecommute: true,
 				apply:       "https://ats.example/apply/1",
-			}))
-		case "/job/assistant-48292":
-			writePage(t, w, detailPage(detailFixture{
+			}),
+			siteOrigin + "/job/assistant-48292": detailPage(detailFixture{
 				title: "Architectural Assistant", company: "Confidential",
 				description: "<p>Studio work</p>",
 				salaryLD:    `"9999 USD"`,
 				apply:       "https://www.dezeenjobs.com/login/",
 				applyNote:   "Please sign-in to apply.",
-			}))
-		case "/job/landscape-architect-paris-1002":
-			writePage(t, w, detailPage(detailFixture{
+			}),
+			siteOrigin + "/job/landscape-architect-paris-1002": detailPage(detailFixture{
 				title: "Landscape Architect", company: "Studio North",
 				city: "Paris", country: "FR",
 				description: "<p>Park</p>",
 				salaryLD:    `"9999 USD"`,
 				apply:       "https://ats.example/apply/9",
 				applyNote:   "A geo gate hides this vacancy.",
-			}))
-		default:
-			t.Errorf("unexpected path %s", r.URL.RequestURI())
-			http.NotFound(w, r)
-		}
-	}))
-	t.Cleanup(srv.Close)
-
-	c := &Dezeen{HTTPClient: &http.Client{Transport: recordHost(srv.URL, &mu, &urls, &agents)}}
+			}),
+		},
+	}}
 	jobs, err := c.FetchWithQuery(context.Background(), slug)
 	require.NoError(t, err)
 	require.Equal(t, SourceName, c.Name())
@@ -91,15 +71,11 @@ func TestFetchWithQuery_stopsOnEmptyListAndReadsSalaryFromHTML(t *testing.T) {
 			lists = append(lists, raw)
 		}
 	}
-	base := siteOrigin + "/job-category/" + slug + "/"
 	require.Equal(t, []string{
 		base,
 		base + "page/2/",
 		base + "page/3/",
 	}, lists)
-	for _, agent := range agents {
-		require.Equal(t, utils.BrowserUserAgent, agent)
-	}
 
 	named := jobs[0]
 	require.Equal(t, "Senior Architectural Designer", named.Title)
@@ -134,12 +110,7 @@ func TestFetchWithQuery_stopsOnEmptyListAndReadsSalaryFromHTML(t *testing.T) {
 }
 
 func TestFetch_emptyQueryDoesNotRequest(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Errorf("unexpected request %s", r.URL.Path)
-	}))
-	t.Cleanup(srv.Close)
-
-	c := &Dezeen{HTTPClient: srv.Client()}
+	c := &Dezeen{Fetcher: &fakeFetcher{pages: map[string]string{}}}
 	jobs, err := c.Fetch(context.Background())
 	require.NoError(t, err)
 	require.Empty(t, jobs)
@@ -268,38 +239,18 @@ func jsonString(s string) string {
 	return b.String()
 }
 
-func writePage(t *testing.T, w http.ResponseWriter, html string) {
-	t.Helper()
-	_, err := w.Write([]byte(html))
-	require.NoError(t, err)
+type fakeFetcher struct {
+	pages map[string]string
+	urls  *[]string
 }
 
-type recordTransport struct {
-	baseURL string
-	next    http.RoundTripper
-	mu      *sync.Mutex
-	urls    *[]string
-	agents  *[]string
-}
-
-func recordHost(base string, mu *sync.Mutex, urls *[]string, agents *[]string) recordTransport {
-	return recordTransport{baseURL: base, next: http.DefaultTransport, mu: mu, urls: urls, agents: agents}
-}
-
-func (r recordTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	r.mu.Lock()
-	*r.urls = append(*r.urls, req.URL.String())
-	if r.agents != nil {
-		*r.agents = append(*r.agents, req.Header.Get("User-Agent"))
+func (f *fakeFetcher) FetchNavigated(_ context.Context, rawURL string) (browserfetch.NavigatedDocument, error) {
+	if f.urls != nil {
+		*f.urls = append(*f.urls, rawURL)
 	}
-	r.mu.Unlock()
-	target, err := url.Parse(r.baseURL)
-	if err != nil {
-		return nil, err
+	html, ok := f.pages[rawURL]
+	if !ok {
+		return browserfetch.NavigatedDocument{}, fmt.Errorf("unexpected %s", rawURL)
 	}
-	clone := req.Clone(req.Context())
-	clone.URL.Scheme = target.Scheme
-	clone.URL.Host = target.Host
-	clone.Host = target.Host
-	return r.next.RoundTrip(clone)
+	return browserfetch.NavigatedDocument{FinalURL: rawURL, HTML: []byte(html)}, nil
 }

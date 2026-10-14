@@ -58,11 +58,13 @@ func TestIngestChildren_considerUnionGetroKeyword(t *testing.T) {
 
 func TestIngestChildren_profileChildrenAndArchitectureLane(t *testing.T) {
 	profile := profileschema.Profile{
-		Sources: []string{"hipo", "landscape_institute", "ejobs", "olx_ro", "builtin"},
+		Sources: []string{"hipo", "landscape_institute", "ejobs", "dezeen_jobs", "world_architects", "builtin"},
 		Queries: []string{"arhitect", "peisagist"},
 		Children: map[string][]string{
 			"hipo":                {"Arhitectura-Design-Proiectare"},
 			"landscape_institute": {"catalog"},
+			"dezeen_jobs":         {"architectural-designer"},
+			"world_architects":    {"catalog"},
 		},
 	}
 
@@ -72,8 +74,8 @@ func TestIngestChildren_profileChildrenAndArchitectureLane(t *testing.T) {
 		{SourceID: "landscape_institute"},
 		{SourceID: "ejobs", Query: "arhitect"},
 		{SourceID: "ejobs", Query: "peisagist"},
-		{SourceID: "olx_ro", Query: "arhitect"},
-		{SourceID: "olx_ro", Query: "peisagist"},
+		{SourceID: "dezeen_jobs", Query: "architectural-designer"},
+		{SourceID: "world_architects"},
 		{SourceID: "builtin", Query: "arhitect"},
 		{SourceID: "builtin", Query: "peisagist"},
 	}

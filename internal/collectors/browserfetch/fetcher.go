@@ -19,8 +19,3 @@ type NavigatedDocument struct {
 type NavigatedFetcher interface {
 	FetchNavigated(ctx context.Context, rawURL string) (NavigatedDocument, error)
 }
-
-// RawFetcher loads the original document response. The live DOM is not used.
-type RawFetcher interface {
-	FetchRaw(ctx context.Context, rawURL string) (NavigatedDocument, error)
-}

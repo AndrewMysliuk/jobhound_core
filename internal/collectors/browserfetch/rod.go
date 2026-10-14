@@ -2,7 +2,6 @@ package browserfetch
 
 import (
 	"context"
-	"encoding/base64"
 	"fmt"
 	"strings"
 	"sync"
@@ -33,6 +32,7 @@ type RodOptions struct {
 type RodFetcher struct {
 	browser    *rod.Browser
 	navTimeout time.Duration
+	opts       RodOptions
 	pageMu     sync.Mutex
 }
 
@@ -42,10 +42,22 @@ func NewRodFetcher(opts RodOptions) (*RodFetcher, error) {
 	if nav <= 0 {
 		nav = 2 * time.Minute
 	}
+	browser, err := launchBrowser(opts)
+	if err != nil {
+		return nil, err
+	}
+	return &RodFetcher{browser: browser, navTimeout: nav, opts: opts}, nil
+}
+
+func launchBrowser(opts RodOptions) (*rod.Browser, error) {
 	launchCtx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 
-	l := launcher.New().Context(launchCtx).Headless(true)
+	// enable-automation makes Cloudflare serve a block page with no job payload.
+	l := launcher.New().Context(launchCtx).Headless(true).
+		Delete("enable-automation").
+		Set("disable-blink-features", "AutomationControlled").
+		Set("user-agent", utils.BrowserUserAgent)
 	if b := strings.TrimSpace(opts.Bin); b != "" {
 		l = l.Bin(b)
 	}
@@ -63,7 +75,20 @@ func NewRodFetcher(opts RodOptions) (*RodFetcher, error) {
 	if err := browser.Connect(); err != nil {
 		return nil, fmt.Errorf("browserfetch: connect to chromium: %w", err)
 	}
-	return &RodFetcher{browser: browser, navTimeout: nav}, nil
+	return browser, nil
+}
+
+func (f *RodFetcher) relaunch() error {
+	if f.browser != nil {
+		_ = f.browser.Close()
+		f.browser = nil
+	}
+	browser, err := launchBrowser(f.opts)
+	if err != nil {
+		return err
+	}
+	f.browser = browser
+	return nil
 }
 
 // postLoadSettle is a fixed pause after the lifecycle "load" event. WaitRequestIdle+WaitDOMStable
@@ -105,6 +130,20 @@ func (f *RodFetcher) navigate(ctx context.Context, rawURL string, reportURL bool
 	}
 	f.pageMu.Lock()
 	defer f.pageMu.Unlock()
+	doc, err := f.navigateLocked(ctx, rawURL, reportURL)
+	if err != nil || !cloudflareBlocked(doc.HTML) {
+		return doc, err
+	}
+	if err := f.relaunch(); err != nil {
+		return NavigatedDocument{}, err
+	}
+	return f.navigateLocked(ctx, rawURL, reportURL)
+}
+
+func (f *RodFetcher) navigateLocked(ctx context.Context, rawURL string, reportURL bool) (NavigatedDocument, error) {
+	if f == nil || f.browser == nil {
+		return NavigatedDocument{}, fmt.Errorf("browserfetch: nil RodFetcher")
+	}
 	if err := ctx.Err(); err != nil {
 		return NavigatedDocument{}, err
 	}
@@ -120,7 +159,7 @@ func (f *RodFetcher) navigate(ctx context.Context, rawURL string, reportURL bool
 
 	p := page.Context(ctx).Timeout(f.navTimeout)
 	if reportURL {
-		if err := p.SetUserAgent(&proto.NetworkSetUserAgentOverride{UserAgent: utils.BrowserUserAgent}); err != nil {
+		if err := p.SetUserAgent(browserUserAgentOverride()); err != nil {
 			return NavigatedDocument{}, fmt.Errorf("browserfetch: user agent: %w", err)
 		}
 	}
@@ -148,6 +187,10 @@ func (f *RodFetcher) navigate(ctx context.Context, rawURL string, reportURL bool
 	if err != nil {
 		return NavigatedDocument{}, fmt.Errorf("browserfetch: read html: %w", err)
 	}
+	html, err = waitPastChallenge(p, html)
+	if err != nil {
+		return NavigatedDocument{}, err
+	}
 	doc := NavigatedDocument{HTML: []byte(html)}
 	if !reportURL {
 		return doc, nil
@@ -160,121 +203,64 @@ func (f *RodFetcher) navigate(ctx context.Context, rawURL string, reportURL bool
 	return doc, nil
 }
 
-// FetchRaw returns the document response body and the URL after redirects.
-// p.HTML is the DOM after scripts run, so a value removed at hydration is still in this body.
-func (f *RodFetcher) FetchRaw(ctx context.Context, rawURL string) (NavigatedDocument, error) {
-	if f == nil || f.browser == nil {
-		return NavigatedDocument{}, fmt.Errorf("browserfetch: nil RodFetcher")
-	}
-	f.pageMu.Lock()
-	defer f.pageMu.Unlock()
-	if err := ctx.Err(); err != nil {
-		return NavigatedDocument{}, err
-	}
-	u, err := requireAbsoluteHTTPS(rawURL)
-	if err != nil {
-		return NavigatedDocument{}, err
-	}
-	page, err := f.browser.Page(proto.TargetCreateTarget{})
-	if err != nil {
-		return NavigatedDocument{}, fmt.Errorf("browserfetch: new page: %w", err)
-	}
-	defer func() { _ = page.Close() }()
-
-	p := page.Context(ctx).Timeout(f.navTimeout)
-	if err := p.SetUserAgent(&proto.NetworkSetUserAgentOverride{UserAgent: utils.BrowserUserAgent}); err != nil {
-		return NavigatedDocument{}, fmt.Errorf("browserfetch: user agent: %w", err)
-	}
-	if err := (proto.PageSetLifecycleEventsEnabled{Enabled: true}).Call(p); err != nil {
-		return NavigatedDocument{}, fmt.Errorf("browserfetch: lifecycle: %w", err)
-	}
-
-	var (
-		last       proto.NetworkRequestID
-		lastStatus int
-		saw        bool
-		body       []byte
-		bodyErr    error
-	)
-	wait := p.EachEvent(
-		func(e *proto.NetworkResponseReceived) {
-			if e.Type != proto.NetworkResourceTypeDocument || e.Response == nil {
-				return
-			}
-			if e.Response.Status >= 300 && e.Response.Status < 400 {
-				return
-			}
-			last = e.RequestID
-			lastStatus = e.Response.Status
-			saw = true
-		},
-		func(e *proto.PageLifecycleEvent) bool {
-			if e.Name != proto.PageLifecycleEventNameLoad {
-				return false
-			}
-			if !saw {
-				bodyErr = fmt.Errorf("browserfetch: document response missing")
-				return true
-			}
-			if lastStatus < 200 || lastStatus >= 300 {
-				bodyErr = fmt.Errorf("browserfetch: document status %d", lastStatus)
-				return true
-			}
-			res, err := (proto.NetworkGetResponseBody{RequestID: last}).Call(p)
-			if err != nil {
-				bodyErr = fmt.Errorf("browserfetch: response body: %w", err)
-				return true
-			}
-			decoded, err := decodeResponseBody(res)
-			if err != nil {
-				bodyErr = fmt.Errorf("browserfetch: response body: %w", err)
-				return true
-			}
-			if len(decoded) == 0 {
-				bodyErr = fmt.Errorf("browserfetch: empty document body")
-				return true
-			}
-			body = decoded
-			return true
-		},
-	)
-	if err := p.Navigate(u); err != nil {
-		return NavigatedDocument{}, fmt.Errorf("browserfetch: navigate: %w", err)
-	}
-	wait()
-	if bodyErr != nil {
-		return NavigatedDocument{}, bodyErr
-	}
-	if err := p.GetContext().Err(); err != nil {
-		return NavigatedDocument{}, err
-	}
-	if len(body) == 0 {
-		return NavigatedDocument{}, fmt.Errorf("browserfetch: empty document body")
-	}
-	info, err := p.Info()
-	if err != nil {
-		return NavigatedDocument{}, fmt.Errorf("browserfetch: page url: %w", err)
-	}
-	if strings.TrimSpace(info.URL) == "" {
-		return NavigatedDocument{}, fmt.Errorf("browserfetch: empty final URL")
-	}
-	return NavigatedDocument{FinalURL: info.URL, HTML: body}, nil
-}
-
-func decodeResponseBody(res *proto.NetworkGetResponseBodyResult) ([]byte, error) {
-	if res == nil {
-		return nil, fmt.Errorf("nil result")
-	}
-	if !res.Base64Encoded {
-		return []byte(res.Body), nil
-	}
-	return base64.StdEncoding.DecodeString(res.Body)
-}
-
 // Close shuts down the browser process.
 func (f *RodFetcher) Close() error {
 	if f == nil || f.browser == nil {
 		return nil
 	}
 	return f.browser.Close()
+}
+
+func browserUserAgentOverride() *proto.NetworkSetUserAgentOverride {
+	return &proto.NetworkSetUserAgentOverride{
+		UserAgent: utils.BrowserUserAgent,
+		Platform:  "Win32",
+		UserAgentMetadata: &proto.EmulationUserAgentMetadata{
+			Brands: []*proto.EmulationUserAgentBrandVersion{
+				{Brand: "Chromium", Version: "131"},
+				{Brand: "Google Chrome", Version: "131"},
+				{Brand: "Not_A Brand", Version: "24"},
+			},
+			FullVersionList: []*proto.EmulationUserAgentBrandVersion{
+				{Brand: "Chromium", Version: "131.0.0.0"},
+				{Brand: "Google Chrome", Version: "131.0.0.0"},
+				{Brand: "Not_A Brand", Version: "24.0.0.0"},
+			},
+			Platform:        "Windows",
+			PlatformVersion: "15.0.0",
+			Architecture:    "x86",
+			Model:           "",
+			Mobile:          false,
+			Bitness:         "64",
+		},
+	}
+}
+
+func waitPastChallenge(p *rod.Page, html string) (string, error) {
+	if !cloudflareChallenge(html) {
+		return html, nil
+	}
+	for range 12 {
+		if err := sleepOrCtxDone(p.GetContext(), time.Second); err != nil {
+			return "", fmt.Errorf("browserfetch: cloudflare challenge: %w", err)
+		}
+		next, err := p.HTML()
+		if err != nil {
+			return "", fmt.Errorf("browserfetch: read html: %w", err)
+		}
+		html = next
+		if !cloudflareChallenge(html) {
+			return html, nil
+		}
+	}
+	return html, nil
+}
+
+func cloudflareChallenge(html string) bool {
+	return strings.Contains(html, "Just a moment") || strings.Contains(html, "cf-challenge")
+}
+
+func cloudflareBlocked(html []byte) bool {
+	s := string(html)
+	return strings.Contains(s, "cf-error-details") || strings.Contains(s, "Sorry, you have been blocked") || strings.Contains(s, "Just a moment")
 }

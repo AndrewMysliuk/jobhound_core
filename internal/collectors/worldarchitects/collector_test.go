@@ -2,73 +2,30 @@ package worldarchitects
 
 import (
 	"context"
-	"net/http"
-	"net/http/cookiejar"
-	"net/http/httptest"
+	"fmt"
 	"net/url"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/andrewmysliuk/jobhound_core/internal/collectors/utils"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/browserfetch"
 	domainutils "github.com/andrewmysliuk/jobhound_core/internal/domain/utils"
 )
 
 func TestFetch_catalogStopsOnRepeatedSlugs(t *testing.T) {
-	var mu sync.Mutex
 	var urls []string
-	var agents []string
-	var cookies []string
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			t.Errorf("method %s", r.Method)
-			http.Error(w, "method", http.StatusMethodNotAllowed)
-			return
-		}
-		if queryHasFold(r.URL, "term") {
-			t.Errorf("term %s", r.URL.RawQuery)
-			http.Error(w, "term", http.StatusBadRequest)
-			return
-		}
-		http.SetCookie(w, &http.Cookie{Name: "session", Value: "term"})
-		switch r.URL.Path {
-		case listPath:
-			switch r.URL.Query().Get("page") {
-			case "":
-				_, _ = w.Write([]byte(listPage1))
-			case "2":
-				_, _ = w.Write([]byte(listPage2))
-			case "3":
-				_, _ = w.Write([]byte(listPage3))
-			default:
-				t.Errorf("page %s", r.URL.RawQuery)
-				http.NotFound(w, r)
-			}
-		case listPath + "/alpha":
-			_, _ = w.Write([]byte(detailNamed))
-		case listPath + "/beta":
-			_, _ = w.Write([]byte(detailConfidential))
-		case listPath + "/gamma":
-			_, _ = w.Write([]byte(detailGermany))
-		default:
-			t.Errorf("unexpected %s", r.URL.RequestURI())
-			http.NotFound(w, r)
-		}
-	}))
-	t.Cleanup(srv.Close)
-
-	jar, err := cookiejar.New(nil)
-	require.NoError(t, err)
-	listU, err := url.Parse(siteOrigin + listPath)
-	require.NoError(t, err)
-	jar.SetCookies(listU, []*http.Cookie{{Name: "session", Value: "stuck-term"}})
-
-	c := &WorldArchitects{HTTPClient: &http.Client{
-		Jar:       jar,
-		Transport: recordHost(srv.URL, &mu, &urls, &agents, &cookies),
+	c := &WorldArchitects{Fetcher: &fakeFetcher{
+		urls: &urls,
+		pages: map[string]string{
+			siteOrigin + listPath:             listPage1,
+			siteOrigin + listPath + "?page=2": listPage2,
+			siteOrigin + listPath + "?page=3": listPage3,
+			siteOrigin + listPath + "/alpha":  detailNamed,
+			siteOrigin + listPath + "/beta":   detailConfidential,
+			siteOrigin + listPath + "/gamma":  detailGermany,
+		},
 	}}
 	jobs, err := c.FetchWithQuery(context.Background(), "catalog")
 	require.NoError(t, err)
@@ -91,13 +48,6 @@ func TestFetch_catalogStopsOnRepeatedSlugs(t *testing.T) {
 		require.NotContains(t, raw, "page=4")
 		require.NotContains(t, raw, "page=9")
 	}
-	for _, agent := range agents {
-		require.Equal(t, utils.BrowserUserAgent, agent)
-	}
-	for _, cookie := range cookies {
-		require.Empty(t, cookie)
-	}
-
 	named := jobs[0]
 	require.Equal(t, "Projektleiter Architektur", named.Title)
 	require.Equal(t, "ffbk Architekten AG", named.Company)
@@ -144,30 +94,15 @@ func TestFetch_catalogStopsOnRepeatedSlugs(t *testing.T) {
 }
 
 func TestFetchWithQuery_ignoresQueryAndSkipsTerm(t *testing.T) {
-	var mu sync.Mutex
 	var urls []string
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != listPath {
-			t.Errorf("unexpected %s", r.URL.RequestURI())
-			http.NotFound(w, r)
-			return
-		}
-		if queryHasFold(r.URL, "term") {
-			t.Errorf("term %s", r.URL.RawQuery)
-			http.Error(w, "term", http.StatusBadRequest)
-			return
-		}
-		switch r.URL.Query().Get("page") {
-		case "", "2":
-			_, _ = w.Write([]byte(`<form action="/en/jobs"><input name="term" value="arhitect"></form><a href="/en/jobs?term=arhitect">search</a><a href="/en/jobs?page=9">9</a>`))
-		default:
-			t.Errorf("page %s", r.URL.RawQuery)
-			http.NotFound(w, r)
-		}
-	}))
-	t.Cleanup(srv.Close)
-
-	c := &WorldArchitects{HTTPClient: &http.Client{Transport: recordHost(srv.URL, &mu, &urls, nil, nil)}}
+	empty := `<form action="/en/jobs"><input name="term" value="arhitect"></form><a href="/en/jobs?term=arhitect">search</a><a href="/en/jobs?page=9">9</a>`
+	c := &WorldArchitects{Fetcher: &fakeFetcher{
+		urls: &urls,
+		pages: map[string]string{
+			siteOrigin + listPath:             empty,
+			siteOrigin + listPath + "?page=2": empty,
+		},
+	}}
 	for _, query := range []string{"", "catalog", "term=foo", "Architekt"} {
 		jobs, err := c.FetchWithQuery(context.Background(), query)
 		require.NoError(t, err)
@@ -190,31 +125,28 @@ func TestFetchWithQuery_ignoresQueryAndSkipsTerm(t *testing.T) {
 }
 
 func TestFetch_emptyTitle(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.URL.Path == listPath && r.URL.Query().Get("page") == "":
-			_, _ = w.Write([]byte(`<li class="row"><a href="/en/jobs/empty">x</a></li>`))
-		case r.URL.Path == listPath+"/empty":
-			_, _ = w.Write([]byte(`<h1>  </h1><script type="application/ld+json">{"@type":"JobPosting","title":"Real"}</script>`))
-		default:
-			http.NotFound(w, r)
-		}
-	}))
-	t.Cleanup(srv.Close)
-
-	c := &WorldArchitects{HTTPClient: &http.Client{Transport: recordHost(srv.URL, nil, nil, nil, nil)}}
+	c := &WorldArchitects{Fetcher: &fakeFetcher{pages: map[string]string{
+		siteOrigin + listPath:            `<li class="row"><a href="/en/jobs/empty">x</a></li>`,
+		siteOrigin + listPath + "/empty": `<h1>  </h1><script type="application/ld+json">{"@type":"JobPosting","title":"Real"}</script>`,
+	}}}
 	_, err := c.Fetch(context.Background())
 	require.Error(t, err)
 	require.ErrorContains(t, err, "empty title")
 }
 
+func TestFetch_nilFetcher(t *testing.T) {
+	_, err := (&WorldArchitects{}).Fetch(context.Background())
+	require.ErrorContains(t, err, "browser fetcher is nil")
+}
+
 func TestGet_refusesTerm(t *testing.T) {
+	c := &WorldArchitects{Fetcher: &fakeFetcher{}}
 	for _, raw := range []string{
 		siteOrigin + listPath + "?term=arhitect",
 		siteOrigin + listPath + "?page=2&term=Architekt",
 		siteOrigin + listPath + "?TERM=foo",
 	} {
-		_, err := get(context.Background(), http.DefaultClient, raw)
+		_, err := c.get(context.Background(), raw)
 		require.ErrorContains(t, err, "refused")
 	}
 }
@@ -331,41 +263,18 @@ const detailGermany = `
 <p><a href="https://jobs.example/apply">portal</a></p>
 `
 
-type recordTransport struct {
-	baseURL string
-	next    http.RoundTripper
-	mu      *sync.Mutex
-	urls    *[]string
-	agents  *[]string
-	cookies *[]string
+type fakeFetcher struct {
+	pages map[string]string
+	urls  *[]string
 }
 
-func recordHost(base string, mu *sync.Mutex, urls *[]string, agents *[]string, cookies *[]string) recordTransport {
-	if mu == nil {
-		mu = &sync.Mutex{}
+func (f *fakeFetcher) FetchNavigated(_ context.Context, rawURL string) (browserfetch.NavigatedDocument, error) {
+	if f.urls != nil {
+		*f.urls = append(*f.urls, rawURL)
 	}
-	return recordTransport{baseURL: base, next: http.DefaultTransport, mu: mu, urls: urls, agents: agents, cookies: cookies}
-}
-
-func (r recordTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	r.mu.Lock()
-	if r.urls != nil {
-		*r.urls = append(*r.urls, req.URL.String())
+	html, ok := f.pages[rawURL]
+	if !ok {
+		return browserfetch.NavigatedDocument{}, fmt.Errorf("unexpected %s", rawURL)
 	}
-	if r.agents != nil {
-		*r.agents = append(*r.agents, req.Header.Get("User-Agent"))
-	}
-	if r.cookies != nil {
-		*r.cookies = append(*r.cookies, req.Header.Get("Cookie"))
-	}
-	r.mu.Unlock()
-	target, err := url.Parse(r.baseURL)
-	if err != nil {
-		return nil, err
-	}
-	clone := req.Clone(req.Context())
-	clone.URL.Scheme = target.Scheme
-	clone.URL.Host = target.Host
-	clone.Host = target.Host
-	return r.next.RoundTrip(clone)
+	return browserfetch.NavigatedDocument{FinalURL: rawURL, HTML: []byte(html)}, nil
 }

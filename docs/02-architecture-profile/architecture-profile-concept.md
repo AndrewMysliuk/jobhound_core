@@ -1,8 +1,8 @@
 # Architecture profile — concept
 
 > **Sequence 2.** Next: [`docs/04-companies-and-ats/`](../04-companies-and-ats/companies-and-ats-concept.md).
-> **Profile file exists.** `config/profiles/lada.yaml` (`id: lada`, `domain: architecture`). `sources` and `queries` are empty. The phrase block in that file is still the software-profile copy. The scoring section below is the rewrite, and it is not applied yet.
-> Opened 2026-10-14. Tier 1 keeps `bestjobs`, `hipo`, `ejobs`, and `olx_ro`. `undelucram` is dropped. European office boards stay and are shown with a penalty. `think_architecture` is dropped: it is US only.
+> **Profile file.** `config/profiles/lada.yaml` (`id: lada`, `domain: architecture`) carries the Scoring phrase block and the `queries`, `sources`, and `children` block from the contracts file.
+> Opened 2026-10-14. Tier 1 is `bestjobs`, `hipo`, and `ejobs`. Boards evaluated and not shipped are under Out of scope. European office boards stay and are shown with a penalty.
 
 ## Why
 
@@ -14,7 +14,7 @@
 2. The score pass reads jobs already stored. It does not fetch. IT rows Andrew already stored get a Lada match and fall through `gate_role`. They are not re-fetched.
 3. Category slugs live in a new `children` map on the profile, one list per source. A source with children does not fan `queries`.
 4. Keyword boards share one `queries` list. The Romanian list and an English remote probe are never in the file together.
-5. Collectors stay ordinary fetchers on the existing ingest lock. Static HTML uses `net/http` + goquery. `ejobs` and `olx_ro` need a browser: curl gets 403. No new module, no new HTTP API.
+5. Collectors stay ordinary fetchers on the existing ingest lock. Static HTML uses `net/http` + goquery. `ejobs`, `dezeen_jobs`, and `world_architects` need a browser: curl gets 403. No new module, no new HTTP API.
 6. Phrase scoring stays the v2 rule scorer. This slice changes the profile file, the `children` field, and one identity rule. It does not change how a phrase is matched.
 7. Near-term volume is the Romanian boards. European office boards stay in the crawl. Practice career pages stay in [`docs/04-companies-and-ats/`](../04-companies-and-ats/companies-and-ats-concept.md).
 
@@ -26,7 +26,7 @@ Roles: Architectural Designer, Architectural Assistant, Landscape Designer. Adja
 
 | Layer | Library / tool | Module |
 | ----- | -------------- | ------ |
-| Ingest | **`net/http` + goquery**, rod for `ejobs` and `olx_ro` | `internal/collectors` |
+| Ingest | **`net/http` + goquery**, rod for `ejobs`, `dezeen_jobs`, and `world_architects` | `internal/collectors` |
 | Profile file | **YAML** | `config/profiles/lada.yaml`, `internal/profiles` |
 | Identity | placeholder company key | `internal/domain/utils` |
 | Orchestration | existing ingest + profile run | `internal/ingest/workflows`, `internal/scoring/workflows` |
@@ -65,9 +65,9 @@ Romania and any remote job, including remote in the US, carry no location penalt
 
 A shorter title also hits inside a longer one. `Arhitect proiectant` scores 6 for the long phrase and 4 for `arhitect`. A bare `Arhitect` is 4, which is REVIEW at the cutoff below.
 
-**Body.** The CV tool terms stay. `max_total` becomes 6. Added terms: `brasov` and `brașov` at 2, `bucuresti` and `bucurești` at 2, `cluj` at 2, `sibiu`, `hibrid`, and `proiectare` at 1.
+**Body.** The CV tool terms stay. `max_total` is 4 (cap body stacking from ranked search). Added terms: `brasov` and `brașov` at 2, `bucuresti` and `bucurești` at 2, `cluj` at 2, `sibiu`, `hibrid`, and `proiectare` at 1.
 
-**Cutoff and pay.** `buckets.top` is 5. Salary stays in the file with no floor and no penalty. A parsed salary does not move the score. `wellfound_roles` is removed. The other soft groups (`agency`, `culture_smell`, `part_time`) stay.
+**Cutoff and pay.** `buckets.top` is 6; TOP also requires a title phrase hit (`domain: architecture` rule in the scorer). Salary stays in the file with no floor and no penalty. A parsed salary does not move the score. `wellfound_roles` is removed. The other soft groups (`agency`, `culture_smell`, `part_time`) stay.
 
 ## Sources
 
@@ -75,16 +75,15 @@ Tiers are an order, not a new ingest mechanism.
 
 **Tier 0 — existing collectors, left off.** `working_nomads`, `himalayas`, `remotify_europe`, `we_work_remotely`. They are not on this profile. The first three are keyword boards and would receive whatever `queries` says. `we_work_remotely` ignores queries and fetches its whole catalog; Andrew already does that, on the same cooldown key. Listing it here does not search architecture. The remote check is the empty-source score of rows already stored.
 
-**Tier 1 — Romania, opened 2026-10-14.** Four boards stay. `undelucram` is dropped.
+**Tier 1 — Romania.** `bestjobs`, `hipo`, and `ejobs`.
 
 | Source id | Walk |
 | --- | --- |
 | `bestjobs` | Keyword. `https://www.bestjobs.eu/locuri-de-munca/{words}` with `+` between words, and the same slug with `-in-romania` and `-in-remote`. All five queries returned rows. The search is ranked, not filtered: `peisagist` also returns shop jobs, so the title still has to match. |
 | `hipo` | Category, not keywords. `https://www.hipo.ro/locuri-de-munca/cautajob/Arhitectura-Design-Proiectare`. A GET `cuvintecheie` is ignored. On 2026-10-14 the category had 31 jobs, and its remote slice had 0. |
 | `ejobs` | Keyword, hyphens. `https://www.ejobs.ro/locuri-de-munca/{words}` and remote `https://www.ejobs.ro/locuri-de-munca/remote/{words}`. `peisagist` and `urbanist` were 0. `desenator-tehnic` was 1476 and matches either word. |
-| `olx_ro` | Keyword. `https://www.olx.ro/locuri-de-munca/q-{words}/` with hyphens. Do not also pin the category: that intersection was 5. Remote adds `search[filter_enum_job_character][0]=can-work-remote`. |
 
-`queries`, for `bestjobs`, `ejobs`, and `olx_ro`: `arhitect`, `arhitect proiectant`, `peisagist`, `urbanist`, `desenator tehnic`. `designer de interior` is not a query. `hipo` is in `children` and does not receive this list.
+`queries`, for `bestjobs` and `ejobs`: `arhitect proiectant`, `peisagist`, `urbanist`. Bare `arhitect` and `desenator tehnic` were dropped after ingest noise on ranked search. `designer de interior` is not a query. `hipo` is in `children` and does not receive this list.
 
 **Tier 2 — opened 2026-10-14.** Children go in `children`, not in `queries`. These are European office boards plus a remote slice. Romania was empty on the industry sites. The office rows are the penalty case above, not a reason to skip the board.
 
@@ -94,7 +93,7 @@ Tiers are an order, not a new ingest mechanism.
 | `riba_jobs` | `/jobs/{slug}/` for `architectural-assistant`, `architect`, `part-1`, `part-2`, `landscape-and-public-realm`. |
 | `landscape_institute` | `https://jobs.landscapeinstitute.org/jobs/`. One catalog, nine jobs, UK office. |
 | `archgee` | `category=architect`, `category=landscape-architect`, and `remote=remote`. `country=ro` was 0. `interior-designer` is not sent. |
-| `archinect` | `https://archinect.com/jobs/region/Remote/all/remote` (37). European region URLs are in scope; on that day Denmark had 1 and the UK had 0. The unfiltered `/jobs/` list is the US catalog and is not fetched. |
+| `archinect` | `https://archinect.com/jobs/region/Remote/all/remote` (37). **Shipped in this slice:** remote region only. European region URLs were evaluated but stay paused. The unfiltered `/jobs/` list is the US catalog and is not fetched. |
 
 `think_architecture` is dropped. See Out of scope.
 
@@ -119,7 +118,7 @@ children:
 
 A source named in `children` expands to one ingest child per slug and does not also fan `queries`. `wellfound_roles` stays on `andrew` only. This profile does not use it.
 
-The Romanian query list is written when the first Tier 1 keyword collector exists. Until then `queries` stays empty. Tier 0 stays off for the whole of that state, because those keyword boards would receive the Romanian list.
+`queries` holds the five Romanian keywords and fans to keyword sources (`bestjobs`, `ejobs`). Tier 0 stays off this profile so those boards never receive that list.
 
 The score pass loads jobs with `first_seen_at` inside 10 days of the run start, plus jobs whose `posted_at` is already older than 30 days. It evaluates each one against this profile and upserts a match, including rejects. It does not look at `sources` and it does not call a collector.
 
@@ -139,11 +138,9 @@ Opened 2026-10-14 in a browser. Salary on the posting maps to the existing salar
 
 **`hipo`.** `/locuri-de-munca/` redirects to the homepage. The list is the category URL above, then `/{page}`, 40 jobs. The last page is `a.page.page-last`, or a page with no jobs. Drop promo id `103395`; it is on every page. Use the one-hyphen slug from `input[name="domeniis[]"]`. The triple-hyphen links in the HTML return 301. Remote, if used, is the third segment (`/Toate-Orasele/Remote`); in the city segment it is ignored. The card marker is one of Remote, Hybrid, On-site, or a city. The description is the visible text in `div.alertbox2`, not JSON-LD. That JSON-LD has raw control characters and broken encoding, and its `jobLocationType` disagrees with the page. The date is "Actualizat la", an update stamp, so it is not `posted_at`. The only salary on the job page is one number in JSON-LD, so `salary` stays empty. Apply is behind login. curl got 200. robots.txt closes `/public/prvfiles/`, `/objects/`, and `/angajator/`.
 
-**`ejobs`.** curl gets Cloudflare 403, so this collector uses rod. About 15 fast requests produced a 429; wait ≥4s. Pages are `/pagina2` through `/pagina10`. robots.txt disallows `*/pagina` except those ten, and the Allow rules are anchored, so a query string on a page URL is disallowed. `/pagina11` returned 200 and is still not fetched. A page past the end redirects to page 1; stop when the final URL is not the requested one. The count in the title is larger than the list. The ItemList in the first HTML has the url and title of all 40 cards. Company, salary, date, and city are filled in for only a few. Read url and title from the ItemList and the rest from the detail page. Detail JSON-LD parses: title, company, description, `datePosted`, city, country `RO`. Salary and workplace are only in the visible summary (`Salariu`, `Mod de lucru` as `Remote`, `Hibrid`, or `La birou/ on-site`). `sort-publish`, `workModels=OFFICE`, and `workModels=HYBRID` are disallowed. The remote path does not use `workModels`. The listing URL is `/user/locuri-de-munca/{slug}/{id}`. Apply is a button behind login. `desenator-tehnic` is cut at 400 rows by the page cap.
+**`ejobs`.** curl gets Cloudflare 403, so this collector uses rod. About 15 fast requests produced a 429; wait ≥4s. Pages are `/pagina2` through `/pagina10`. Stop when `_nextBtnVisible` is false. The count in the title is larger than the list. The list page no longer has an ItemList. Read the row from `#__NUXT_DATA__` (`pinia.jobs._listItems`) and do not open the detail page. Company, salary, date, and city are on that row. Description and workplace stay empty. `sort-publish`, `workModels=OFFICE`, and `workModels=HYBRID` are disallowed. The remote path does not use `workModels`. The listing URL is `/user/locuri-de-munca/{slug}/{id}`. Apply is a button behind login. `desenator-tehnic` is about 1500 hits and is cut at 10 pages.
 
-**`olx_ro`.** curl gets CloudFront 403, including on robots.txt, so this collector uses rod. The list is `window.__PRERENDERED_STATE__`, a JSON string inside the HTML. Hydration deletes it, so read the raw response. `ads[]` holds the full description. Page 2 is `?page=2`. Stop when `ads` is empty. `totalPages` is in that state. Promoted rows repeat on every page; keep `searchReason` `organic` and dedupe on the numeric `id`. `job_character` is `can-work-remote`, `hybrid`, `stable-location-wanted`, or `need-to-travel`. A missing value is not office. The company name is not on the card. On the detail page it is `postingComponent.companyName`. JSON-LD `hiringOrganization.name` is often `confidential`. Open the `/oferta/loc-de-munca/…-ID{token}.html` URL from the state. `/d/oferta/…` returns 200 and drops the JSON-LD. Salary is an object (`from`, `to`, `currencyCode`, `gross`), not a string. The state has no country; JSON-LD hardcodes `RO`. `/api/` is disallowed, including the `api/v1/offers` URL the page links. `q-desenator-tehnic` was 303 rows and includes other trades.
-
-**`dezeen_jobs`.** WordPress SSR. Walk `/job-category/{slug}/page/N/` until `.main-jobs-list` has no job cards. `rel=next` is present on an empty page, so it is not the end marker. The Algolia block is empty in the HTML and is not the list. Description is JSON-LD. `baseSalary` in that JSON-LD is garbage (`USD` / `choose_my_own`); the salary string is `div.salary-range`. There is no remote field. `/location/remote/` exists and was empty. `/location/romania/` is 404.
+**`dezeen_jobs`.** WordPress SSR. curl gets Cloudflare 403, so this collector uses rod. Walk `/job-category/{slug}/page/N/` until `.main-jobs-list` has no job cards. `rel=next` is present on an empty page, so it is not the end marker. The Algolia block is empty in the HTML and is not the list. Description is JSON-LD. `baseSalary` in that JSON-LD is garbage (`USD` / `choose_my_own`); the salary string is `div.salary-range`. There is no remote field. `/location/remote/` exists and was empty. `/location/romania/` is 404.
 
 **`riba_jobs`.** Madgex SSR. Category `/jobs/{slug}/`, then `/jobs/{slug}/2/`. robots.txt disallows employment-type, salary, and recruiter facet segments. `/jobs/remote/` and `/jobs/architect/romania/` return 200 and the unfiltered list, so those paths are not filters. Description is JSON-LD. The GTM dataLayer on the detail page described a different job; do not read it.
 
@@ -159,7 +156,7 @@ Opened 2026-10-14 in a browser. Salary on the posting maps to the existing salar
 
 **`bdla`.** SSR. `https://www.bdla.de/de/jobs-praktika/jobangebote`. Categories are `bl=` and `toj=`, one at a time; together they do not combine. Pages are `page=2`, 25 jobs in `div.listLine` only. The map markers on the same page are not the list. No JSON-LD. No country field and no remote field. `bl=international` was two jobs in Zürich.
 
-**`world_architects`.** SSR. `https://world-architects.com/en/jobs?term={words}`. The filter sticks in the session, so every request sends the full query string. Pages are `page=2`, 36 jobs, and the last page repeats the previous one. The country dropdown is Germany and Switzerland only. No remote field. `arhitect` fuzzy-matches German `Architekt`. The listing URL is a slug with no numeric id. The apply email is Cloudflare-obfuscated.
+**`world_architects`.** SSR. curl gets Cloudflare 403, so this collector uses rod. Fetch the unfiltered catalog `https://world-architects.com/en/jobs`, not `?term=`. Pages are `page=2`, 36 jobs, and the last page repeats the previous one. The country dropdown is Germany and Switzerland only. No remote field. The listing URL is a slug with no numeric id. The apply email is Cloudflare-obfuscated.
 
 **Cooldown.** A 3600s global cooldown is the wrong pace. These boards need their own cooldown, 6–24 hours, not `JOBHOUND_INGEST_COOLDOWN_TTL_SEC`. `ejobs` also waits ≥4s between requests. `archinect` waits ≥5s.
 
@@ -176,15 +173,13 @@ Opened 2026-10-14 in a browser. Salary on the posting maps to the existing salar
 | Empty location | no location cut |
 | `bestjobs` | keyword plus `-in-romania` and `-in-remote`; cursor API for page 2+; no `_lat`/`_lon`; skip `estimatedSalary` |
 | `hipo` | category slug only; drop id `103395`; description from the HTML, not JSON-LD |
-| `ejobs` | rod; ≥4s; stop at `/pagina10`; remote is a path, not `workModels` |
-| `olx_ro` | rod; read `__PRERENDERED_STATE__` from the raw HTML; organic rows only; never `/api/` |
-| `archinect` | remote region, plus a European region URL; never the unfiltered US list; ≥5s and a site mutex; User-Agent stays off the robots block list |
+| `ejobs` | rod; ≥4s; stop at `/pagina10`; rows come from the list payload, not the detail page |
+| `archinect` | remote region only in this slice; never the unfiltered US list; ≥5s and a site mutex; User-Agent stays off the robots block list |
 | `archgee` | HTML only; categories `architect` and `landscape-architect`, plus `remote=remote`; never `/api/`; no `interior-designer` |
-| `dezeen_jobs` | category pages until the list is empty; ignore `rel=next`; no Algolia |
+| `dezeen_jobs` | rod; category pages until the list is empty; ignore `rel=next`; no Algolia |
 | `riba_jobs` | category URLs only; no facet segments; `/romania/` and `/remote/` are not filters |
 | `baunetz` | never `/stellenmarkt/suche` |
 | `competitionline` | `/api/jobs/` only; never `/api/modgnikehtotsyek` |
-| `undelucram` | no collector |
 | Office in Europe, not Romania, not remote | show, penalty −2; a relocation phrase cancels it |
 | Office outside Europe | `CUT_LOCATION`; remote is exempt |
 | Source on cooldown | skipped child; the run still succeeds |
@@ -215,10 +210,9 @@ Opened 2026-10-14 in a browser. Salary on the posting maps to the existing salar
 3. Placeholder company keys include the normalized listing URL. This lands before the first Romanian collector.
 4. `bestjobs` (`net/http`, cursor API for later pages) and `hipo` (category HTML).
 5. `ejobs` with rod.
-6. `olx_ro` with rod.
-7. `dezeen_jobs`, `riba_jobs`, and `landscape_institute`.
-8. `archgee` (the two categories and `remote=remote`) and `archinect` (remote, plus a European region when that page has rows).
-9. Tier 3: `competitionline`, `bdla`, `world_architects`, then `baunetz` within the pages robots.txt allows.
+6. `dezeen_jobs`, `riba_jobs`, and `landscape_institute`.
+7. `archgee` (the two categories and `remote=remote`) and `archinect` (remote region only).
+8. Tier 3: `competitionline`, `bdla`, `world_architects`, then `baunetz` within the pages robots.txt allows.
 
 Early check on the first category board: one category fetch stores jobs, and a second fetch of the same category does not duplicate them.
 
@@ -227,6 +221,7 @@ Early check on the first category board: one category fetch stores jobs, and a s
 - Practice career pages, and the practice names already seen (Grimshaw, SOM, Herzog & de Meuron, Perkins&Will, Stantec, HDR, WSP, plus the WLA footer: Felixx, OMGEVING, SLA, LDA Design, LUC, Grant Associates, Studio Egret West, EPD Landscape, Arup, AtkinsRéalis, Benoy, WATG). That is [`docs/04-companies-and-ats/`](../04-companies-and-ats/companies-and-ats-concept.md).
 - Turning on Tier 0. Those collectors stay off this profile.
 - `undelucram`. Opened 2026-10-14. Four of the five queries returned 0. The fifth was one IT posting, Salesforce Solution Architect. No collector.
+- `olx_ro`. Evaluated 2026-10-14; no collector. curl gets CloudFront 403. The list lived in `window.__PRERENDERED_STATE__` in pre-hydration HTML; rod could not reliably read that body on detail URLs (CDP `-32000`).
 - `think_architecture`. Opened 2026-10-14. US only. `/remote` is 404. The first HTML is 50 cards and `?page=2` repeats them. The rest is Typesense on another host or a sitemap with no category split. Apply links go to `/go/`, which robots.txt disallows.
 - IT sources copied from `andrew`: `builtin`, `golang_cafe`, `vue_jobs`, `wellfound`, every `consider_*`, every `getro_*`, `europe_remotely`.
 - `academic_positions` — university posts, not this profile. `find-jobs?keywords=` returned HTML once and Cloudflare 403 on the next request.

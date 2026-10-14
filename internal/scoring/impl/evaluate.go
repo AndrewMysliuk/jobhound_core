@@ -69,15 +69,23 @@ func evaluateAt(profile profileschema.Profile, job jobdata.Job, now time.Time) O
 	var signals []schema.Signal
 	signals = append(signals, matchPhrases(profile.GateRole, false, "gate_role", schema.SignalGateRole, job.Title)...)
 	signals = append(signals, matchPhrases(profile.GateHard, true, "gate_hard", schema.SignalGateHard, job.Title, job.Description, job.Location.Raw)...)
-	signals = append(signals, matchGateLocation(profile.GateLocation, job, now)...)
+	signals = append(signals, matchGateLocation(profile, job, now)...)
 	signals = append(signals, matchSignalsPlus(profile, job, now)...)
 	signals = append(signals, matchPenaltiesSoft(profile, job)...)
 	score := scoreOf(signals)
 	return Outcome{
-		Bucket:  chooseBucket(profile.Buckets.Top, score, signals),
+		Bucket:  chooseBucket(profile, score, signals),
 		Score:   score,
 		Signals: signals,
 	}
+}
+
+// PostedAtRejectDaysForProfile returns the stale posted_at cutoff for scoring this profile.
+func PostedAtRejectDaysForProfile(profile profileschema.Profile) int {
+	if profile.Domain == profileschema.DomainArchitecture {
+		return schema.PostedAtRejectDaysArchitecture
+	}
+	return schema.PostedAtRejectDays
 }
 
 func matchSignalsPlus(profile profileschema.Profile, job jobdata.Job, now time.Time) []schema.Signal {
@@ -454,14 +462,15 @@ func penaltyOccurrences(titleHits, bodyHits, need int) (int, bool) {
 	return 0, false
 }
 
-func matchGateLocation(gate profileschema.GateLocation, job jobdata.Job, now time.Time) []schema.Signal {
+func matchGateLocation(profile profileschema.Profile, job jobdata.Job, now time.Time) []schema.Signal {
+	gate := profile.GateLocation
 	var signals []schema.Signal
 	if !remoteLocation(job.Location) {
 		signals = append(signals, europeTier(job)...)
 		signals = append(signals, locationCuts(gate, job.Location)...)
 	}
 	signals = append(signals, matchPhrases(gate.RejectTimezones, true, "gate_location.reject_timezones", schema.SignalCutTimezone, job.Title, job.Description, job.Location.Raw, job.Location.Timezone)...)
-	signals = append(signals, postedAtCut(job.PostedAt, now)...)
+	signals = append(signals, postedAtCut(job.PostedAt, now, PostedAtRejectDaysForProfile(profile))...)
 	return signals
 }
 
@@ -561,8 +570,8 @@ func missesAllowLists(code string, countries, regions []string) bool {
 	return !containsFold(countries, code) && !containsFold(regions, code)
 }
 
-func postedAtCut(posted, now time.Time) []schema.Signal {
-	if !postedAtStale(posted, now) {
+func postedAtCut(posted, now time.Time, rejectDays int) []schema.Signal {
+	if !postedAtStale(posted, now, rejectDays) {
 		return nil
 	}
 	return []schema.Signal{{
@@ -572,24 +581,37 @@ func postedAtCut(posted, now time.Time) []schema.Signal {
 	}}
 }
 
-func postedAtStale(posted, now time.Time) bool {
-	if posted.IsZero() || now.IsZero() {
+func postedAtStale(posted, now time.Time, rejectDays int) bool {
+	if posted.IsZero() || now.IsZero() || rejectDays < 1 {
 		return false
 	}
-	cutoff := now.UTC().Add(-time.Duration(schema.PostedAtRejectDays) * 24 * time.Hour)
+	cutoff := now.UTC().Add(-time.Duration(rejectDays) * 24 * time.Hour)
 	return posted.UTC().Before(cutoff)
 }
 
-func chooseBucket(top, score int, signals []schema.Signal) schema.Bucket {
+func chooseBucket(profile profileschema.Profile, score int, signals []schema.Signal) schema.Bucket {
 	for _, signal := range signals {
 		if isGate(signal.Code) {
 			return schema.BucketRejected
 		}
 	}
+	top := profile.Buckets.Top
 	if score >= top {
+		if profile.Domain == profileschema.DomainArchitecture && !hasTitlePlusSignal(signals) {
+			return schema.BucketReview
+		}
 		return schema.BucketTop
 	}
 	return schema.BucketReview
+}
+
+func hasTitlePlusSignal(signals []schema.Signal) bool {
+	for _, signal := range signals {
+		if signal.Code == schema.SignalPlus && strings.HasPrefix(signal.Rule, "signals_plus.title") {
+			return true
+		}
+	}
+	return false
 }
 
 func isGate(code schema.SignalCode) bool {

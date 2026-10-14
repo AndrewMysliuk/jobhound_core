@@ -17,7 +17,8 @@ const (
 	sourceGolangCafe        = "golang_cafe"
 	sourceBuiltin           = "builtin"
 	sourceEjobs             = "ejobs"
-	sourceOlxRO             = "olx_ro"
+	sourceWorldArchitects   = "world_architects"
+	sourceDezeenJobs        = "dezeen_jobs"
 	browserLane             = "browser"
 	architectureBrowserLane = "architecture-browser"
 	considerSourcePrefix    = "consider_"
@@ -91,7 +92,7 @@ func childrenInputs(sourceID string, slugs []string) []ingestschema.IngestSource
 }
 
 // IngestLane is one resource that cannot be fetched concurrently with itself.
-// Builtin and Golang Cafe share Chromium. ejobs and olx_ro share architecture-browser.
+// Builtin and Golang Cafe share Chromium. ejobs, dezeen_jobs, and world_architects share architecture-browser.
 // Every other source is its own lane.
 type IngestLane struct {
 	Name     string
@@ -131,7 +132,7 @@ func resourceLane(sourceID string) string {
 	switch sourceID {
 	case sourceBuiltin, sourceGolangCafe:
 		return browserLane
-	case sourceEjobs, sourceOlxRO:
+	case sourceEjobs, sourceDezeenJobs, sourceWorldArchitects:
 		return architectureBrowserLane
 	default:
 		return sourceID

@@ -32,8 +32,11 @@ These override the concept where it still says otherwise.
 3. The Europe-office penalty is **code in the scorer**, not a `penalties_soft` phrase group. Do not match the word `office`.
 4. Relocation phrases that cancel the penalty include the German words below. They live in the scorer, not in YAML.
 5. **archinect** in this slice fetches only the remote region. European region URLs are paused.
-6. **ejobs** and **olx_ro** share one browser lane. They do not join the Built In / Golang Cafe lane.
+6. **ejobs**, **dezeen_jobs**, and **world_architects** share one browser lane (`architecture-browser`). They do not join the Built In / Golang Cafe lane.
 7. Architecture-board cooldown is 12 hours. `JOBHOUND_INGEST_COOLDOWN_TTL_SEC` stays 3600 for every other source.
+8. Architecture profiles use `PostedAtRejectDaysArchitecture` (90) instead of 30 for `posted_at` cuts and stale job selection.
+9. TOP for `domain: architecture` requires at least one `signals_plus.title` hit; body-only score stays REVIEW.
+10. `lada.yaml` uses `buckets.top: 6` and `signals_plus.text.max_total: 4` to limit ranked-search noise.
 
 ---
 
@@ -52,19 +55,18 @@ Also:
 
 ### Sources, written only after every source id below is in `sourceids.KnownSourceIDs`
 
+Keyword fan-out uses three queries only. Bare `arhitect` and `desenator tehnic` pull ranked IT/CAD noise on bestjobs and ejobs; hipo and the EU `children` boards cover category/catalog fetch.
+
 ```yaml
 queries:
-  - arhitect
   - arhitect proiectant
   - peisagist
   - urbanist
-  - desenator tehnic
 
 sources:
   - bestjobs
   - hipo
   - ejobs
-  - olx_ro
   - dezeen_jobs
   - riba_jobs
   - landscape_institute
@@ -110,7 +112,7 @@ children:
 
 `designer de interior` is not a query. `interior-designer` is not an archgee child. `landscape-designer` is not a dezeen child.
 
-`bestjobs`, `ejobs`, and `olx_ro` are absent from `children`. They fan `queries`.
+`bestjobs` and `ejobs` are absent from `children`. They fan `queries`.
 
 ---
 
@@ -137,7 +139,7 @@ YAML key `children`. Keys are source ids. Values are the slugs in the file above
 5. **New.** If `profile.Children[id]` is non-empty: one `IngestSourceInput` per slug. `Query` is the slug. Do not copy `profile.Queries`. The slug `catalog` is the exception: `Query` is empty.
 6. Otherwise: one child per `profile.Queries` entry, as today.
 
-`resourceLane`: `ejobs` and `olx_ro` return the lane name `architecture-browser`. No other new source joins that lane. Built In and Golang Cafe stay on `browser`.
+`resourceLane`: `ejobs`, `dezeen_jobs`, and `world_architects` return the lane name `architecture-browser`. Built In and Golang Cafe stay on `browser`.
 
 ### `internal/domain/utils/identity.go`
 
@@ -172,7 +174,7 @@ Relocation phrases, fixed in code, existing case-folded word-boundary match, tit
 
 `DefaultIngestCooldownTTLSec` stays **3600**. No new `JOBHOUND_*` key.
 
-In `RecordSuccessfulIngest`, the TTL for these source ids is **43200** seconds: `bestjobs`, `hipo`, `ejobs`, `olx_ro`, `dezeen_jobs`, `riba_jobs`, `landscape_institute`, `archgee`, `archinect`, `competitionline`, `baunetz`, `bdla`, `world_architects`. Every other source id keeps the coordinator TTL.
+In `RecordSuccessfulIngest`, the TTL for these source ids is **43200** seconds: `bestjobs`, `hipo`, `ejobs`, `dezeen_jobs`, `riba_jobs`, `landscape_institute`, `archgee`, `archinect`, `competitionline`, `baunetz`, `bdla`, `world_architects`. Every other source id keeps the coordinator TTL.
 
 ---
 
@@ -244,29 +246,15 @@ Sleep at least 4s between requests. curl gets Cloudflare 403.
 
 Spaces become `-`.
 
-Pagination: `/pagina2` … `/pagina10` only. robots.txt disallows `*/pagina11` and above even when the server returns 200. A page past the end redirects to page 1. Stop when the final URL is not the requested URL, or when `numberOfItems` is under 40. Do not append a query string to a `/paginaN` URL. Do not request `sort-publish`, `sort-geo`, `workModels=OFFICE`, or `workModels=HYBRID`.
+Pagination: `/pagina2` … `/pagina10` only. Stop when `_nextBtnVisible` is false, or at `/pagina10`. Do not request `sort-publish`, `sort-geo`, `workModels=OFFICE`, or `workModels=HYBRID`.
 
-List URLs and titles come from the JSON-LD `ItemList` in the first HTML (all cards). Company, salary, date, city, and workplace come from the detail page. The detail URL is `/user/locuri-de-munca/{slug}/{id}`.
+The list page no longer has an `ItemList`. Read each row from `#__NUXT_DATA__` `pinia.jobs._listItems`: `id`, `title`, `slug`, `company.name`, `salary`, `locations[0].address`, `creationDate`. The listing URL is `/user/locuri-de-munca/{slug}/{id}`. Do not open that detail page. Description and workplace stay empty.
 
 Detail JSON-LD is valid for title, company, description, `datePosted`, city, and country `RO`. Salary is the visible summary `Salariu`, not JSON-LD. Workplace is the visible summary `Mod de lucru`: `Remote`, `Hibrid`, or anything else → office. Apply URL is empty.
 
-### `olx_ro` — rod, lane `architecture-browser`
+### `dezeen_jobs` — rod, lane `architecture-browser`
 
-curl gets CloudFront 403, including robots.txt.
-
-`FetchWithQuery("arhitect proiectant")` fetches only:
-
-`https://www.olx.ro/locuri-de-munca/q-arhitect-proiectant/`
-
-Spaces become `-`. Do not also set the category slug. Do not call `/api/`, including `api/v1/offers`.
-
-The list is `window.__PRERENDERED_STATE__` in the **raw** HTML, a JSON string that must be parsed twice. It is gone after hydration. Page 2 is `?page=2`. Stop when `ads` is empty. Keep rows whose `searchReason` is `organic`. Dedupe on numeric `id`.
-
-`ads[].description` is the full description. Company is not on the card. Open `url` / `urlPath` in the form `/oferta/loc-de-munca/{slug}-ID{token}.html`. Do not use `/d/oferta/…` (JSON-LD is absent there).
-
-Company is `postingComponent.companyName`. Do not use JSON-LD `hiringOrganization.name` (it is often `confidential`). Workplace is `job_character`: `can-work-remote` → remote, `hybrid` → hybrid, `stable-location-wanted` and `need-to-travel` → office, missing → leave type empty. Salary is formatted from `from`, `to`, and `currencyCode`. Country is `RO` only from the detail JSON-LD. `createdTime` / `datePosted` may be stored as `posted_at`.
-
-### `dezeen_jobs` — `net/http`
+curl gets Cloudflare 403.
 
 `FetchWithQuery` receives one category slug. URL:
 
@@ -344,9 +332,9 @@ then `&page=2`. Count cards only in `div.listLine`. Stop when that count is 0. D
 
 Detail `?details={id}`. There is no JSON-LD. Title is `h1`. Company is the `Firma` row. Description is the paragraph after `Stellenbeschreibung`. City is the `Einsatzort` row. Country is empty. `posted_at` may be parsed from `Angebot vom`. Salary is empty. Workplace is empty. Apply URL is an `http(s)` link in the contact block. A `mailto:` is not an apply URL.
 
-### `world_architects` — `net/http`
+### `world_architects` — rod, lane `architecture-browser`
 
-The child query is empty. Fetch `https://world-architects.com/en/jobs` and `?page=2`, `?page=3`, … Do not send `term`. Do not keep cookies between requests. Stop when the set of `/en/jobs/{slug}` links repeats the previous page. The footer pager is not the end marker.
+curl gets Cloudflare 403. The child query is empty. Fetch `https://world-architects.com/en/jobs` and `?page=2`, `?page=3`, … Do not send `term`. Stop when the set of `/en/jobs/{slug}` links repeats the previous page. The footer pager is not the end marker.
 
 Detail `https://world-architects.com/en/jobs/{slug}`. Title is `h1`. Company is the provider link. Description is `div.col-md-7`. City and country are the `Job Location` row, split on the last comma. `posted_at` is the `time[datetime]` on the **list card** (the detail date has no year). Salary is empty. Workplace is empty. Apply URL is empty. Normalize the listing URL to `https://world-architects.com/en/jobs/{slug}` with no query string.
 
@@ -354,7 +342,7 @@ Detail `https://world-architects.com/en/jobs/{slug}`. Title is `h1`. Company is 
 
 ## Errors
 
-No new product API errors. Unknown source id in YAML stays `profiles.ErrProfileInvalid`. A collector that cannot pass Cloudflare returns the HTTP error. It does not switch to rod inside the same function. Cooldown and lock stay `ingest.ErrCooldownActive` and `ingest.ErrLockHeld` and still skip the child.
+No new product API errors. Unknown source id in YAML stays `profiles.ErrProfileInvalid`. A `net/http` collector that cannot pass Cloudflare returns the HTTP error. It does not switch to rod inside the same function. `dezeen_jobs` and `world_architects` are rod, same as `ejobs`. Cooldown and lock stay `ingest.ErrCooldownActive` and `ingest.ErrLockHeld` and still skip the child.
 
 ---
 
@@ -363,7 +351,7 @@ No new product API errors. Unknown source id in YAML stays `profiles.ErrProfileI
 | Layer | Where | What |
 | ----- | ----- | ---- |
 | Profile load | `internal/profiles/impl/store_test.go` | `children` round-trip; unknown source id still fails |
-| Fan-out | `internal/scoring/workflows/mappers_test.go` | children do not receive `queries`; `catalog` has empty `Query`; `ejobs` and `olx_ro` share `architecture-browser` |
+| Fan-out | `internal/scoring/workflows/mappers_test.go` | children do not receive `queries`; `catalog` has empty `Query`; `ejobs`, `dezeen_jobs`, and `world_architects` share `architecture-browser` |
 | Identity | exercised by a collector test or `internal/domain` caller already covered by collector save path | placeholder company id includes the normalized URL; a named company does not |
 | Score | `internal/scoring/impl/evaluate_test.go` | remote US is not cut; DE office is −2; DE office plus `umzug` is not −2; RO office is not −2; US office is cut |
 | Cooldown | `internal/ingest/coordinator_test.go` | architecture source TTL 43200; another source keeps the coordinator TTL |

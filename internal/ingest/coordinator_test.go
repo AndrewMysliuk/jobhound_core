@@ -84,7 +84,6 @@ func TestRecordSuccessfulIngest_architectureSourceUsesTwelveHours(t *testing.T) 
 		"bestjobs",
 		"hipo",
 		"ejobs",
-		"olx_ro",
 		"dezeen_jobs",
 		"riba_jobs",
 		"landscape_institute",

@@ -57,18 +57,19 @@ type stubMultiCollector struct {
 func (s stubMultiCollector) Name() string { return s.name }
 
 func (stubMultiCollector) Fetch(context.Context) ([]schema.Job, error) {
+	now := time.Now().UTC()
 	old := schema.Job{
 		ID: "old", Source: "src", Title: "t", Company: "c", URL: "https://old",
-		Description: "d", PostedAt: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC),
+		Description: "d", PostedAt: now.Add(-60 * 24 * time.Hour),
 	}
 	fresh := schema.Job{
 		ID: "fresh", Source: "src", Title: "t", Company: "c", URL: "https://fresh",
-		Description: "d", PostedAt: time.Date(2026, 4, 9, 0, 0, 0, 0, time.UTC),
+		Description: "d", PostedAt: now.Add(-2 * 24 * time.Hour),
 	}
 	return []schema.Job{old, fresh}, nil
 }
 
-func TestRunIngestSource_savesEveryFetchedJob(t *testing.T) {
+func TestRunIngestSource_skipsStalePostedAt(t *testing.T) {
 	ctx := context.Background()
 	mr, err := miniredis.Run()
 	require.NoError(t, err)
@@ -102,8 +103,9 @@ func TestRunIngestSource_savesEveryFetchedJob(t *testing.T) {
 
 	out, err := acts.RunIngestSource(ctx, ingestschema.IngestSourceInput{SourceID: src, ExplicitRefresh: true})
 	require.NoError(t, err)
-	require.Equal(t, 2, out.JobsWritten)
-	require.Equal(t, 2, mj.saved)
+	require.Equal(t, 1, out.JobsWritten)
+	require.Equal(t, 1, out.JobsSkipped)
+	require.Equal(t, 1, mj.saved)
 }
 
 func TestRunIngestSource_cooldownCompletesAsSkip(t *testing.T) {
@@ -141,12 +143,12 @@ func TestRunIngestSource_cooldownCompletesAsSkip(t *testing.T) {
 	first, err := acts.RunIngestSource(ctx, ingestschema.IngestSourceInput{SourceID: src})
 	require.NoError(t, err)
 	require.False(t, first.Skipped)
-	require.Equal(t, 2, mj.saved)
+	require.Equal(t, 1, mj.saved)
 
 	second, err := acts.RunIngestSource(ctx, ingestschema.IngestSourceInput{SourceID: src})
 	require.NoError(t, err)
 	require.True(t, second.Skipped)
-	require.Equal(t, 2, mj.saved)
+	require.Equal(t, 1, mj.saved)
 }
 
 func TestRunIngestSource_persistsJob(t *testing.T) {
@@ -207,13 +209,15 @@ func TestRunIngestSource_persistsJob(t *testing.T) {
 
 	out, err := acts.RunIngestSource(ctx, ingestschema.IngestSourceInput{SourceID: src, ExplicitRefresh: true})
 	require.NoError(t, err)
-	require.Equal(t, 2, out.JobsWritten)
+	require.Equal(t, 1, out.JobsWritten)
+	require.Equal(t, 1, out.JobsSkipped)
 
 	var sources string
 	require.NoError(t, db.Raw(`SELECT sources FROM jobs WHERE id = 'fresh'`).Scan(&sources).Error)
 	require.Contains(t, sources, "src")
-	require.NoError(t, db.Raw(`SELECT sources FROM jobs WHERE id = 'old'`).Scan(&sources).Error)
-	require.Contains(t, sources, "src")
+	var oldCount int64
+	require.NoError(t, db.Raw(`SELECT COUNT(*) FROM jobs WHERE id = 'old'`).Scan(&oldCount).Error)
+	require.Zero(t, oldCount)
 	var first, last time.Time
 	require.NoError(t, db.Raw(`SELECT first_seen_at, last_seen_at FROM jobs WHERE id = 'fresh'`).Row().Scan(&first, &last))
 	require.False(t, first.IsZero())
@@ -251,7 +255,7 @@ func (s *stubUnionCollector) FetchUnion(_ context.Context, queries []string) ([]
 	s.queries = append([]string(nil), queries...)
 	return []schema.Job{{
 		ID: "u1", Source: "src", Title: "t", Company: "c", URL: "https://u",
-		Description: "d", PostedAt: time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC),
+		Description: "d", PostedAt: time.Now().UTC().Add(-2 * 24 * time.Hour),
 	}}, nil
 }
 

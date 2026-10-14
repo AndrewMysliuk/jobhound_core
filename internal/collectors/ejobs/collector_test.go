@@ -138,6 +138,47 @@ func TestFetchWithQuery_stopsAtPagina10(t *testing.T) {
 	require.Equal(t, siteOrigin+"/locuri-de-munca/remote/urbanist/pagina10", lists[19])
 }
 
+func TestFetchWithQuery_readsNuxtList(t *testing.T) {
+	keyword := siteOrigin + "/locuri-de-munca/arhitect"
+	remote := siteOrigin + "/locuri-de-munca/remote/arhitect"
+	studio := siteOrigin + "/user/locuri-de-munca/arhitect-stagiar/1990585"
+	pages := map[string]browserfetch.NavigatedDocument{
+		keyword: {
+			FinalURL: keyword,
+			HTML: nuxtListHTML([]nuxtJob{
+				{id: 1990585, title: "Arhitect stagiar", slug: "arhitect-stagiar", company: "Studio", salary: "3000 - 5000 RON", address: "Sibiu, România", posted: "2026-10-13"},
+				{id: 1990736, title: "ARHITECT", slug: "arhitect", company: "Firm", address: "București, România"},
+			}, false),
+		},
+		remote: {FinalURL: remote, HTML: nuxtListHTML(nil, false)},
+	}
+	fake := &fakeFetcher{pages: pages}
+	c := &Ejobs{Fetcher: fake, Gap: -1}
+	jobs, err := c.FetchWithQuery(context.Background(), "arhitect")
+	require.NoError(t, err)
+	require.Len(t, jobs, 2)
+	require.Equal(t, []string{keyword, remote}, fake.urls)
+	require.Equal(t, "Arhitect stagiar", jobs[0].Title)
+	require.Equal(t, studio, jobs[0].URL)
+	require.Equal(t, "Studio", jobs[0].Company)
+	require.Equal(t, "3000 - 5000 RON", jobs[0].SalaryRaw)
+	require.Equal(t, "Sibiu", jobs[0].Location.Raw)
+	require.Equal(t, []string{"RO"}, jobs[0].Location.Countries)
+	require.Equal(t, time.Date(2026, 10, 13, 0, 0, 0, 0, time.UTC), jobs[0].PostedAt)
+	require.Empty(t, jobs[0].Description)
+	require.Equal(t, "ARHITECT", jobs[1].Title)
+	require.Equal(t, "București", jobs[1].Location.Raw)
+}
+
+func TestFetchWithQuery_cloudflareBlock(t *testing.T) {
+	keyword := siteOrigin + "/locuri-de-munca/arhitect"
+	fake := &fakeFetcher{pages: map[string]browserfetch.NavigatedDocument{
+		keyword: {FinalURL: keyword, HTML: []byte(`<html><head><title>Attention Required! | Cloudflare</title></head><body><div id="cf-error-details"><h1>Sorry, you have been blocked</h1></div></body></html>`)},
+	}}
+	_, err := (&Ejobs{Fetcher: fake, Gap: -1}).FetchWithQuery(context.Background(), "arhitect")
+	require.ErrorContains(t, err, "cloudflare blocked")
+}
+
 func TestFetch_emptyQueryDoesNotFetch(t *testing.T) {
 	fake := &fakeFetcher{}
 	c := &Ejobs{Fetcher: fake, Gap: -1}
@@ -160,6 +201,49 @@ func TestGap_atLeastFourSeconds(t *testing.T) {
 type card struct {
 	url   string
 	title string
+}
+
+type nuxtJob struct {
+	id                      int64
+	title, slug, company    string
+	salary, address, posted string
+}
+
+func nuxtListHTML(items []nuxtJob, next bool) []byte {
+	refs := make([]any, len(items))
+	tail := []any{next}
+	idx := 6
+	for i, item := range items {
+		refs[i] = idx
+		tail = append(tail,
+			map[string]any{
+				"id": idx + 1, "title": idx + 2, "slug": idx + 3,
+				"company": idx + 4, "salary": idx + 6, "locations": idx + 7, "creationDate": idx + 10,
+			},
+			item.id, item.title, item.slug,
+			map[string]any{"name": idx + 5},
+			item.company,
+			item.salary,
+			[]any{idx + 8},
+			map[string]any{"address": idx + 9},
+			item.address,
+			item.posted,
+		)
+		idx += 11
+	}
+	data := []any{
+		[]any{"ShallowReactive", 1},
+		map[string]any{"pinia": 2},
+		map[string]any{"jobs": 3},
+		map[string]any{"_listItems": 4, "_nextBtnVisible": 5},
+		refs,
+	}
+	data = append(data, tail...)
+	raw, err := json.Marshal(data)
+	if err != nil {
+		panic(err)
+	}
+	return []byte(`<html><head><script type="application/json" id="__NUXT_DATA__">` + string(raw) + `</script></head><body></body></html>`)
 }
 
 func listHTML(count int, cards []card, extra string) []byte {

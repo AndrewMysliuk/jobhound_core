@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -16,8 +17,10 @@ import (
 )
 
 type listPage struct {
-	Cards []listCard
-	Count int
+	Cards    []listCard
+	Count    int
+	Jobs     []schema.Job
+	FromList bool
 }
 
 type listCard struct {
@@ -29,6 +32,15 @@ func parseListHTML(body []byte) (listPage, error) {
 	doc, err := goquery.NewDocumentFromReader(bytes.NewReader(body))
 	if err != nil {
 		return listPage{}, fmt.Errorf("ejobs: list html: %w", err)
+	}
+	if node := doc.Find("#__NUXT_DATA__").First(); node.Length() > 0 {
+		page, ok, err := listFromNuxt([]byte(node.Text()))
+		if err != nil {
+			return listPage{}, err
+		}
+		if ok {
+			return page, nil
+		}
 	}
 	var found *listPage
 	var scanErr error
@@ -53,9 +65,310 @@ func parseListHTML(body []byte) (listPage, error) {
 		return listPage{}, scanErr
 	}
 	if found == nil {
+		if cloudflareBlocked(body) {
+			return listPage{}, fmt.Errorf("ejobs: cloudflare blocked")
+		}
 		return listPage{}, fmt.Errorf("ejobs: ItemList ld+json not found")
 	}
 	return *found, nil
+}
+
+func listFromNuxt(raw []byte) (listPage, bool, error) {
+	root, err := decodeNuxtPayload(raw)
+	if err != nil {
+		return listPage{}, false, err
+	}
+	jobs, ok := nuxtMap(root, "pinia", "jobs")
+	if !ok {
+		return listPage{}, false, nil
+	}
+	items, ok := jobs["_listItems"].([]any)
+	if !ok {
+		return listPage{}, false, nil
+	}
+	parsed, err := jobsFromNuxt(items)
+	if err != nil {
+		return listPage{}, false, err
+	}
+	count := len(parsed)
+	if next, ok := jobs["_nextBtnVisible"].(bool); ok {
+		if next {
+			count = pageSize
+		} else if count >= pageSize {
+			count = pageSize - 1
+		}
+	}
+	return listPage{Jobs: parsed, Count: count, FromList: true}, true, nil
+}
+
+func jobsFromNuxt(items []any) ([]schema.Job, error) {
+	var out []schema.Job
+	seen := make(map[string]struct{})
+	for _, item := range items {
+		obj, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		id, ok := nuxtInt(obj["id"])
+		if !ok || id <= 0 {
+			continue
+		}
+		title, _ := obj["title"].(string)
+		slug, _ := obj["slug"].(string)
+		title = strings.TrimSpace(title)
+		slug = strings.Trim(strings.TrimSpace(slug), "/")
+		if title == "" || slug == "" || strings.ContainsAny(slug, `/\?#`) {
+			continue
+		}
+		link := siteOrigin + "/user/locuri-de-munca/" + url.PathEscape(slug) + "/" + strconv.FormatInt(id, 10)
+		listing, ok := canonicalListing(link)
+		if !ok {
+			continue
+		}
+		if _, dup := seen[listing]; dup {
+			continue
+		}
+		seen[listing] = struct{}{}
+		city, countries := nuxtPlace(obj["locations"])
+		job := schema.Job{
+			Source:      SourceName,
+			Title:       title,
+			Company:     nuxtCompany(obj["company"]),
+			URL:         listing,
+			Description: "",
+			PostedAt:    nuxtPosted(obj["creationDate"]),
+			SalaryRaw:   nuxtText(obj["salary"]),
+			Location: schema.Location{
+				Raw:       city,
+				Countries: countries,
+			},
+		}
+		if err := domainutils.AssignStableID(&job); err != nil {
+			return nil, err
+		}
+		out = append(out, job)
+	}
+	return out, nil
+}
+
+func nuxtCompany(v any) string {
+	switch c := v.(type) {
+	case string:
+		return strings.TrimSpace(c)
+	case map[string]any:
+		return nuxtText(c["name"])
+	default:
+		return ""
+	}
+}
+
+func nuxtText(v any) string {
+	s, _ := v.(string)
+	return strings.TrimSpace(s)
+}
+
+func nuxtPlace(v any) (string, []string) {
+	arr, ok := v.([]any)
+	if !ok || len(arr) == 0 {
+		return "", nil
+	}
+	first, ok := arr[0].(map[string]any)
+	if !ok {
+		return "", nil
+	}
+	addr := nuxtText(first["address"])
+	if addr == "" {
+		return "", nil
+	}
+	city := addr
+	var countries []string
+	if i := strings.LastIndex(addr, ","); i >= 0 {
+		tail := strings.TrimSpace(addr[i+1:])
+		if strings.EqualFold(tail, "România") || strings.EqualFold(tail, "Romania") {
+			city = strings.TrimSpace(addr[:i])
+			countries = []string{"RO"}
+		}
+	}
+	return city, countries
+}
+
+func nuxtPosted(v any) time.Time {
+	switch n := v.(type) {
+	case string:
+		return parsePosted(n)
+	case int64:
+		return unixPosted(n)
+	case float64:
+		return unixPosted(int64(n))
+	default:
+		return time.Time{}
+	}
+}
+
+func unixPosted(n int64) time.Time {
+	if n <= 0 {
+		return time.Time{}
+	}
+	if n > 1_000_000_000_000 {
+		return time.UnixMilli(n).UTC()
+	}
+	return time.Unix(n, 0).UTC()
+}
+
+func nuxtMap(root any, keys ...string) (map[string]any, bool) {
+	cur := root
+	for _, key := range keys {
+		obj, ok := cur.(map[string]any)
+		if !ok {
+			return nil, false
+		}
+		cur = obj[key]
+	}
+	obj, ok := cur.(map[string]any)
+	return obj, ok
+}
+
+func nuxtInt(v any) (int64, bool) {
+	switch n := v.(type) {
+	case int64:
+		return n, true
+	case json.Number:
+		i, err := n.Int64()
+		return i, err == nil
+	default:
+		return 0, false
+	}
+}
+
+func decodeNuxtPayload(raw []byte) (any, error) {
+	dec := json.NewDecoder(bytes.NewReader(bytes.TrimSpace(raw)))
+	dec.UseNumber()
+	var slots []any
+	if err := dec.Decode(&slots); err != nil {
+		return nil, fmt.Errorf("ejobs: nuxt payload: %w", err)
+	}
+	if len(slots) == 0 {
+		return nil, fmt.Errorf("ejobs: nuxt payload: empty")
+	}
+	cache := make([]any, len(slots))
+	ready := make([]bool, len(slots))
+	var walk func(int) (any, error)
+	walk = func(i int) (any, error) {
+		if i < 0 || i >= len(slots) {
+			return nil, fmt.Errorf("ejobs: nuxt payload: index %d", i)
+		}
+		if ready[i] {
+			return cache[i], nil
+		}
+		switch v := slots[i].(type) {
+		case nil, string, bool:
+			ready[i] = true
+			cache[i] = v
+			return v, nil
+		case json.Number:
+			ready[i] = true
+			if parsed, err := v.Int64(); err == nil {
+				cache[i] = parsed
+				return parsed, nil
+			}
+			parsed, err := v.Float64()
+			if err != nil {
+				return nil, fmt.Errorf("ejobs: nuxt payload: %w", err)
+			}
+			cache[i] = parsed
+			return parsed, nil
+		case []any:
+			if inner, ok := nuxtReviver(v, len(slots)); ok {
+				ready[i] = true
+				if inner < 0 {
+					return nil, nil
+				}
+				val, err := walk(inner)
+				if err != nil {
+					return nil, err
+				}
+				cache[i] = val
+				return val, nil
+			}
+			arr := make([]any, len(v))
+			cache[i] = arr
+			ready[i] = true
+			for j, el := range v {
+				idx, ok := nuxtIndex(el, len(slots))
+				if !ok {
+					arr[j] = el
+					continue
+				}
+				val, err := walk(idx)
+				if err != nil {
+					return nil, err
+				}
+				arr[j] = val
+			}
+			return arr, nil
+		case map[string]any:
+			obj := make(map[string]any, len(v))
+			cache[i] = obj
+			ready[i] = true
+			for key, el := range v {
+				idx, ok := nuxtIndex(el, len(slots))
+				if !ok {
+					obj[key] = el
+					continue
+				}
+				val, err := walk(idx)
+				if err != nil {
+					return nil, err
+				}
+				obj[key] = val
+			}
+			return obj, nil
+		default:
+			ready[i] = true
+			cache[i] = v
+			return v, nil
+		}
+	}
+	return walk(0)
+}
+
+func nuxtReviver(v []any, n int) (int, bool) {
+	if len(v) == 0 || len(v) > 2 {
+		return 0, false
+	}
+	name, ok := v[0].(string)
+	if !ok || !nuxtReviverName(name) {
+		return 0, false
+	}
+	if len(v) == 1 {
+		return -1, true
+	}
+	idx, ok := nuxtIndex(v[1], n)
+	if !ok {
+		return 0, false
+	}
+	return idx, true
+}
+
+func nuxtReviverName(name string) bool {
+	switch name {
+	case "EmptyShallowRef", "EmptyRef", "ShallowRef", "ShallowReactive", "Ref", "Reactive", "NuxtError":
+		return true
+	default:
+		return false
+	}
+}
+
+func nuxtIndex(v any, n int) (int, bool) {
+	num, ok := v.(json.Number)
+	if !ok {
+		return 0, false
+	}
+	i, err := num.Int64()
+	if err != nil || i < 0 || i >= int64(n) {
+		return 0, false
+	}
+	return int(i), true
 }
 
 func decodeItemList(raw []byte) (listPage, bool, error) {
@@ -344,6 +657,11 @@ func parsePosted(raw string) time.Time {
 		}
 	}
 	return time.Time{}
+}
+
+func cloudflareBlocked(body []byte) bool {
+	s := string(body)
+	return strings.Contains(s, "cf-error-details") || strings.Contains(s, "Sorry, you have been blocked") || strings.Contains(s, "Just a moment")
 }
 
 func jsonTypeIs(raw json.RawMessage, want string) bool {
