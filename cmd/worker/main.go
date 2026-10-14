@@ -8,17 +8,30 @@ import (
 	"time"
 
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/archgee"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/archinect"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/baunetz"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/bdla"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/bestjobs"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/bootstrap"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/builtin"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/competitionline"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/dezeen"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/ejobs"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/europeremotely"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/golangcafe"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/himalayas"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/hipo"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/landscapeinstitute"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/olxro"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/remotifyeurope"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/riba"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/sourceids"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/vuejobs"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/wellfound"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/weworkremotely"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/workingnomads"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/worldarchitects"
 	"github.com/andrewmysliuk/jobhound_core/internal/config"
 	"github.com/andrewmysliuk/jobhound_core/internal/ingest"
 	ingest_workflows "github.com/andrewmysliuk/jobhound_core/internal/ingest/workflows"
@@ -94,13 +107,13 @@ func main() {
 			ingestRedis = ingest.NewRedisCoordinatorWithTTL(rdb, appCfg.Ingest.LockTTLSeconds, appCfg.Ingest.CooldownTTLSeconds)
 			ingestWatermarks = ingest.NewGormWatermarkStore(getter)
 			bootCtx, bcancel := context.WithTimeout(context.Background(), 2*time.Minute)
-			er, wn, builtinColl, himColl, reColl, wwrColl, wfColl, vjColl, gcColl, considerColls, getroColls, err := bootstrap.MVPCollectors(bootCtx, nil, appCfg.DataDir, appCfg.BuiltinCollector, appCfg.HimalayasCollector, appCfg.Browser, appCfg.EuropeRemotely)
+			er, wn, builtinColl, himColl, reColl, wwrColl, wfColl, vjColl, gcColl, bjColl, hipoColl, ejobsColl, olxColl, dezeenColl, ribaColl, landscapeColl, archgeeColl, archinectColl, competitionlineColl, baunetzColl, bdlaColl, worldArchitectsColl, considerColls, getroColls, err := bootstrap.MVPCollectors(bootCtx, nil, appCfg.DataDir, appCfg.BuiltinCollector, appCfg.HimalayasCollector, appCfg.Browser, appCfg.EuropeRemotely)
 			bcancel()
 			if err != nil {
 				log.Error().Err(err).Msg("collectors bootstrap")
 				os.Exit(1)
 			}
-			ingestCollectors = ingestCollectorMap(er, wn, builtinColl, himColl, reColl, wwrColl, wfColl, vjColl, gcColl, considerColls, getroColls)
+			ingestCollectors = ingestCollectorMap(er, wn, builtinColl, himColl, reColl, wwrColl, wfColl, vjColl, gcColl, bjColl, hipoColl, ejobsColl, olxColl, dezeenColl, ribaColl, landscapeColl, archgeeColl, archinectColl, competitionlineColl, baunetzColl, bdlaColl, worldArchitectsColl, considerColls, getroColls)
 			ingestExplicitRefresh = appCfg.Ingest.ExplicitRefresh
 		}
 	}
@@ -149,17 +162,30 @@ func main() {
 // considerColls and getroColls are keyed by Name(); a nil collector in either slice is skipped.
 func ingestCollectorMap(
 	er, wn, builtinColl, himColl,
-	reColl, wwrColl, wfColl, vjColl, gcColl collectors.Collector,
+	reColl, wwrColl, wfColl, vjColl, gcColl, bjColl, hipoColl, ejobsColl, olxColl, dezeenColl, ribaColl, landscapeColl, archgeeColl, archinectColl, competitionlineColl, baunetzColl, bdlaColl, worldArchitectsColl collectors.Collector,
 	considerColls, getroColls []collectors.Collector,
 ) map[string]collectors.Collector {
 	m := map[string]collectors.Collector{
-		ingest.NormalizeSourceID(europeremotely.SourceName): er,
-		ingest.NormalizeSourceID(workingnomads.SourceName):  wn,
-		ingest.NormalizeSourceID(builtin.SourceName):        builtinColl,
-		ingest.NormalizeSourceID(remotifyeurope.SourceName): reColl,
-		ingest.NormalizeSourceID(weworkremotely.SourceName): wwrColl,
-		ingest.NormalizeSourceID(wellfound.SourceName):      wfColl,
-		ingest.NormalizeSourceID(vuejobs.SourceName):        vjColl,
+		ingest.NormalizeSourceID(europeremotely.SourceName):     er,
+		ingest.NormalizeSourceID(workingnomads.SourceName):      wn,
+		ingest.NormalizeSourceID(builtin.SourceName):            builtinColl,
+		ingest.NormalizeSourceID(remotifyeurope.SourceName):     reColl,
+		ingest.NormalizeSourceID(weworkremotely.SourceName):     wwrColl,
+		ingest.NormalizeSourceID(wellfound.SourceName):          wfColl,
+		ingest.NormalizeSourceID(vuejobs.SourceName):            vjColl,
+		ingest.NormalizeSourceID(bestjobs.SourceName):           bjColl,
+		ingest.NormalizeSourceID(hipo.SourceName):               hipoColl,
+		ingest.NormalizeSourceID(ejobs.SourceName):              ejobsColl,
+		ingest.NormalizeSourceID(olxro.SourceName):              olxColl,
+		ingest.NormalizeSourceID(dezeen.SourceName):             dezeenColl,
+		ingest.NormalizeSourceID(riba.SourceName):               ribaColl,
+		ingest.NormalizeSourceID(landscapeinstitute.SourceName): landscapeColl,
+		ingest.NormalizeSourceID(archgee.SourceName):            archgeeColl,
+		ingest.NormalizeSourceID(archinect.SourceName):          archinectColl,
+		ingest.NormalizeSourceID(competitionline.SourceName):    competitionlineColl,
+		ingest.NormalizeSourceID(baunetz.SourceName):            baunetzColl,
+		ingest.NormalizeSourceID(bdla.SourceName):               bdlaColl,
+		ingest.NormalizeSourceID(worldarchitects.SourceName):    worldArchitectsColl,
 	}
 	if himColl != nil {
 		m[ingest.NormalizeSourceID(himalayas.SourceName)] = himColl

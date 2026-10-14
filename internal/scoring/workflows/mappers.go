@@ -11,13 +11,17 @@ import (
 )
 
 const (
-	sourceWellfound      = "wellfound"
-	sourceWeWorkRemotely = "we_work_remotely"
-	sourceVueJobs        = "vue_jobs"
-	sourceGolangCafe     = "golang_cafe"
-	sourceBuiltin        = "builtin"
-	browserLane          = "browser"
-	considerSourcePrefix = "consider_"
+	sourceWellfound         = "wellfound"
+	sourceWeWorkRemotely    = "we_work_remotely"
+	sourceVueJobs           = "vue_jobs"
+	sourceGolangCafe        = "golang_cafe"
+	sourceBuiltin           = "builtin"
+	sourceEjobs             = "ejobs"
+	sourceOlxRO             = "olx_ro"
+	browserLane             = "browser"
+	architectureBrowserLane = "architecture-browser"
+	considerSourcePrefix    = "consider_"
+	catalogChildSlug        = "catalog"
 )
 
 // WorkflowID is the Temporal id for one profile. A second start while it is open is rejected.
@@ -30,6 +34,8 @@ func WorkflowID(profileID string) string {
 // consider_* gets one child: Queries is the profile query list and Query is empty.
 // Wellfound gets one child per role slug.
 // Catalog sources get one child with an empty query; their queries are ignored.
+// A source listed in Children gets one child per slug and does not copy Queries.
+// The slug catalog is an empty Query.
 func IngestChildren(profile profileschema.Profile) []ingestschema.IngestSourceInput {
 	var out []ingestschema.IngestSourceInput
 	for _, raw := range profile.Sources {
@@ -53,6 +59,8 @@ func IngestChildren(profile profileschema.Profile) []ingestschema.IngestSourceIn
 				SourceID: id,
 				Queries:  append([]string(nil), profile.Queries...),
 			})
+		case len(profile.Children[id]) > 0:
+			out = append(out, childrenInputs(id, profile.Children[id])...)
 		default:
 			for _, query := range profile.Queries {
 				query = strings.TrimSpace(query)
@@ -66,8 +74,25 @@ func IngestChildren(profile profileschema.Profile) []ingestschema.IngestSourceIn
 	return out
 }
 
+func childrenInputs(sourceID string, slugs []string) []ingestschema.IngestSourceInput {
+	out := make([]ingestschema.IngestSourceInput, 0, len(slugs))
+	for _, slug := range slugs {
+		slug = strings.TrimSpace(slug)
+		if slug == "" {
+			continue
+		}
+		child := ingestschema.IngestSourceInput{SourceID: sourceID}
+		if slug != catalogChildSlug {
+			child.Query = slug
+		}
+		out = append(out, child)
+	}
+	return out
+}
+
 // IngestLane is one resource that cannot be fetched concurrently with itself.
-// Builtin and Golang Cafe share Chromium. Every other source is its own lane.
+// Builtin and Golang Cafe share Chromium. ejobs and olx_ro share architecture-browser.
+// Every other source is its own lane.
 type IngestLane struct {
 	Name     string
 	Children []ingestschema.IngestSourceInput
@@ -106,6 +131,8 @@ func resourceLane(sourceID string) string {
 	switch sourceID {
 	case sourceBuiltin, sourceGolangCafe:
 		return browserLane
+	case sourceEjobs, sourceOlxRO:
+		return architectureBrowserLane
 	default:
 		return sourceID
 	}

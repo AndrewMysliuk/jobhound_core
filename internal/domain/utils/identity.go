@@ -74,12 +74,30 @@ func normalizeIdentitySegment(s string) string {
 	return strings.ToLower(whitespaceRun.ReplaceAllString(strings.TrimSpace(s), " "))
 }
 
+func isPlaceholderCompanyKey(key string) bool {
+	switch key {
+	case "", "confidential", "confidențial", "nedivulgat":
+		return true
+	default:
+		return false
+	}
+}
+
 // AssignStableID sets CompanyKey from Company and ID from that key and the title.
+// A placeholder company key also appends the normalized listing URL.
 func AssignStableID(j *schema.Job) error {
 	if j == nil {
 		return errors.New("nil job")
 	}
 	j.CompanyKey = CompanyKey(j.Company)
 	j.ID = StableJobID(j.CompanyKey, j.Title)
+	if !isPlaceholderCompanyKey(j.CompanyKey) {
+		return nil
+	}
+	listing, err := NormalizeListingURL(j.URL)
+	if err != nil {
+		return err
+	}
+	j.ID += idSep + listing
 	return nil
 }

@@ -72,6 +72,42 @@ func TestBegin_failClosedRedisUnavailable(t *testing.T) {
 	require.False(t, errors.Is(err, ErrCooldownActive))
 }
 
+func TestRecordSuccessfulIngest_architectureSourceUsesTwelveHours(t *testing.T) {
+	mr := miniredis.RunT(t)
+	t.Cleanup(func() { mr.Close() })
+
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	c := NewRedisCoordinatorWithTTL(rdb, 0, 99)
+	ctx := context.Background()
+
+	architecture := []string{
+		"bestjobs",
+		"hipo",
+		"ejobs",
+		"olx_ro",
+		"dezeen_jobs",
+		"riba_jobs",
+		"landscape_institute",
+		"archgee",
+		"archinect",
+		"competitionline",
+		"baunetz",
+		"bdla",
+		"world_architects",
+	}
+	for _, id := range architecture {
+		require.NoError(t, c.RecordSuccessfulIngest(ctx, id, ""))
+		ttl := mr.TTL(cooldownKey(id, catalogQuerySegment))
+		require.GreaterOrEqual(t, ttl, architectureIngestCooldownTTL-time.Second, id)
+		require.LessOrEqual(t, ttl, architectureIngestCooldownTTL, id)
+	}
+
+	require.NoError(t, c.RecordSuccessfulIngest(ctx, "greenhouse", ""))
+	other := mr.TTL(cooldownKey("greenhouse", catalogQuerySegment))
+	require.GreaterOrEqual(t, other, 98*time.Second)
+	require.LessOrEqual(t, other, 99*time.Second)
+}
+
 func TestRecordSuccessfulIngest_TTL(t *testing.T) {
 	mr := miniredis.RunT(t)
 	t.Cleanup(func() { mr.Close() })

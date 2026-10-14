@@ -5,17 +5,30 @@ import (
 	"testing"
 
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/archgee"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/archinect"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/baunetz"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/bdla"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/bestjobs"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/builtin"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/competitionline"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/consider"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/dezeen"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/ejobs"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/europeremotely"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/getro"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/golangcafe"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/himalayas"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/hipo"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/landscapeinstitute"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/olxro"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/remotifyeurope"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/riba"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/vuejobs"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/wellfound"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/weworkremotely"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/workingnomads"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/worldarchitects"
 	"github.com/andrewmysliuk/jobhound_core/internal/domain/schema"
 	"github.com/andrewmysliuk/jobhound_core/internal/ingest"
 )
@@ -38,6 +51,19 @@ func TestIngestCollectorMap_keys(t *testing.T) {
 	wf := stubCollector{name: wellfound.SourceName}
 	vj := stubCollector{name: vuejobs.SourceName}
 	gc := stubCollector{name: golangcafe.SourceName}
+	bj := stubCollector{name: bestjobs.SourceName}
+	hp := stubCollector{name: hipo.SourceName}
+	ej := stubCollector{name: ejobs.SourceName}
+	ox := stubCollector{name: olxro.SourceName}
+	dz := stubCollector{name: dezeen.SourceName}
+	rb := stubCollector{name: riba.SourceName}
+	li := stubCollector{name: landscapeinstitute.SourceName}
+	ag := stubCollector{name: archgee.SourceName}
+	an := stubCollector{name: archinect.SourceName}
+	cl := stubCollector{name: competitionline.SourceName}
+	bn := stubCollector{name: baunetz.SourceName}
+	bd := stubCollector{name: bdla.SourceName}
+	wa := stubCollector{name: worldarchitects.SourceName}
 
 	want := []string{
 		ingest.NormalizeSourceID(europeremotely.SourceName),
@@ -49,10 +75,23 @@ func TestIngestCollectorMap_keys(t *testing.T) {
 		ingest.NormalizeSourceID(wellfound.SourceName),
 		ingest.NormalizeSourceID(vuejobs.SourceName),
 		ingest.NormalizeSourceID(golangcafe.SourceName),
+		ingest.NormalizeSourceID(bestjobs.SourceName),
+		ingest.NormalizeSourceID(hipo.SourceName),
+		ingest.NormalizeSourceID(ejobs.SourceName),
+		ingest.NormalizeSourceID(olxro.SourceName),
+		ingest.NormalizeSourceID(dezeen.SourceName),
+		ingest.NormalizeSourceID(riba.SourceName),
+		ingest.NormalizeSourceID(landscapeinstitute.SourceName),
+		ingest.NormalizeSourceID(archgee.SourceName),
+		ingest.NormalizeSourceID(archinect.SourceName),
+		ingest.NormalizeSourceID(competitionline.SourceName),
+		ingest.NormalizeSourceID(baunetz.SourceName),
+		ingest.NormalizeSourceID(bdla.SourceName),
+		ingest.NormalizeSourceID(worldarchitects.SourceName),
 	}
 	portfolio := portfolioCollectors()
 	want = append(want, portfolio.ids...)
-	m := ingestCollectorMap(er, wn, bi, him, re, wwr, wf, vj, gc, portfolio.consider, portfolio.getro)
+	m := ingestCollectorMap(er, wn, bi, him, re, wwr, wf, vj, gc, bj, hp, ej, ox, dz, rb, li, ag, an, cl, bn, bd, wa, portfolio.consider, portfolio.getro)
 	if len(m) != len(want) {
 		t.Fatalf("worker map len=%d want %d", len(m), len(want))
 	}
@@ -67,14 +106,14 @@ func TestIngestCollectorMap_keys(t *testing.T) {
 		}
 	}
 
-	absent := ingestCollectorMap(er, wn, bi, him, re, wwr, wf, vj, gc, nil, nil)
+	absent := ingestCollectorMap(er, wn, bi, him, re, wwr, wf, vj, gc, bj, hp, ej, ox, dz, rb, li, ag, an, cl, bn, bd, wa, nil, nil)
 	for _, id := range portfolio.ids {
 		if _, ok := absent[id]; ok {
 			t.Fatalf("worker map has %q when portfolio slices are nil", id)
 		}
 	}
 
-	noHim := ingestCollectorMap(er, wn, bi, nil, re, wwr, wf, vj, gc, nil, nil)
+	noHim := ingestCollectorMap(er, wn, bi, nil, re, wwr, wf, vj, gc, bj, hp, ej, ox, dz, rb, li, ag, an, cl, bn, bd, wa, nil, nil)
 	if _, ok := noHim[ingest.NormalizeSourceID(himalayas.SourceName)]; ok {
 		t.Fatal("himalayas present when collector is nil")
 	}
@@ -82,7 +121,7 @@ func TestIngestCollectorMap_keys(t *testing.T) {
 		t.Fatal("golang_cafe missing when rod fetcher collector is set")
 	}
 
-	noCafe := ingestCollectorMap(er, wn, bi, him, re, wwr, wf, vj, nil, nil, nil)
+	noCafe := ingestCollectorMap(er, wn, bi, him, re, wwr, wf, vj, nil, bj, hp, ej, ox, dz, rb, li, ag, an, cl, bn, bd, wa, nil, nil)
 	if _, ok := noCafe[ingest.NormalizeSourceID(golangcafe.SourceName)]; ok {
 		t.Fatal("golang_cafe present when rod fetcher is nil")
 	}

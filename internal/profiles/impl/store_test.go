@@ -208,14 +208,80 @@ func TestFileStoreLoadsAndrew(t *testing.T) {
 	require.Equal(t, listed[1], lada)
 	require.Equal(t, "Lada", lada.Name)
 	require.Equal(t, schema.DomainArchitecture, lada.Domain)
-	require.Empty(t, lada.Sources)
-	require.Empty(t, lada.Queries)
+	require.Equal(t, []string{
+		"bestjobs",
+		"hipo",
+		"ejobs",
+		"olx_ro",
+		"dezeen_jobs",
+		"riba_jobs",
+		"landscape_institute",
+		"archgee",
+		"archinect",
+		"competitionline",
+		"baunetz",
+		"bdla",
+		"world_architects",
+	}, lada.Sources)
+	for _, id := range lada.Sources {
+		require.Contains(t, known, id)
+	}
+	require.Equal(t, []string{
+		"arhitect",
+		"arhitect proiectant",
+		"peisagist",
+		"urbanist",
+		"desenator tehnic",
+	}, lada.Queries)
+	require.Equal(t, map[string][]string{
+		"hipo":                {"Arhitectura-Design-Proiectare"},
+		"dezeen_jobs":         {"architectural-designer", "architectural-assistants", "landscape-architect", "part-1", "part-2"},
+		"riba_jobs":           {"architectural-assistant", "architect", "part-1", "part-2", "landscape-and-public-realm"},
+		"landscape_institute": {"catalog"},
+		"archgee":             {"architect", "landscape-architect", "remote"},
+		"archinect":           {"remote"},
+		"competitionline":     {"catalog"},
+		"baunetz":             {"catalog"},
+		"bdla":                {"catalog"},
+		"world_architects":    {"catalog"},
+	}, lada.Children)
+	require.NotContains(t, lada.Children, "bestjobs")
+	require.NotContains(t, lada.Children, "ejobs")
+	require.NotContains(t, lada.Children, "olx_ro")
 	require.Equal(t, map[string]int{
-		"architectural assistant": 6,
-		"architectural designer":  6,
-		"landscape designer":      6,
-		"junior architect":        4,
+		"architectural designer":     6,
+		"architectural assistant":    6,
+		"landscape designer":         6,
+		"arhitect proiectant":        6,
+		"arhitect junior":            6,
+		"peisagist":                  6,
+		"landscape architect":        5,
+		"architectural technologist": 4,
+		"graduate architect":         4,
+		"junior architect":           4,
+		"arhitect":                   4,
+		"urbanist":                   3,
+		"desenator tehnic":           3,
 	}, lada.SignalsPlus.Title)
+	require.Equal(t, 6, lada.SignalsPlus.Text.MaxTotal)
+	require.Equal(t, 5, lada.Buckets.Top)
+	require.NotContains(t, lada.GateLocation.AllowCountries, "US")
+	require.Empty(t, lada.WellfoundRoles)
+	require.NotContains(t, lada.GateRole, "intern")
+	require.NotContains(t, lada.GateRole, "internship")
+	require.Contains(t, lada.GateRole, "interior designer")
+	require.Contains(t, lada.GateRole, "solution architect")
+	require.NotContains(t, lada.GateRole, "technical architect")
+	require.Contains(t, lada.GateHard, "right to work in the uk")
+	require.Contains(t, lada.GateHard, "drept de semnătură")
+	require.NotContains(t, lada.GateHard, "work permit required")
+	require.NotContains(t, lada.GateHard, "itar")
+	require.NotContains(t, lada.GateHard, "govcloud")
+	ladaPenalties := make([]string, 0, len(lada.PenaltiesSoft))
+	for _, group := range lada.PenaltiesSoft {
+		ladaPenalties = append(ladaPenalties, group.Name)
+	}
+	require.Equal(t, []string{"agency", "culture_smell", "part_time"}, ladaPenalties)
 	for _, phrase := range []string{"designer", "architect", "assistant", "landscape", "junior"} {
 		require.NotContains(t, lada.GateRole, phrase)
 	}
@@ -297,6 +363,43 @@ sources: [vue_jobs]
 queries: []
 wellfound_roles: []
 exclude_title: []
+`)
+	_, err := NewFileStore(dir, sourceids.KnownSourceIDs()).Get(context.Background(), "sample")
+	require.ErrorIs(t, err, profiles.ErrProfileInvalid)
+}
+
+func TestFileStoreRoundTripsChildren(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	writeProfile(t, dir, "sample", `
+id: sample
+name: Sample
+domain: software
+sources: [vue_jobs]
+queries: []
+wellfound_roles: []
+children:
+  vue_jobs:
+    - catalog
+`)
+	got, err := NewFileStore(dir, sourceids.KnownSourceIDs()).Get(context.Background(), "sample")
+	require.NoError(t, err)
+	require.Equal(t, map[string][]string{"vue_jobs": {"catalog"}}, got.Children)
+}
+
+func TestFileStoreRejectsChildrenSourceNotInSources(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	writeProfile(t, dir, "sample", `
+id: sample
+name: Sample
+domain: software
+sources: [vue_jobs]
+queries: []
+wellfound_roles: []
+children:
+  himalayas:
+    - catalog
 `)
 	_, err := NewFileStore(dir, sourceids.KnownSourceIDs()).Get(context.Background(), "sample")
 	require.ErrorIs(t, err, profiles.ErrProfileInvalid)

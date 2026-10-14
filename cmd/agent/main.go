@@ -52,7 +52,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	er, wn, builtinColl, himColl, reColl, wwrColl, wfColl, vjColl, gcColl, considerColls, getroColls, err := bootstrap.MVPCollectors(ctx, nil, appCfg.DataDir, appCfg.BuiltinCollector, appCfg.HimalayasCollector, appCfg.Browser, appCfg.EuropeRemotely)
+	er, wn, builtinColl, himColl, reColl, wwrColl, wfColl, vjColl, gcColl, _, _, _, _, _, _, _, _, _, _, _, _, _, considerColls, getroColls, err := bootstrap.MVPCollectors(ctx, nil, appCfg.DataDir, appCfg.BuiltinCollector, appCfg.HimalayasCollector, appCfg.Browser, appCfg.EuropeRemotely)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)

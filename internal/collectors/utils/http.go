@@ -12,6 +12,9 @@ import (
 // DefaultUserAgent is sent on collector HTTP requests (see specs/005-job-collectors/contracts/collector.md).
 const DefaultUserAgent = "JobHound/1.0 (+collector; https://github.com/andrewmysliuk/jobhound_core)"
 
+// BrowserUserAgent is the shared browser User-Agent for architecture-profile collectors.
+const BrowserUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+
 // SetCollectorUserAgent sets the standard collector User-Agent on req.
 func SetCollectorUserAgent(req *http.Request) {
 	req.Header.Set("User-Agent", DefaultUserAgent)

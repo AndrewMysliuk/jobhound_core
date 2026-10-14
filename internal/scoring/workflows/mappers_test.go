@@ -56,6 +56,51 @@ func TestIngestChildren_considerUnionGetroKeyword(t *testing.T) {
 	}
 }
 
+func TestIngestChildren_profileChildrenAndArchitectureLane(t *testing.T) {
+	profile := profileschema.Profile{
+		Sources: []string{"hipo", "landscape_institute", "ejobs", "olx_ro", "builtin"},
+		Queries: []string{"arhitect", "peisagist"},
+		Children: map[string][]string{
+			"hipo":                {"Arhitectura-Design-Proiectare"},
+			"landscape_institute": {"catalog"},
+		},
+	}
+
+	got := IngestChildren(profile)
+	want := []ingestschema.IngestSourceInput{
+		{SourceID: "hipo", Query: "Arhitectura-Design-Proiectare"},
+		{SourceID: "landscape_institute"},
+		{SourceID: "ejobs", Query: "arhitect"},
+		{SourceID: "ejobs", Query: "peisagist"},
+		{SourceID: "olx_ro", Query: "arhitect"},
+		{SourceID: "olx_ro", Query: "peisagist"},
+		{SourceID: "builtin", Query: "arhitect"},
+		{SourceID: "builtin", Query: "peisagist"},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("children = %#v, want %#v", got, want)
+	}
+	if got[0].Queries != nil {
+		t.Fatalf("hipo copied queries %#v", got[0].Queries)
+	}
+	if got[1].Query != "" {
+		t.Fatalf("catalog query = %q", got[1].Query)
+	}
+
+	lanes := IngestLanes(profile)
+	arch := laneNamed(t, lanes, "architecture-browser")
+	if arch.Name == "browser" {
+		t.Fatal("architecture lane joined browser")
+	}
+	if !reflect.DeepEqual(arch.Children, want[2:6]) {
+		t.Fatalf("architecture lane = %#v", arch.Children)
+	}
+	browser := laneNamed(t, lanes, "browser")
+	if !reflect.DeepEqual(browser.Children, want[6:]) {
+		t.Fatalf("browser lane = %#v", browser.Children)
+	}
+}
+
 func TestChildSkipped_tenantUnavailable(t *testing.T) {
 	if !ChildSkipped(collectors.ErrTenantUnavailable) {
 		t.Fatal("sentinel did not skip")

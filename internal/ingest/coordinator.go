@@ -35,7 +35,27 @@ func NewRedisCoordinatorWithTTL(rdb *redis.Client, lockTTLSec, cooldownTTLSec in
 	return &RedisCoordinator{rdb: rdb, lockTTL: lock, cooldownTTL: cd}
 }
 
-const catalogQuerySegment = "catalog"
+const (
+	catalogQuerySegment           = "catalog"
+	architectureIngestCooldownTTL = 43200 * time.Second
+)
+
+// architectureSourceIDs use a fixed twelve-hour cooldown. Every other source keeps c.cooldownTTL.
+var architectureSourceIDs = map[string]struct{}{
+	"bestjobs":            {},
+	"hipo":                {},
+	"ejobs":               {},
+	"olx_ro":              {},
+	"dezeen_jobs":         {},
+	"riba_jobs":           {},
+	"landscape_institute": {},
+	"archgee":             {},
+	"archinect":           {},
+	"competitionline":     {},
+	"baunetz":             {},
+	"bdla":                {},
+	"world_architects":    {},
+}
 
 func querySegment(query string) string {
 	q := NormalizeSourceID(query)
@@ -102,5 +122,9 @@ func (c *RedisCoordinator) RecordSuccessfulIngest(ctx context.Context, sourceID,
 	if id == "" {
 		return ErrEmptySourceID
 	}
-	return c.rdb.Set(ctx, cooldownKey(id, querySegment(query)), "1", c.cooldownTTL).Err()
+	ttl := c.cooldownTTL
+	if _, ok := architectureSourceIDs[id]; ok {
+		ttl = architectureIngestCooldownTTL
+	}
+	return c.rdb.Set(ctx, cooldownKey(id, querySegment(query)), "1", ttl).Err()
 }

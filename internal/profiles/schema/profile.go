@@ -7,6 +7,7 @@ type Profile struct {
 	Domain         Domain
 	Sources        []string
 	Queries        []string
+	Children       map[string][]string
 	WellfoundRoles []string
 	GateRole       []string
 	GateHard       []string

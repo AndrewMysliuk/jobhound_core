@@ -2,11 +2,59 @@ id: lada
 name: Lada
 domain: architecture
 
-# Boards are not wired yet. An empty list does not search Andrew's sources.
-sources: []
+queries:
+  - arhitect
+  - arhitect proiectant
+  - peisagist
+  - urbanist
+  - desenator tehnic
 
-# Category slugs belong on each board, not in this shared list.
-queries: []
+sources:
+  - bestjobs
+  - hipo
+  - ejobs
+  - olx_ro
+  - dezeen_jobs
+  - riba_jobs
+  - landscape_institute
+  - archgee
+  - archinect
+  - competitionline
+  - baunetz
+  - bdla
+  - world_architects
+
+children:
+  hipo:
+    - Arhitectura-Design-Proiectare
+  dezeen_jobs:
+    - architectural-designer
+    - architectural-assistants
+    - landscape-architect
+    - part-1
+    - part-2
+  riba_jobs:
+    - architectural-assistant
+    - architect
+    - part-1
+    - part-2
+    - landscape-and-public-realm
+  landscape_institute:
+    - catalog
+  archgee:
+    - architect
+    - landscape-architect
+    - remote
+  archinect:
+    - remote
+  competitionline:
+    - catalog
+  baunetz:
+    - catalog
+  bdla:
+    - catalog
+  world_architects:
+    - catalog
 
 wellfound_roles: []
 
@@ -30,38 +78,27 @@ gate_role:
   - "project manager"
   - "construction manager"
   - "quantity surveyor"
-  - "intern"
-  - "internship"
   - "director"
   - "head of"
   - "sales"
   - "marketing"
   - "accountant"
+  - "solution architect"
+  - "solutions architect"
+  - "enterprise architect"
+  - "software architect"
+  - "data architect"
+  - "cloud architect"
+  - "security architect"
+  - "systems architect"
+  - "system architect"
+  - "infrastructure architect"
+  - "network architect"
+  - "information architect"
+  - "integration architect"
+  - "platform architect"
 
 gate_hard:
-  - "authorized to work in the united states"
-  - "authorized to work in the u.s"
-  - "authorized to work in the us"
-  - "authorized to work in the usa"
-  - "authorized to work lawfully"
-  - "authorization to work in the us"
-  - "u.s. citizen"
-  - "u.s. citizenship"
-  - "us citizenship"
-  - "us work authorization"
-  - "department of defense"
-  - "department of war"
-  - "security clearance"
-  - "secret clearance"
-  - "clearance eligible"
-  - "clearance eligibility"
-  - "top secret"
-  - "ts/sci"
-  - "classified environment"
-  - "itar"
-  - "u.s. person"
-  - "us person"
-  - "govcloud"
   - "no visa sponsorship"
   - "visa sponsorship is not available"
   - "visa sponsorship: none"
@@ -71,10 +108,15 @@ gate_hard:
   - "deferred compensation"
   - "no salary until"
   - "compensation will be deferred"
+  - "right to work in the uk"
+  - "right to work in germany"
+  - "eligible to work in france"
+  - "must reside in switzerland"
+  - "drept de semnatura"
+  - "drept de semnătură"
 
 gate_location:
   allow_countries:
-    - "US"
     - "AT"
     - "BE"
     - "BG"
@@ -130,9 +172,18 @@ signals_plus:
     architectural designer: 6
     architectural assistant: 6
     landscape designer: 6
+    arhitect proiectant: 6
+    arhitect junior: 6
+    peisagist: 6
+    landscape architect: 5
+    architectural technologist: 4
+    graduate architect: 4
     junior architect: 4
+    arhitect: 4
+    urbanist: 3
+    desenator tehnic: 3
   text:
-    max_total: 4
+    max_total: 6
     terms:
       revit: 2
       archicad: 2
@@ -151,6 +202,14 @@ signals_plus:
       permit package: 2
       landscape design: 2
       town planning: 2
+      brasov: 2
+      brașov: 2
+      bucuresti: 2
+      bucurești: 2
+      cluj: 2
+      sibiu: 1
+      hibrid: 1
+      proiectare: 1
   # Junior. No floor and no penalty: low pay does not cut the match.
   salary:
     min_eur_year: 0
@@ -163,63 +222,6 @@ signals_plus:
     days_7: 1
 
 penalties_soft:
-  office_pressure:
-    weight: -3
-    min_occurrences: 1
-    check_negation: false
-    terms:
-      - "umowa o prac"
-      - "lpa"
-      - "ctc annually"
-      - "area applicants"
-      - "commuting distance"
-      - "commutable"
-      - "bay area"
-      - "west coast"
-      - "east coast"
-      - "western hemisphere"
-      - "must be based in"
-      - "must be located in"
-      - "must live in"
-      - "should already be based"
-      - "candidates who are residing in"
-      - "individuals living in"
-      - "may live in the following locations"
-      - "preference for candidates near"
-      - "open to relocation"
-      - "open to relocating"
-      - "reside or are open to"
-      - "relocate to"
-      - "willing and able to relocate"
-      - "is your home base"
-      - "geographic zones"
-      - "in-office"
-      - "in office"
-      - "hybrid schedule"
-      - "hybrid work model"
-      - "hybrid role"
-      - "hybrid roles"
-      - "hybrid-first"
-      - "hybrid dynamic"
-      - "on-site presence"
-      - "onsite presence"
-      - "work onsite"
-      - "onsite a minimum"
-      - "5 days onsite"
-      - "onsite five days per week"
-      - "not remote/hybrid"
-      - "regular time on-site"
-      - "location type: on-site"
-      - "able to work on-site"
-      - "office attendance in"
-      - "week from the office"
-      - "week in the office"
-      - "days/week in office"
-      - "right to work in germany"
-      - "must reside in switzerland"
-      - "right to work in the uk"
-      - "eligible to work in france"
-      - "work permit required"
   agency:
     weight: -3
     min_occurrences: 1
@@ -242,34 +244,6 @@ penalties_soft:
       - "work hard, play hard"
       - "rockstar"
       - "ninja"
-  ambiguous_us:
-    weight: -3
-    min_occurrences: 1
-    check_negation: true
-    terms:
-      - "must reside in the us"
-      - "must reside in the eastern"
-      - "must be based in the us"
-      - "based in the united states"
-      - "based in the us"
-      - "reside in the united states"
-      - "located in the united states"
-      - "us based only"
-      - "hiring only within the u.s"
-      - "remote in the us"
-      - "remote in the usa"
-      - "remote in usa"
-      - "must live in the state"
-      - "candidates residing in the us"
-      - "anywhere in the us"
-      - "anywhere in the united states"
-      - "remote - united states"
-      - "remote - usa"
-      - "remote (us)"
-      - "remote, us"
-      - "remote us"
-      - "remote - us"
-      - "remote within canada or united states"
   part_time:
     weight: -3
     min_occurrences: 1
@@ -279,4 +253,4 @@ penalties_soft:
       - "part time"
 
 buckets:
-  top: 6
+  top: 5

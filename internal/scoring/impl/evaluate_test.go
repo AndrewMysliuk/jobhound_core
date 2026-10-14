@@ -27,9 +27,10 @@ func TestEvaluate(t *testing.T) {
 	hard := func(phrase string, occurrences int) schema.Signal {
 		return signal(schema.SignalGateHard, "gate_hard", phrase, occurrences)
 	}
-	country := func(code string) schema.Signal {
-		return signal(schema.SignalCutLocation, "gate_location.allow_countries", code, 0)
+	europe := func(code string) schema.Signal {
+		return signal(schema.SignalCutLocation, "gate_location.europe", code, 0)
 	}
+	europeOffice := schema.Signal{Code: schema.SignalPenalty, Rule: "europe_office", Delta: -2}
 	region := func(code string) schema.Signal {
 		return signal(schema.SignalCutLocation, "gate_location.allow_regions", code, 0)
 	}
@@ -176,14 +177,14 @@ func TestEvaluate(t *testing.T) {
 				Buckets: review,
 			},
 			job: jobdata.Job{
-				Location: jobdata.Location{Countries: []string{"BR"}, Regions: []string{"LATAM"}},
+				Location: jobdata.Location{Countries: []string{"RO"}, Regions: []string{"LATAM"}},
 			},
 			want: Outcome{Bucket: schema.BucketReview},
 		},
 		{
 			name:    "allowed country stays",
 			profile: locations,
-			job:     jobdata.Job{Location: jobdata.Location{Countries: []string{"DE"}}},
+			job:     jobdata.Job{Location: jobdata.Location{Countries: []string{"RO"}}},
 			want:    Outcome{Bucket: schema.BucketReview},
 		},
 		{
@@ -200,7 +201,7 @@ func TestEvaluate(t *testing.T) {
 			},
 			want: Outcome{
 				Bucket:  schema.BucketRejected,
-				Signals: []schema.Signal{country("BR"), country("AR"), region("LATAM")},
+				Signals: []schema.Signal{europe("BR"), europe("AR"), region("LATAM")},
 			},
 		},
 		{
@@ -209,7 +210,68 @@ func TestEvaluate(t *testing.T) {
 			job:     jobdata.Job{Location: jobdata.Location{Countries: []string{"DE", "BR"}}},
 			want: Outcome{
 				Bucket:  schema.BucketRejected,
-				Signals: []schema.Signal{country("BR")},
+				Signals: []schema.Signal{europe("BR")},
+			},
+		},
+		{
+			name: "remote in the US is not a location cut",
+			profile: profileschema.Profile{
+				GateLocation: profileschema.GateLocation{AllowCountries: []string{"RO"}},
+				Buckets:      review,
+			},
+			job: jobdata.Job{Location: jobdata.Location{
+				Type:      jobdata.LocationRemote,
+				Countries: []string{"US"},
+			}},
+			want: Outcome{Bucket: schema.BucketReview},
+		},
+		{
+			name:    "office in DE scores the europe penalty once",
+			profile: profileschema.Profile{Buckets: review},
+			job: jobdata.Job{Location: jobdata.Location{
+				Type:      jobdata.LocationOffice,
+				Countries: []string{"DE"},
+			}},
+			want: Outcome{
+				Bucket:  schema.BucketReview,
+				Score:   -2,
+				Signals: []schema.Signal{europeOffice},
+			},
+		},
+		{
+			name:    "office in DE with umzug has no europe penalty",
+			profile: profileschema.Profile{Buckets: review},
+			job: jobdata.Job{
+				Description: "umzug",
+				Location: jobdata.Location{
+					Type:      jobdata.LocationOffice,
+					Countries: []string{"DE"},
+				},
+			},
+			want: Outcome{Bucket: schema.BucketReview},
+		},
+		{
+			name:    "office in RO has no europe penalty",
+			profile: profileschema.Profile{Buckets: review},
+			job: jobdata.Job{Location: jobdata.Location{
+				Type:      jobdata.LocationOffice,
+				Countries: []string{"RO"},
+			}},
+			want: Outcome{Bucket: schema.BucketReview},
+		},
+		{
+			name: "office in the US is a location cut",
+			profile: profileschema.Profile{
+				GateLocation: profileschema.GateLocation{AllowCountries: []string{"US"}},
+				Buckets:      review,
+			},
+			job: jobdata.Job{Location: jobdata.Location{
+				Type:      jobdata.LocationOffice,
+				Countries: []string{"US"},
+			}},
+			want: Outcome{
+				Bucket:  schema.BucketRejected,
+				Signals: []schema.Signal{europe("US")},
 			},
 		},
 		{
@@ -293,7 +355,7 @@ func TestEvaluate(t *testing.T) {
 				Signals: []schema.Signal{
 					role("recruiter", 1),
 					hard("security clearance", 1),
-					country("BR"),
+					europe("BR"),
 					timezone("EST", 1),
 					{
 						Code:   schema.SignalCutPostedAt,

@@ -8,3 +8,19 @@ import "context"
 type HTMLDocumentFetcher interface {
 	FetchHTMLDocument(ctx context.Context, rawURL string) ([]byte, error)
 }
+
+// NavigatedDocument is the HTML after navigation and the URL the browser landed on.
+type NavigatedDocument struct {
+	FinalURL string
+	HTML     []byte
+}
+
+// NavigatedFetcher loads one absolute HTTPS URL and reports the post-redirect URL.
+type NavigatedFetcher interface {
+	FetchNavigated(ctx context.Context, rawURL string) (NavigatedDocument, error)
+}
+
+// RawFetcher loads the original document response. The live DOM is not used.
+type RawFetcher interface {
+	FetchRaw(ctx context.Context, rawURL string) (NavigatedDocument, error)
+}

@@ -42,6 +42,7 @@ type fileProfile struct {
 	Domain         string                      `yaml:"domain"`
 	Sources        []string                    `yaml:"sources"`
 	Queries        []string                    `yaml:"queries"`
+	Children       map[string][]string         `yaml:"children"`
 	WellfoundRoles []string                    `yaml:"wellfound_roles"`
 	GateRole       []string                    `yaml:"gate_role"`
 	GateHard       []string                    `yaml:"gate_hard"`
@@ -147,9 +148,16 @@ func (s *FileStore) load(path, wantID string) (schema.Profile, error) {
 	if err != nil {
 		return schema.Profile{}, fmt.Errorf("%w: %w", profiles.ErrProfileInvalid, err)
 	}
+	allowed := make(map[string]struct{}, len(raw.Sources))
 	for _, sourceID := range raw.Sources {
 		if _, ok := s.known[sourceID]; !ok {
 			return schema.Profile{}, fmt.Errorf("%w: unknown source id %q", profiles.ErrProfileInvalid, sourceID)
+		}
+		allowed[sourceID] = struct{}{}
+	}
+	for sourceID := range raw.Children {
+		if _, ok := allowed[sourceID]; !ok {
+			return schema.Profile{}, fmt.Errorf("%w: children source id %q is not in sources", profiles.ErrProfileInvalid, sourceID)
 		}
 	}
 	return schema.Profile{
@@ -158,6 +166,7 @@ func (s *FileStore) load(path, wantID string) (schema.Profile, error) {
 		Domain:         domain,
 		Sources:        raw.Sources,
 		Queries:        raw.Queries,
+		Children:       raw.Children,
 		WellfoundRoles: raw.WellfoundRoles,
 		GateRole:       raw.GateRole,
 		GateHard:       raw.GateHard,

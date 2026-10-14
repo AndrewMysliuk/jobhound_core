@@ -92,3 +92,48 @@ func TestAssignStableID_nil(t *testing.T) {
 		t.Fatal("want error")
 	}
 }
+
+func TestAssignStableID_placeholderIncludesListingURL(t *testing.T) {
+	cases := []struct {
+		company, wantKey string
+	}{
+		{company: "", wantKey: ""},
+		{company: "Confidential", wantKey: "confidential"},
+		{company: "Confidențial", wantKey: "confidențial"},
+		{company: "Nedivulgat", wantKey: "nedivulgat"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.wantKey, func(t *testing.T) {
+			j := &schema.Job{
+				Company: tc.company,
+				Title:   "  Architect ",
+				URL:     "https://EXAMPLE.com/jobs/42/?ref=1",
+			}
+			if err := utils.AssignStableID(j); err != nil {
+				t.Fatal(err)
+			}
+			want := tc.wantKey + "\x1earchitect\x1ehttps://example.com/jobs/42"
+			if j.ID != want {
+				t.Fatalf("id %q want %q", j.ID, want)
+			}
+			if j.CompanyKey != tc.wantKey {
+				t.Fatalf("key %q want %q", j.CompanyKey, tc.wantKey)
+			}
+		})
+	}
+}
+
+func TestAssignStableID_namedCompanyOmitsListingURL(t *testing.T) {
+	j := &schema.Job{
+		Company: "Acme Inc",
+		Title:   "Architect",
+		URL:     "https://example.com/jobs/42",
+	}
+	if err := utils.AssignStableID(j); err != nil {
+		t.Fatal(err)
+	}
+	want := "acme\x1earchitect"
+	if j.ID != want {
+		t.Fatalf("id %q want %q", j.ID, want)
+	}
+}

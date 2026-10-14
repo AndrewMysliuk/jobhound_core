@@ -20,7 +20,29 @@ const (
 	negationWindowRunes = 50
 	// fullTimeHoursPerYear annualizes an hourly figure at 40 hours × 52 weeks.
 	fullTimeHoursPerYear = 40 * 52
+	europeOfficeRule     = "europe_office"
+	europeOfficeDelta    = -2
+	europeLocationRule   = "gate_location.europe"
 )
+
+// Europe office countries are fixed in the scorer. They are not a profile allow list.
+var europeCountries = map[string]struct{}{
+	"AT": {}, "BE": {}, "BG": {}, "CY": {}, "CZ": {}, "DE": {}, "DK": {}, "EE": {},
+	"ES": {}, "FI": {}, "FR": {}, "GR": {}, "HR": {}, "HU": {}, "IE": {}, "IT": {},
+	"LT": {}, "LU": {}, "LV": {}, "MT": {}, "NL": {}, "PL": {}, "PT": {}, "SE": {},
+	"SI": {}, "SK": {}, "IS": {}, "LI": {}, "NO": {}, "CH": {}, "GB": {}, "RO": {},
+}
+
+// Relocation phrases cancel the Europe office penalty. They are not a YAML group.
+var relocationPhrases = []string{
+	"relocation",
+	"relocation package",
+	"relocation assistance",
+	"relocate",
+	"relocare",
+	"umzug",
+	"umzugskosten",
+}
 
 var (
 	salaryLeadCurrency  = regexp.MustCompile(`(?i)(€|\$|£|\busd\b|\beur\b|\bgbp\b|us\$)\s*(\d{1,3}(?:[, ]\d{3})+|\d+(?:\.\d+)?)(\s*[kK])?(?:\s*(?:-|\bto\b)\s*(?:€|\$|£|\busd\b|\beur\b|\bgbp\b|us\$)?\s*(\d{1,3}(?:[, ]\d{3})+|\d+(?:\.\d+)?)(\s*[kK])?)?`)
@@ -434,10 +456,68 @@ func penaltyOccurrences(titleHits, bodyHits, need int) (int, bool) {
 
 func matchGateLocation(gate profileschema.GateLocation, job jobdata.Job, now time.Time) []schema.Signal {
 	var signals []schema.Signal
-	signals = append(signals, locationCuts(gate, job.Location)...)
+	if !remoteLocation(job.Location) {
+		signals = append(signals, europeTier(job)...)
+		signals = append(signals, locationCuts(gate, job.Location)...)
+	}
 	signals = append(signals, matchPhrases(gate.RejectTimezones, true, "gate_location.reject_timezones", schema.SignalCutTimezone, job.Title, job.Description, job.Location.Raw, job.Location.Timezone)...)
 	signals = append(signals, postedAtCut(job.PostedAt, now)...)
 	return signals
+}
+
+func remoteLocation(loc jobdata.Location) bool {
+	return strings.EqualFold(strings.TrimSpace(loc.Type), jobdata.LocationRemote)
+}
+
+// europeTier applies the fixed Europe office rule before the profile allow lists.
+// A remote job never reaches it. An empty location adds nothing.
+// A country outside the Europe set is CUT_LOCATION. An office job whose countries
+// are all in that set, and none of them is RO, takes one −2 unless the posting offers relocation.
+func europeTier(job jobdata.Job) []schema.Signal {
+	countries := compact(job.Location.Countries)
+	regions := compact(job.Location.Regions)
+	if len(countries) == 0 && len(regions) == 0 {
+		return nil
+	}
+	var signals []schema.Signal
+	outside := false
+	hasRO := false
+	for _, code := range countries {
+		if !europeCountry(code) {
+			outside = true
+			signals = append(signals, schema.Signal{
+				Code:   schema.SignalCutLocation,
+				Rule:   europeLocationRule,
+				Phrase: code,
+			})
+			continue
+		}
+		if strings.EqualFold(code, "RO") {
+			hasRO = true
+		}
+	}
+	if outside || len(countries) == 0 || hasRO || relocationOffered(job) {
+		return signals
+	}
+	return append(signals, schema.Signal{
+		Code:  schema.SignalPenalty,
+		Rule:  europeOfficeRule,
+		Delta: europeOfficeDelta,
+	})
+}
+
+func europeCountry(code string) bool {
+	_, ok := europeCountries[strings.ToUpper(strings.TrimSpace(code))]
+	return ok
+}
+
+func relocationOffered(job jobdata.Job) bool {
+	for _, phrase := range relocationPhrases {
+		if activeHits(job.Title, phrase, false) > 0 || activeHits(job.Description, phrase, false) > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 func locationCuts(gate profileschema.GateLocation, loc jobdata.Location) []schema.Signal {
@@ -453,6 +533,10 @@ func locationCuts(gate profileschema.GateLocation, loc jobdata.Location) []schem
 	}
 	var signals []schema.Signal
 	for _, code := range countries {
+		// The Europe tier already cut countries outside the set.
+		if !europeCountry(code) {
+			continue
+		}
 		if missesAllowLists(code, allowedCountries, allowedRegions) {
 			signals = append(signals, schema.Signal{
 				Code:   schema.SignalCutLocation,

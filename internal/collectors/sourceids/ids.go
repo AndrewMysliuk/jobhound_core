@@ -2,17 +2,30 @@
 package sourceids
 
 import (
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/archgee"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/archinect"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/baunetz"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/bdla"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/bestjobs"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/builtin"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/competitionline"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/consider"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/dezeen"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/ejobs"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/europeremotely"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/getro"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/golangcafe"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/himalayas"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/hipo"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/landscapeinstitute"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/olxro"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/remotifyeurope"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/riba"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/vuejobs"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/wellfound"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/weworkremotely"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/workingnomads"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/worldarchitects"
 )
 
 // KnownSourceIDs returns aggregator source ids, then Consider tenants, then Getro tenants.
@@ -27,6 +40,19 @@ func KnownSourceIDs() []string {
 		vuejobs.SourceName,
 		golangcafe.SourceName,
 		builtin.SourceName,
+		bestjobs.SourceName,
+		hipo.SourceName,
+		ejobs.SourceName,
+		olxro.SourceName,
+		dezeen.SourceName,
+		riba.SourceName,
+		landscapeinstitute.SourceName,
+		archgee.SourceName,
+		archinect.SourceName,
+		competitionline.SourceName,
+		baunetz.SourceName,
+		bdla.SourceName,
+		worldarchitects.SourceName,
 	}
 	for _, tenant := range consider.Tenants() {
 		ids = append(ids, tenant.SourceID)
