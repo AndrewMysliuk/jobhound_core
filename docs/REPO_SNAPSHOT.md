@@ -2,7 +2,7 @@
 
 Repository remote `AndrewMysliuk/jobhound_core` (`go.mod` module: `github.com/andrewmysliuk/jobhound_core`; README: “jobhound_core”) is the JobHound backend: ingest job listings from public boards, persist one row per vacancy in PostgreSQL, score that pool with in-process phrase rules, and expose a JSON HTTP API. Role: backend / worker / debug collector process. The product UI is the sibling Nuxt app `jobhound_frontend` (section 2.6).
 
-MVP is **single-tenant** (no auth). The unit of search is a **profile** loaded from YAML, not a slot. One profile is shipped: `andrew` (`domain: software`). Product HTTP is API-first (`cmd/api`). Collectors debug HTTP (`cmd/agent`) is development-only. Search phrases exist only in `config/profiles/*.yaml`. The browser does not send queries or scoring phrases.
+MVP is **single-tenant** (no auth). The unit of search is a **profile** loaded from YAML, not a slot. Two profiles are shipped: `andrew` (`domain: software`) and `lada` (`domain: architecture`). Product HTTP is API-first (`cmd/api`). Collectors debug HTTP (`cmd/agent`) is development-only. Search phrases exist only in `config/profiles/*.yaml`. The browser does not send queries or scoring phrases.
 
 ## 2. How the system works
 
@@ -10,18 +10,19 @@ MVP is **single-tenant** (no auth). The unit of search is a **profile** loaded f
 
 A profile file (`config/profiles/<id>.yaml`) is the only copy of:
 
-1. **`sources`** — which collectors to poll: the nine aggregators, plus the Consider and Getro source ids in section 2.4.
-2. **`queries`** — stage-1 search strings only. They do not add score. `frontend` and `full-stack` are not in this list.
-3. **`wellfound_roles`** — Wellfound `/role/r/{slug}` segments. They address that one site. They are not search words for other boards and they do not affect the score.
-4. **`gate_role`**, **`gate_hard`**, **`gate_location`**, **`signals_plus`**, **`penalties_soft`**, **`buckets.top`** — the score. `gate_location` holds `allow_countries`, `allow_regions`, and `reject_timezones`. Not returned by `GET /api/v1/profiles`.
+1. **`sources`** — which collectors to poll. The allow-list is the nine software aggregators, the twelve architecture boards, and the Consider and Getro source ids in section 2.4. A file lists only the ids it polls.
+2. **`queries`** — stage-1 search strings only. They do not add score. `frontend` and `full-stack` are not query strings.
+3. **`children`** — optional map of source id → slugs. A listed source gets one ingest child per slug and does not copy `queries`. The slug `catalog` is an empty query. A key that is not in `sources` makes the file invalid. Not returned by `GET /api/v1/profiles`.
+4. **`wellfound_roles`** — Wellfound `/role/r/{slug}` segments. They address that one site. They are not search words for other boards and they do not affect the score. `lada.yaml` leaves this list empty.
+5. **`gate_role`**, **`gate_hard`**, **`gate_location`**, **`signals_plus`**, **`penalties_soft`**, **`buckets.top`** — the score. `gate_location` holds `allow_countries`, `allow_regions`, and `reject_timezones`. Not returned by `GET /api/v1/profiles`.
 
-`domain` is `software` or `architecture`. `architecture.yaml` is not in this tree. Profiles are read on every `List`/`Get` (no cache). They are not created, updated, or deleted over HTTP. The only user-writable field is `user_status` on a match (`NEW` or `HIDDEN`).
+`domain` is `software` or `architecture`. The shipped files are `andrew.yaml` and `lada.yaml`. There is no `architecture.yaml`. Profiles are read on every `List`/`Get` (no cache). They are not created, updated, or deleted over HTTP. The only user-writable field is `user_status` on a match (`NEW` or `HIDDEN`).
 
-**Stage 1** is ingest. It does not score. A profile run expands `sources` × `queries` into child `IngestSourceWorkflow`s: keyword children for query sources, `wellfound_roles` children for Wellfound, one catalog child for `we_work_remotely` / `vue_jobs` / `golang_cafe` (`queries` ignored), one catalog child per `consider_*` source (`Queries` set, lock segment `catalog`), and one keyword child per `getro_*` query. Redis keys are `ingest:lock:{source_id}:{query_segment}` and `ingest:cooldown:{source_id}:{query_segment}`; an empty query uses the segment `catalog`.
+**Stage 1** is ingest. It does not score. A profile run expands `sources` into child `IngestSourceWorkflow`s. Keyword sources, including `getro_*` and any source with no `children` entry, get one child per `queries` phrase. Wellfound gets one child per `wellfound_roles` slug. `we_work_remotely`, `vue_jobs`, and `golang_cafe` get one catalog child (`queries` ignored). Each `consider_*` source gets one catalog child (`Queries` set, lock segment `catalog`). A source listed in `children` gets one child per slug and does not copy `queries`. Redis keys are `ingest:lock:{source_id}:{query_segment}` and `ingest:cooldown:{source_id}:{query_segment}`; an empty query uses the segment `catalog`. Architecture source ids use a fixed 12-hour cooldown. Other sources use `JOBHOUND_INGEST_COOLDOWN_TTL_SEC` (default 3600). Ingest drops a row whose `posted_at` is known and strictly older than 30 days, or 90 days when the source id is an architecture board. A zero `posted_at` is stored.
 
-**Stage 2** scores stored rows whose `first_seen_at` is inside 10 days before `profile_runs.started_at`, and rows whose `posted_at` is already older than 30 days. All five steps always run. Nothing returns on the first hit. Score is the sum of signal deltas. The bucket is chosen at the end: any gate signal is `REJECTED`; otherwise `score >= buckets.top` is `TOP`; otherwise `REVIEW`, including 0 and negative. Phrase match is case-insensitive and word-bounded (`java` does not hit `javascript`). Country and region codes match the whole code, case-insensitive.
+**Stage 2** scores stored rows whose `first_seen_at` is inside 10 days before `profile_runs.started_at`, and rows whose `posted_at` is already older than the profile cutoff: 30 days when `domain` is `software`, 90 when `domain` is `architecture`. All five steps always run. Nothing returns on the first hit. Score is the sum of signal deltas. The bucket is chosen at the end: any gate signal is `REJECTED`; otherwise `score >= buckets.top` is `TOP`; otherwise `REVIEW`, including 0 and negative. Phrase match is case-insensitive and word-bounded (`java` does not hit `javascript`). Country and region codes match the whole code, case-insensitive. Diacritics are not folded.
 
-`gate_role` is title only: one `GATE_ROLE` per phrase, delta 0, no negation. `gate_hard` is title, description, and `location.raw`, negation-checked: one `GATE_HARD` per phrase that still hits. `gate_location`: a known country or region that misses both allow lists emits one `CUT_LOCATION` per code (another allowed code does not cancel it); empty allow lists, or empty job countries and regions, are not a reject. Timezone phrases match title, description, `location.raw`, and `location.timezone`, negation-checked, one `CUT_TIMEZONE` each. A known `posted_at` strictly older than `PostedAtRejectDays` (30) emits `CUT_POSTED_AT`; a zero `posted_at` is not a reject. `signals_plus` walks title terms, then body terms up to `text.max_total` (a term after the cap still fires with delta 0), then salary (parsed upper bound against `min_eur_year` or `min_usd_year`; no salary and an unparseable string add nothing), then freshness (`posted_at`, else `first_seen_at`: within 3 days `days_3`, else within 7 days `days_7`). `penalties_soft` emits one `PENALTY` per group: a title hit fires once even under `min_occurrences`; body hits fire at the threshold (`0` and `1` both mean one hit); negation runs only when the group sets `check_negation`. The negation window is the 50 characters before the phrase, clamped at the previous `.`, `!`, or `?`; `not`, `no`, `n't`, or a `non-` prefix drops the hit. `queries` do not score. Weights, the body cap, `buckets.top`, and `usd_per_eur` are profile YAML. There is no `min_score` parameter, no `PASSED` bucket, and no LLM. A signal is `{code, rule, phrase, delta, occurrences}` with codes `GATE_ROLE`, `GATE_HARD`, `CUT_LOCATION`, `CUT_TIMEZONE`, `CUT_POSTED_AT`, `PLUS`, `PENALTY`. Every list returns its scores, including 0 and below. The default bucket is `TOP`.
+`gate_role` is title only: one `GATE_ROLE` per phrase, delta 0, no negation. `gate_hard` is title, description, and `location.raw`, negation-checked: one `GATE_HARD` per phrase that still hits. `gate_location`: a known country or region that misses both allow lists emits one `CUT_LOCATION` per code (another allowed code does not cancel it); empty allow lists, or empty job countries and regions, are not a reject. Timezone phrases match title, description, `location.raw`, and `location.timezone`, negation-checked, one `CUT_TIMEZONE` each. A known `posted_at` strictly older than that profile cutoff emits `CUT_POSTED_AT`; a zero `posted_at` is not a reject. `signals_plus` walks title terms, then body terms up to `text.max_total` (a term after the cap still fires with delta 0), then salary (parsed upper bound against `min_eur_year` or `min_usd_year`; no salary and an unparseable string add nothing), then freshness (`posted_at`, else `first_seen_at`: within 3 days `days_3`, else within 7 days `days_7`). `penalties_soft` emits one `PENALTY` per group: a title hit fires once even under `min_occurrences`; body hits fire at the threshold (`0` and `1` both mean one hit); negation runs only when the group sets `check_negation`. The negation window is the 50 characters before the phrase, clamped at the previous `.`, `!`, or `?`; `not`, `no`, `n't`, or a `non-` prefix drops the hit. `queries` do not score. Weights, the body cap, `buckets.top`, and `usd_per_eur` are profile YAML. There is no `min_score` parameter, no `PASSED` bucket, and no LLM. A signal is `{code, rule, phrase, delta, occurrences}` with codes `GATE_ROLE`, `GATE_HARD`, `CUT_LOCATION`, `CUT_TIMEZONE`, `CUT_POSTED_AT`, `PLUS`, `PENALTY`. Every list returns its scores, including 0 and below. The default bucket is `TOP`.
 
 One vacancy is one `jobs` row. `id` is `company_key + U+001E + normalized title` (trim, collapse whitespace, lowercase); location is not part of `id`. Re-ingest appends an `openings` element `{country, url, apply_url}` deduped by normalized country + url + apply_url, unions `location.countries` and `location.regions`, and sets `location.raw` to the sorted country labels joined by `", "`. It keeps `first_seen_at`, moves `last_seen_at`, fills an empty `company_website`, and leaves description and salary from the first row. Parent `url` / `apply_url` are the first opening after that sort. A recompute overwrites score, bucket, and signals and keeps `user_status`.
 
@@ -69,8 +70,8 @@ The arrow from `cmd/api` to Temporal is the run start in section 2.3. `cmd/api` 
 1. `POST /api/v1/profiles/{profile_id}/runs` with header `Idempotency-Key` (non-nil UUID) and an empty body. A JSON body is `400`.
 2. The handler writes a `profile_runs` row (`RUNNING`) and starts `ProfileRunWorkflow`, workflow id `profile-run-{profile_id}`, reuse `ALLOW_DUPLICATE` after close. Input is `ProfileRunInput{ProfileID, RunID}` only. Activities re-read the YAML.
 3. A second POST while that execution is open is **409** `PROFILES.RUN_ALREADY_RUNNING`. The same idempotency key returns the same run. The same key with a different profile is **409** `HTTP.IDEMPOTENCY_KEY_CONFLICT`.
-4. Ingest children run at the same time across resources, and in order inside one resource. `builtin` and `golang_cafe` share one lane (one Chromium). Workflow id is `ingest-{source}-{segment}` (`catalog` when the query is empty). Each child takes a Redis lock and respects cooldown. Cooldown and a held lock finish the child workflow successfully with `Skipped` and are counted in `sources_skipped`; they are not activity failures and are not retried. A rate-limited, dead-tenant, or not-built collector child is skipped the same way on the profile run. It is not a failed run. Two profiles share the ingest cooldown.
-5. After each child that stored jobs, and once more when every lane has finished, score jobs with `first_seen_at` inside `ScoreWindowDays` (10) before that run's `started_at`, and jobs whose `posted_at` is set and strictly older than `PostedAtRejectDays` (30) before that same clock. A zero `posted_at` is not a reject by itself. The pass records every fired rule, including a stale `posted_at` as `CUT_POSTED_AT`, and picks the bucket only after that. Upsert `profile_matches` (`bucket`, `score`, `signals`, `run_id`, `updated_at`). `user_status` is not in the update set. The open run's `jobs_scored` and `sources_skipped` update as children finish. A failed score attempt does not delete existing matches.
+4. Ingest children run at the same time across resources, and in order inside one resource. `builtin` and `golang_cafe` share the lane `browser` (one Chromium). `ejobs`, `dezeen_jobs`, and `world_architects` share `architecture-browser`. Every other source is its own lane. Workflow id is `ingest-{source}-{segment}` (`catalog` when the query is empty; spaces in the segment become hyphens). Each child takes a Redis lock and respects cooldown. Cooldown and a held lock finish the child workflow successfully with `Skipped` and are counted in `sources_skipped`; they are not activity failures and are not retried. A rate-limited, dead-tenant, or not-built collector child is skipped the same way on the profile run. It is not a failed run. Two profiles share the ingest cooldown.
+5. After each child that stored jobs, and once more when every lane has finished, score jobs with `first_seen_at` inside `ScoreWindowDays` (10) before that run's `started_at`, and jobs whose `posted_at` is set and strictly older than the profile cutoff before that same clock (`PostedAtRejectDays` 30, or `PostedAtRejectDaysArchitecture` 90 when `domain` is `architecture`). A zero `posted_at` is not a reject by itself. The pass records every fired rule, including a stale `posted_at` as `CUT_POSTED_AT`, and picks the bucket only after that. Upsert `profile_matches` (`bucket`, `score`, `signals`, `run_id`, `updated_at`). `user_status` is not in the update set. The open run's `jobs_scored` and `sources_skipped` update as children finish. A failed score attempt does not delete existing matches.
 6. Mark the run `SUCCEEDED` with those counters. `FAILED` only after Temporal retries. `GET /api/v1/profiles/{profile_id}/runs/latest` reads that row.
 
 **Read / correct**
@@ -96,32 +97,44 @@ Every source implements `collectors.Collector` (`Name` + `Fetch`). Optional: `Qu
 | `wellfound` | wellfound.com | T2: HTML `/role/r/{slug}` + JobPosting JSON-LD; site mutex + 1s delay | one child per `wellfound_roles` slug |
 | `vue_jobs` | vuejobs.com | T2: SSR `__NUXT_DATA__` remote catalog; skip PRO; `Job.URL` = `/jobs/{slug}` | catalog |
 | `golang_cafe` | golang.cafe | **T3 rod** JSON API via shared `browserfetch` (plain HTTP = Vercel 429) | catalog |
+| `bestjobs` | bestjobs.eu | T2: HTML keyword lists + `/api/proxy/v2/jobs` | one child per `queries` phrase (`-in-romania` and `-in-remote`) |
+| `hipo` | hipo.ro | T2: HTML category pages | one child per `children.hipo` slug; the collector ignores the query and always loads `Arhitectura-Design-Proiectare` |
+| `ejobs` | ejobs.ro | **T3 rod** (plain HTTP = Cloudflare 403) | one child per `queries` phrase (`/locuri-de-munca/{words}` and `/remote/{words}`) |
+| `dezeen_jobs` | dezeenjobs.com | **T3 rod** (plain HTTP = Cloudflare 403) | one child per `children` category slug |
+| `riba_jobs` | jobs.architecture.com | T2: HTML category pages | one child per `children` category slug |
+| `landscape_institute` | jobs.landscapeinstitute.org | T2: HTML `/jobs/` (one page) | `children` slug `catalog`; the query is not sent |
+| `archgee` | archgee.com | T2: HTML | one child per `children` slug (`architect`, `landscape-architect`, `remote`; other slugs fetch nothing) |
+| `archinect` | archinect.com | T2: HTML remote region; site mutex + 5s delay | `children` slug `remote` only; any other query fetches nothing |
+| `competitionline` | competitionline.com | T2: unfiltered `/api/jobs/` | `children` slug `catalog`; the query is not sent |
+| `baunetz` | baunetz.de | T2: one `/stellenmarkt/` page | `children` slug `catalog` |
+| `bdla` | bdla.de | T2: HTML job catalog | `children` slug `catalog` |
+| `world_architects` | world-architects.com | **T3 rod** (plain HTTP = Cloudflare 403) | `children` slug `catalog`; the query is not sent |
 | `consider_*` | one Consider host per fund | T1: `GET {host}/jobs` (CSRF) then `POST {host}/api-boards/search-jobs` | one catalog child (`Queries` set, lock segment `catalog`) |
 | `getro_*` | api.getro.com | T1: `POST /api/v2/collections/{collection_id}/search/jobs` | one keyword child per `queries` phrase |
 
-`andrew.yaml` queries: `vue` · `typescript` · `react` · `golang` · `node`. Wellfound slugs: `frontend-engineer` · `full-stack-engineer` · `backend-engineer`.
+`andrew.yaml` queries: `vue` · `typescript` · `react` · `golang` · `node`. Wellfound slugs: `frontend-engineer` · `full-stack-engineer` · `backend-engineer`. `europe_remotely` is commented out of that file; the collector is still built. `lada.yaml` queries: `arhitect proiectant` · `peisagist` · `urbanist`. Its `children` slugs are the category lists in the file (`hipo`, `dezeen_jobs`, `riba_jobs`, `archgee`, and `catalog` for `landscape_institute`, `competitionline`, `baunetz`, `bdla`, `world_architects`, plus `archinect: remote`). `bestjobs` and `ejobs` are keyword sources on that file, so they fan `queries`.
 
-Known source ids are the nine aggregators plus these Consider and Getro ids. Consider: `consider_andreessen_horowitz` · `consider_lightspeed` · `consider_sequoia_capital` · `consider_gv` · `consider_bessemer_ventures` · `consider_balderton_capital` · `consider_notion_capital` · `consider_atlantic_labs` · `consider_battery_ventures` · `consider_panoramic_ventures` · `consider_ivp` · `consider_kleiner_perkins` · `consider_nea` · `consider_sequoia_capital_india` · `consider_union_square_ventures`. Getro: `getro_accel` · `getro_general_catalyst` · `getro_atomico` · `getro_hv_capital` · `getro_point_nine` · `getro_earlybird` · `getro_firstminute` · `getro_craft_ventures`. `djinni` and `dou_ua` are dropped. LinkedIn is **cancelled** (never shipped; no package, no session cookies, no `SessionProvider`). If `JOBHOUND_COLLECTOR_HIMALAYAS_DISABLED`, the worker omits `himalayas`. `golang_cafe` is omitted when the rod fetcher is nil. A listed source with no collector in the worker map increments `sources_skipped`; the run still succeeds.
+Known source ids are the nine software aggregators, the twelve architecture boards above, plus these Consider and Getro ids. Consider: `consider_andreessen_horowitz` · `consider_lightspeed` · `consider_sequoia_capital` · `consider_gv` · `consider_bessemer_ventures` · `consider_balderton_capital` · `consider_notion_capital` · `consider_atlantic_labs` · `consider_battery_ventures` · `consider_panoramic_ventures` · `consider_ivp` · `consider_kleiner_perkins` · `consider_nea` · `consider_sequoia_capital_india` · `consider_union_square_ventures`. Getro: `getro_accel` · `getro_general_catalyst` · `getro_atomico` · `getro_hv_capital` · `getro_point_nine` · `getro_earlybird` · `getro_firstminute` · `getro_craft_ventures`. `djinni` and `dou_ua` are dropped. LinkedIn is **cancelled** (never shipped; no package, no session cookies, no `SessionProvider`). If `JOBHOUND_COLLECTOR_HIMALAYAS_DISABLED`, the worker omits `himalayas`. `golang_cafe` is omitted when the rod fetcher is nil. `ejobs`, `dezeen_jobs`, and `world_architects` stay in the map with a nil fetcher in that case; fetch then errors. A listed source with no collector in the worker map increments `sources_skipped`; the run still succeeds.
 
-Debug HTTP (`cmd/agent`): `GET /health`, `POST /debug/collectors/{europe_remotely,working_nomads,himalayas,builtin,remotify_europe,we_work_remotely,wellfound,vue_jobs,golang_cafe}`, `POST /debug/collectors/consider`, `POST /debug/collectors/getro`.
+Debug HTTP (`cmd/agent`): `GET /health`, `POST /debug/collectors/{europe_remotely,working_nomads,himalayas,builtin,remotify_europe,we_work_remotely,wellfound,vue_jobs,golang_cafe}`, `POST /debug/collectors/consider`, `POST /debug/collectors/getro`. Architecture boards have no debug route.
 
 ### 2.5 What is *not* on the product path
 
 - Stage 3, Claude / Anthropic, `internal/llm`, the global `user_profile` text, slots, the three-slot cap, and `ManualSlotRunWorkflow`.
 - Client keyword defaults (`defaultStage2Exclude.ts`, `EUROPE_HIRING_OK`, a stage-2 rule builder). Phrases are not posted by the browser.
-- `config/profiles/architecture.yaml` and any architecture collector (`docs/02-architecture-profile/`).
+- A file named `architecture.yaml`. The architecture profile is `config/profiles/lada.yaml`, and its collectors are on the product path (`docs/02-architecture-profile/`).
 - Companies and ATS polling, a company-tag signal, `min_score`.
 - Telegram / push, auth, users, payments, scheduled vacancy auto-refresh, GCP deploy.
 - Collectors debug HTTP and `cmd/ipv6proxy` stay; they are not the product path.
 
 ### 2.6 Nuxt (`jobhound_frontend`)
 
-Nuxt 4 under `app/`. Pages call `app/api/publicApi.ts`. No Pinia store for this screen. No keyword editor and no profile-text page.
+Nuxt 4 under `app/`. Dev server listens on **:3002** (`NUXT_PUBLIC_API_BASE_URL` defaults to `http://localhost:3000`). Pages call `app/api/publicApi.ts`. `@pinia/nuxt` is installed; `app/store/index.ts` exports nothing. No keyword editor and no profile-text page. `apiFetch` sets `X-Correlation-ID`. `readApiJson` unwraps `{ ok: true, result }` when that wrapper is present and otherwise uses the JSON body as `T`.
 
 | Route | Behavior |
 |-------|----------|
 | `/` | `getProfiles`. Each row shows `name` and links to `/profiles/{id}`. No create, no delete, no slot cap. The header’s only nav target is `/`. |
-| `/profiles/{id}` | Latest run plus the job list (`PaginatedDataTable`). The run button calls `postProfileRun` with a new UUID and an empty body. While status is `RUNNING`, the page polls `getLatestProfileRun` and `getProfileJobs`. It shows status, `jobs_scored`, and `sources_skipped` when those fields are present. The default tab sends `bucket=TOP` and omits `user_status`, so it is `TOP` and `NEW`. Controls request `bucket=REVIEW` and `bucket=REJECTED`. One control requests `user_status=HIDDEN` and omits `bucket`, so the server default `TOP` still applies; it can patch a row back to `NEW`. Hide calls `patchProfileJob` with `HIDDEN`. An empty `location.countries` and `location.regions` renders a dash. Failures render `error.message`, including an already-open run. Profile phrase blocks and per-job signals are not rendered. |
+| `/profiles/{id}` | Latest run plus the job list (`PaginatedDataTable`, page size 50). Columns: row number, title, company, score, sources, location, first seen (local, minutes), posted (local, or a dash), hide or unhide. The run button calls `postProfileRun` with a new UUID and an empty body. While status is `RUNNING`, the page polls `getLatestProfileRun` and `getProfileJobs` every 2.5s. It shows status, `jobs_scored` (“Parsed N vacancies”), and `sources_skipped` when those fields are present. The default tab sends `bucket=TOP` and omits `user_status`, so it is `TOP` and `NEW`. Controls request `bucket=REVIEW` and `bucket=REJECTED`. One control requests `user_status=HIDDEN` and omits `bucket`, so the server default `TOP` still applies; it can patch a row back to `NEW`. Hide calls `patchProfileJob` with `HIDDEN`. Location prefers `openings` as links (country label, or `Link`); a Recruitee apply URL falls back to the listing or the careers index. With no opening link, countries and regions render as text. Empty countries, regions, and links render a dash. Source labels exist for the nine software aggregators; every other id, including Consider, Getro, and the architecture boards, renders the raw id. Failures render `error.message`, including an already-open run. `PROFILES.NO_RUN` on the latest-run call renders “No run yet”. Profile phrase blocks and per-job signals are not rendered. |
 
 Client functions: `getProfiles`, `postProfileRun`, `getLatestProfileRun`, `getProfileJobs`, `patchProfileJob`. `postProfileRun` sends `Idempotency-Key` and no body. `getProfileJobs` sends `bucket`, `user_status`, `page`, and `limit` only when the caller set them.
 
@@ -183,7 +196,7 @@ jobhound_core/
 │   ├── migrate/             # golang-migrate CLI
 │   ├── retention/           # one-shot job hard-delete
 │   └── ipv6proxy/           # host CONNECT proxy (IPv6-first); started by make docker-up, not Compose
-├── config/profiles/         # andrew.yaml (the only shipped profile)
+├── config/profiles/         # andrew.yaml (software), lada.yaml (architecture)
 ├── data/                    # countries.json (ISO lookup for collectors)
 ├── docker/temporal/         # Temporal dynamic config for Compose
 ├── docs/                    # REPO_SNAPSHOT.md + feature slices (02-architecture-profile, 04-companies-and-ats)
@@ -247,7 +260,7 @@ Non-standard: env names live only in `internal/config`. Feature packages must no
 
 Wire `code` values (registry order; generated copy `internal/publicapi/schema/generated/api-error-registry.json`): `HTTP.INVALID_JSON`, `HTTP.VALIDATION_FAILED`, `HTTP.INVALID_QUERY`, `HTTP.IDEMPOTENCY_KEY_REQUIRED`, `HTTP.INVALID_IDEMPOTENCY_KEY`, `HTTP.IDEMPOTENCY_KEY_CONFLICT`, `PROFILES.NOT_FOUND`, `PROFILES.INVALID_DEFINITION`, `PROFILES.RUN_ALREADY_RUNNING`, `PROFILES.NO_RUN`, `PROFILES.JOB_NOT_IN_SCOPE`, `PROFILES.INVALID_USER_STATUS`, `HTTP.METHOD_NOT_ALLOWED`, `INTERNAL.UNEXPECTED`. Wire struct: `APIErrorBody` / `APIErrorDetail` in `publicapi/schema/errors.go`.
 
-Named score constants in `internal/scoring/schema`: `ScoreWindowDays` = 10, `PostedAtRejectDays` = 30. Weights, the body cap, `buckets.top`, and the currency rate are profile YAML, not Go constants. The 10-day window is not an env key.
+Named score constants in `internal/scoring/schema`: `ScoreWindowDays` = 10, `PostedAtRejectDays` = 30, `PostedAtRejectDaysArchitecture` = 90. Scoring picks 90 when `profile.domain` is `architecture`. Ingest picks 90 when the source id is an architecture board. Weights, the body cap, `buckets.top`, and the currency rate are profile YAML, not Go constants. The 10-day window is not an env key. The 12-hour architecture cooldown is a Go constant (`43200s`), not an env key.
 
 ## 7. Code conventions
 
@@ -283,7 +296,7 @@ No Stripe/Paddle/billing modules.
 - **Runs:** `profile_runs.status` ∈ `RUNNING` | `SUCCEEDED` | `FAILED`. Unique `idempotency_key`. Counters `jobs_scored`, `sources_skipped`.
 - **Matches:** composite PK `(profile_id, job_id)`. `bucket` ∈ `TOP` | `REVIEW` | `REJECTED`. `user_status` ∈ `NEW` | `HIDDEN`, default `NEW`. `signals` JSONB. Index `(profile_id, bucket, user_status, score DESC)`. Scoring upsert omits `user_status`.
 - **Watermarks:** PK `(source_id)` only.
-- **Seeds:** none. `andrew.yaml` is the phrase source.
+- **Seeds:** none. `andrew.yaml` and `lada.yaml` are the phrase sources.
 - **Retention:** hard-delete `jobs` where `last_seen_at` is older than `JOBHOUND_JOB_RETENTION_DAYS` (default 30). `profile_matches.job_id` is `ON DELETE CASCADE`.
 - **SQLite:** test-only GORM driver for storage unit tests — not a runtime target.
 
@@ -306,8 +319,8 @@ No Stripe/Paddle/billing modules.
 
 ### Tests
 
-- **Runner:** `go test`. **43** `*_test.go` files.
-- **Unit (default):** handlers (`httptest`) for the five profile routes, `profiles/impl` YAML load, `scoring/impl` phrase table, `scoring/storage` and `jobs/storage` (often sqlite), collector parse fixtures, ingest coordinator (miniredis).
+- **Runner:** `go test`. **55** `*_test.go` files.
+- **Unit (default):** handlers (`httptest`) for the five profile routes, `profiles/impl` YAML load (including `lada.yaml` and `children`), `scoring/impl` phrase table, `scoring/storage` and `jobs/storage` (often sqlite), collector parse fixtures (software and architecture boards), ingest coordinator (miniredis).
 - **Integration (`//go:build integration`):** `internal/platform/pgsql/migrations_integration_test.go`; `internal/ingest/coordinator_integration_test.go`; `internal/collectors/browserfetch/rod_integration_test.go`. Need env / Compose (`JOBHOUND_DATABASE_URL`, Chromium as applicable).
 - **`tests/`:** empty directory (constitution allows optional `tests/integration/`).
 - **Frontend unit tests:** live in `jobhound_frontend` (`pnpm test:unit`), not in this repo.
@@ -320,7 +333,7 @@ No Stripe/Paddle/billing modules.
 
 - **Production target (constitution):** GCP runtime + secrets. **No** Cloud Run workflow, Dockerfile deploy target, or Artifact Registry config is in this repo yet.
 - **Local / current runtime:** Docker Compose on a laptop (`make docker-up`). Published ports: **5432** Postgres, **6379** Redis, **7233** Temporal gRPC, **8088** Temporal UI, **3000** API, **3001** agent debug HTTP. Host proxy **127.0.0.1:18080** is not a Compose port.
-- **Images:** `jobhound-core:local` (agent/worker/api); migrate uses `Dockerfile.migrate`. Chromium in the app image for Built In + Golang Cafe T3 (`JOBHOUND_BROWSER_NO_SANDBOX=1` as root). `config/profiles` is in the app image.
+- **Images:** `jobhound-core:local` (agent/worker/api); migrate uses `Dockerfile.migrate`. Chromium in the app image for Built In, Golang Cafe, and the architecture rod boards `ejobs`, `dezeen_jobs`, and `world_architects` (`JOBHOUND_BROWSER_NO_SANDBOX=1` as root). `config/profiles` is in the app image.
 - **CORS defaults:** `http://localhost:5173`, `http://localhost:3002` (frontend dev servers — not the API listen address).
 
 ### Environment variable names
@@ -399,8 +412,9 @@ From `internal/config` (single source). Values not listed.
 
 ### Project-specific (remove when turning into a template)
 
-- Job-board collectors (`europe_remotely`, `working_nomads`, `builtin`, `himalayas`, `remotify_europe`, `we_work_remotely`, `wellfound`, `vue_jobs`, `golang_cafe`, Consider `consider_*`, Getro `getro_*`), `browserfetch` / Chromium, and host `cmd/ipv6proxy` for Europe Remotely from Docker
-- Profile YAML (`config/profiles/andrew.yaml`) and gated phrase scoring (`gate_role` / `gate_hard` / `gate_location` / `signals_plus` / `penalties_soft`, buckets `TOP` | `REVIEW` | `REJECTED`)
+- Job-board collectors (the nine software aggregators, the twelve architecture boards, Consider `consider_*`, Getro `getro_*`), `browserfetch` / Chromium, and host `cmd/ipv6proxy` for Europe Remotely from Docker
+- Profile YAML (`config/profiles/andrew.yaml`, `config/profiles/lada.yaml`, including `children`) and gated phrase scoring (`gate_role` / `gate_hard` / `gate_location` / `signals_plus` / `penalties_soft`, buckets `TOP` | `REVIEW` | `REJECTED`)
+- Architecture-board cooldown of 12 hours and the 90-day `posted_at` cutoff for `domain: architecture` and for architecture source ids
 - Content-key job id and `profile_runs` / `profile_matches`
 - Redis ingest lock/cooldown keys `ingest:lock|cooldown:{source_id}:{query_segment}`
 - `data/countries.json`
@@ -412,7 +426,7 @@ From `internal/config` (single source). Values not listed.
 ## 15. Debt and unfinished spots
 
 - **LinkedIn:** cancelled, not planned. No package, no cookies file, no `SessionProvider`.
-- **`architecture.yaml`:** not shipped. Domain value `architecture` exists so a later file can use it.
+- **`lada.yaml`:** shipped (`domain: architecture`). There is no file named `architecture.yaml`.
 - **Worker without Redis URL:** ingest workflows register with nil coordinator; ingest activities cannot take locks (fail closed / incomplete ingest).
 - **No LICENSE**, no OpenAPI. CI and `.env.example` exist (`.github/workflows/ci.yml`, repo-baseline).
 - **README** points at `.env.example` and stays thinner than Compose (no routes, no ports).
@@ -423,6 +437,7 @@ From `internal/config` (single source). Values not listed.
 - **GCP deploy:** named as production target; not implemented in-repo.
 - **Himalayas nil:** if `JOBHOUND_COLLECTOR_HIMALAYAS_DISABLED`, debug route returns 500; worker omits the source from the collector map. A profile that lists it counts a skipped source.
 - **Golang Cafe nil:** constructed only when rod `HTMLDocumentFetcher` exists (`JOBHOUND_BROWSER_ENABLED` + Built In browser path). Without it, the ingest map has no `golang_cafe`.
+- **Architecture browser nil:** `ejobs`, `dezeen_jobs`, and `world_architects` stay in the worker map when rod is off. Fetch then returns `browser fetcher is nil`, and that error is not a skip.
 
 ---
 
