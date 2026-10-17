@@ -900,7 +900,7 @@ func TestEvaluate(t *testing.T) {
 				Buckets: profileschema.Buckets{Top: 6},
 			},
 			job: jobdata.Job{
-				Title: "Arhitect",
+				Title:    "Arhitect",
 				Location: jobdata.Location{Raw: "Strada Gheorghe Lazăr, Brașov, Romania"},
 			},
 			want: Outcome{
@@ -934,7 +934,7 @@ func TestEvaluate(t *testing.T) {
 				Domain:  profileschema.DomainSoftware,
 				Buckets: review,
 			},
-			job: jobdata.Job{Description: "Minimum 10 years of Go."},
+			job:  jobdata.Job{Description: "Minimum 10 years of Go."},
 			want: Outcome{Bucket: schema.BucketReview},
 		},
 		{
@@ -945,7 +945,7 @@ func TestEvaluate(t *testing.T) {
 				},
 				Buckets: review,
 			},
-			job: jobdata.Job{Description: "HVAC coordination on site."},
+			job:  jobdata.Job{Description: "HVAC coordination on site."},
 			want: Outcome{Bucket: schema.BucketReview},
 		},
 		{

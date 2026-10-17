@@ -45,12 +45,12 @@ var relocationPhrases = []string{
 }
 
 var (
-	salaryLeadCurrency  = regexp.MustCompile(`(?i)(€|\$|£|\busd\b|\beur\b|\bgbp\b|us\$)\s*(\d{1,3}(?:[, ]\d{3})+|\d+(?:\.\d+)?)(\s*[kK])?(?:\s*(?:-|\bto\b)\s*(?:€|\$|£|\busd\b|\beur\b|\bgbp\b|us\$)?\s*(\d{1,3}(?:[, ]\d{3})+|\d+(?:\.\d+)?)(\s*[kK])?)?`)
-	salaryTrailCurrency = regexp.MustCompile(`(?i)(\d{1,3}(?:[, ]\d{3})+|\d+(?:\.\d+)?)(\s*[kK])?(?:\s*(?:-|\bto\b)\s*(\d{1,3}(?:[, ]\d{3})+|\d+(?:\.\d+)?)(\s*[kK])?)?\s*\+?\s*-?\s*(€|\$|£|\busd\b|\beur\b|\bgbp\b|us\$)`)
-	salaryPeriod        = regexp.MustCompile(`(?i)^\s*(?:/|\bper\b|\ba\b)?\s*(yearly|annual(?:ly)?|monthly|weekly|hourly|daily|year|month|week|hour|day)\b`)
-	salaryMagnitude     = regexp.MustCompile(`(?i)^\s*(?:million|billion|mm|mn|bn|m|b)\b`)
-	experienceYearsRO   = regexp.MustCompile(`(?i)(\d+)\s*\+?\s*ani\b`)
-	experienceYearsEN   = regexp.MustCompile(`(?i)(\d+)\s*\+?\s*years?\b`)
+	salaryLeadCurrency   = regexp.MustCompile(`(?i)(€|\$|£|\busd\b|\beur\b|\bgbp\b|us\$)\s*(\d{1,3}(?:[, ]\d{3})+|\d+(?:\.\d+)?)(\s*[kK])?(?:\s*(?:-|\bto\b)\s*(?:€|\$|£|\busd\b|\beur\b|\bgbp\b|us\$)?\s*(\d{1,3}(?:[, ]\d{3})+|\d+(?:\.\d+)?)(\s*[kK])?)?`)
+	salaryTrailCurrency  = regexp.MustCompile(`(?i)(\d{1,3}(?:[, ]\d{3})+|\d+(?:\.\d+)?)(\s*[kK])?(?:\s*(?:-|\bto\b)\s*(\d{1,3}(?:[, ]\d{3})+|\d+(?:\.\d+)?)(\s*[kK])?)?\s*\+?\s*-?\s*(€|\$|£|\busd\b|\beur\b|\bgbp\b|us\$)`)
+	salaryPeriod         = regexp.MustCompile(`(?i)^\s*(?:/|\bper\b|\ba\b)?\s*(yearly|annual(?:ly)?|monthly|weekly|hourly|daily|year|month|week|hour|day)\b`)
+	salaryMagnitude      = regexp.MustCompile(`(?i)^\s*(?:million|billion|mm|mn|bn|m|b)\b`)
+	experienceYearsRO    = regexp.MustCompile(`(?i)(\d+)\s*\+?\s*ani\b`)
+	experienceYearsEN    = regexp.MustCompile(`(?i)(\d+)\s*\+?\s*years?\b`)
 	experienceYearsRange = regexp.MustCompile(`(?i)(\d+)\s*[-–]\s*(\d+)\s*\+?\s*(?:years?|ani)\b`)
 )
 
@@ -62,7 +62,7 @@ var foldDiacritics = strings.NewReplacer(
 
 const (
 	architectureMaxExperienceYears = 3
-	wrongDomainPenaltyName           = "wrong_domain"
+	wrongDomainPenaltyName         = "wrong_domain"
 )
 
 // Outcome is the score of one job. It does not set user status or a run id.
