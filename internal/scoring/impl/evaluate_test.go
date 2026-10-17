@@ -888,6 +888,84 @@ func TestEvaluate(t *testing.T) {
 			},
 		},
 		{
+			name: "architecture city terms match location raw with diacritic fold",
+			profile: profileschema.Profile{
+				Domain: profileschema.DomainArchitecture,
+				SignalsPlus: profileschema.SignalsPlus{
+					Text: profileschema.TextSignals{
+						MaxTotal: 4,
+						Terms:    map[string]int{"brasov": 4},
+					},
+				},
+				Buckets: profileschema.Buckets{Top: 6},
+			},
+			job: jobdata.Job{
+				Title: "Arhitect",
+				Location: jobdata.Location{Raw: "Strada Gheorghe Lazăr, Brașov, Romania"},
+			},
+			want: Outcome{
+				Bucket: schema.BucketReview,
+				Score:  4,
+				Signals: []schema.Signal{
+					plus("signals_plus.text", "brasov", 4, 1),
+				},
+			},
+		},
+		{
+			name: "architecture experience over three years is gate hard",
+			profile: profileschema.Profile{
+				Domain:  profileschema.DomainArchitecture,
+				Buckets: review,
+			},
+			job: jobdata.Job{Description: "Minimum 5 years in Revit."},
+			want: Outcome{
+				Bucket: schema.BucketRejected,
+				Signals: []schema.Signal{{
+					Code:        schema.SignalGateHard,
+					Rule:        "experience_years",
+					Phrase:      "5",
+					Occurrences: 1,
+				}},
+			},
+		},
+		{
+			name: "software profile ignores experience years gate",
+			profile: profileschema.Profile{
+				Domain:  profileschema.DomainSoftware,
+				Buckets: review,
+			},
+			job: jobdata.Job{Description: "Minimum 10 years of Go."},
+			want: Outcome{Bucket: schema.BucketReview},
+		},
+		{
+			name: "wrong domain penalty needs two distinct terms",
+			profile: profileschema.Profile{
+				PenaltiesSoft: []profileschema.PenaltyGroup{
+					soft("wrong_domain", -6, 2, false, "hvac", "devops", "revit"),
+				},
+				Buckets: review,
+			},
+			job: jobdata.Job{Description: "HVAC coordination on site."},
+			want: Outcome{Bucket: schema.BucketReview},
+		},
+		{
+			name: "wrong domain penalty fires on two terms",
+			profile: profileschema.Profile{
+				PenaltiesSoft: []profileschema.PenaltyGroup{
+					soft("wrong_domain", -6, 2, false, "hvac", "devops", "revit"),
+				},
+				Buckets: review,
+			},
+			job: jobdata.Job{Description: "HVAC and DevOps pipeline."},
+			want: Outcome{
+				Bucket: schema.BucketReview,
+				Score:  -6,
+				Signals: []schema.Signal{
+					penalty("wrong_domain", "hvac", -6, 2),
+				},
+			},
+		},
+		{
 			name: "architecture stale posted_at uses ninety day cutoff",
 			profile: profileschema.Profile{
 				Domain:  profileschema.DomainArchitecture,

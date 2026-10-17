@@ -4,7 +4,9 @@ domain: architecture
 
 queries:
   - arhitect proiectant
+  - arhitect brasov
   - peisagist
+  - peisagist brasov
   - urbanist
 
 sources:
@@ -106,6 +108,23 @@ gate_role:
   - "inginer instalat"
   - "inginer automat"
   - "electronist"
+  - senior
+  - "sr."
+  - lead
+  - principal
+  - executive
+  - "cloud arhitect"
+  - "arhitect software"
+  - "arhitect it"
+  - "arhitect sisteme"
+  - "arhitect solutii"
+  - "arhitect de santier"
+  - "arhitect vanzari"
+  - gradinar
+  - "desenator tehnic instalatii"
+  - "desenator tehnic structuri"
+  - "desenator tehnic electric"
+  - "proiectant instalatii"
 
 gate_hard:
   - "no visa sponsorship"
@@ -126,8 +145,26 @@ gate_hard:
   - "right to work in ireland"
   - "eligible to work in ireland"
   - "must reside in switzerland"
-  - "drept de semnatura"
-  - "drept de semnătură"
+  - "detinerea dreptului de semnatura"
+  - "drept de semnatura obligatoriu"
+  - "authorized to work in the us"
+  - "authorised to work in the uk"
+  - "eligibility to work in the uk"
+  - "work authorization"
+  - "usa only"
+  - "remote in usa"
+  - "must be based in the uk"
+  - "based in the united kingdom"
+  - "based in the united states"
+  - "riba part 2"
+  - "riba part ii"
+  - "part 3"
+  - "arb registered"
+  - "ncarb"
+  - "licensed architect"
+  - "fluency in german"
+  - "limba germana obligatoriu"
+  - "limba italiana"
 
 gate_location:
   allow_countries:
@@ -216,14 +253,26 @@ signals_plus:
       permit package: 2
       landscape design: 2
       town planning: 2
-      brasov: 2
-      brașov: 2
-      bucuresti: 2
-      bucurești: 2
+      brasov: 4
+      bucuresti: 1
       cluj: 2
       sibiu: 1
       hibrid: 1
       proiectare: 1
+      remote: 3
+      "100% remote": 3
+      "fully remote": 3
+      "work from anywhere": 3
+      "la distanta": 2
+      "de acasa": 2
+      stagiar: 3
+      "fara experienta": 3
+      entry: 2
+      "0-2 ani": 2
+      "recent graduate": 3
+      "experienta profesionala nu este obligatorie": 3
+      "previous professional experience is not required": 3
+      stagiatura: 1
   # Junior. No floor and no penalty: low pay does not cut the match.
   salary:
     min_eur_year: 0
@@ -265,6 +314,40 @@ penalties_soft:
     terms:
       - "part-time"
       - "part time"
+  wrong_domain:
+    weight: -6
+    min_occurrences: 2
+    check_negation: false
+    terms:
+      - instalatii sanitare
+      - hvac
+      - magicad
+      - beton armat
+      - glaser
+      - solidworks
+      - solid edge
+      - cnc
+      - mobilier
+      - azure
+      - devops
+      - kubernetes
+      - vanzari
+      - gis
+  not_active:
+    weight: -3
+    min_occurrences: 1
+    check_negation: false
+    terms:
+      - "nu are o recrutare activa"
+  mid_level:
+    weight: -3
+    min_occurrences: 1
+    check_negation: false
+    terms:
+      - "mid-level"
+      - "middle (2-5"
+      - "2+ years"
+      - "minim 2 ani"
 
 buckets:
   top: 6

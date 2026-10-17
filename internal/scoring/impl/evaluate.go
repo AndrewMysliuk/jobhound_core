@@ -49,6 +49,20 @@ var (
 	salaryTrailCurrency = regexp.MustCompile(`(?i)(\d{1,3}(?:[, ]\d{3})+|\d+(?:\.\d+)?)(\s*[kK])?(?:\s*(?:-|\bto\b)\s*(\d{1,3}(?:[, ]\d{3})+|\d+(?:\.\d+)?)(\s*[kK])?)?\s*\+?\s*-?\s*(€|\$|£|\busd\b|\beur\b|\bgbp\b|us\$)`)
 	salaryPeriod        = regexp.MustCompile(`(?i)^\s*(?:/|\bper\b|\ba\b)?\s*(yearly|annual(?:ly)?|monthly|weekly|hourly|daily|year|month|week|hour|day)\b`)
 	salaryMagnitude     = regexp.MustCompile(`(?i)^\s*(?:million|billion|mm|mn|bn|m|b)\b`)
+	experienceYearsRO   = regexp.MustCompile(`(?i)(\d+)\s*\+?\s*ani\b`)
+	experienceYearsEN   = regexp.MustCompile(`(?i)(\d+)\s*\+?\s*years?\b`)
+	experienceYearsRange = regexp.MustCompile(`(?i)(\d+)\s*[-–]\s*(\d+)\s*\+?\s*(?:years?|ani)\b`)
+)
+
+var foldDiacritics = strings.NewReplacer(
+	"ă", "a", "â", "a", "î", "i", "ș", "s", "ț", "t",
+	"Ă", "A", "Â", "A", "Î", "I", "Ș", "S", "Ț", "T",
+	"ş", "s", "ţ", "t", "Ş", "S", "Ţ", "T",
+)
+
+const (
+	architectureMaxExperienceYears = 3
+	wrongDomainPenaltyName           = "wrong_domain"
 )
 
 // Outcome is the score of one job. It does not set user status or a run id.
@@ -69,6 +83,7 @@ func evaluateAt(profile profileschema.Profile, job jobdata.Job, now time.Time) O
 	var signals []schema.Signal
 	signals = append(signals, matchPhrases(profile.GateRole, false, "gate_role", schema.SignalGateRole, job.Title)...)
 	signals = append(signals, matchPhrases(profile.GateHard, true, "gate_hard", schema.SignalGateHard, job.Title, job.Description, job.Location.Raw)...)
+	signals = append(signals, experienceYearsGate(profile, job)...)
 	signals = append(signals, matchGateLocation(profile, job, now)...)
 	signals = append(signals, matchSignalsPlus(profile, job, now)...)
 	signals = append(signals, matchPenaltiesSoft(profile, job)...)
@@ -92,7 +107,7 @@ func matchSignalsPlus(profile profileschema.Profile, job jobdata.Job, now time.T
 	plus := profile.SignalsPlus
 	var signals []schema.Signal
 	signals = append(signals, matchTermSignals(plus.Title, "signals_plus.title", 0, false, job.Title)...)
-	signals = append(signals, matchTermSignals(plus.Text.Terms, "signals_plus.text", plus.Text.MaxTotal, true, job.Description)...)
+	signals = append(signals, matchTermSignals(plus.Text.Terms, "signals_plus.text", plus.Text.MaxTotal, true, job.Description, job.Location.Raw)...)
 	if signal, ok := salarySignal(plus.Salary, job); ok {
 		signals = append(signals, signal)
 	}
@@ -425,7 +440,11 @@ func matchPenaltiesSoft(profile profileschema.Profile, job jobdata.Job) []schema
 // A title hit qualifies even when the body is under the threshold.
 // Body hits qualify only at the threshold. MinOccurrences below 1 means one hit.
 // Occurrences is the count that met that bar. Negation runs only when the group asks.
+// wrong_domain counts distinct matching terms; MinOccurrences is the distinct-term threshold.
 func penaltySignal(group profileschema.PenaltyGroup, job jobdata.Job) (schema.Signal, bool) {
+	if group.Name == wrongDomainPenaltyName {
+		return wrongDomainPenalty(group, job)
+	}
 	need := group.MinOccurrences
 	if need < 1 {
 		need = 1
@@ -450,6 +469,86 @@ func penaltySignal(group profileschema.PenaltyGroup, job jobdata.Job) (schema.Si
 		}, true
 	}
 	return schema.Signal{}, false
+}
+
+func wrongDomainPenalty(group profileschema.PenaltyGroup, job jobdata.Job) (schema.Signal, bool) {
+	need := group.MinOccurrences
+	if need < 2 {
+		need = 2
+	}
+	var matched []string
+	for _, term := range group.Terms {
+		term = strings.TrimSpace(term)
+		if term == "" {
+			continue
+		}
+		if activeHits(job.Title, term, group.CheckNegation) == 0 &&
+			activeHits(job.Description, term, group.CheckNegation) == 0 {
+			continue
+		}
+		matched = append(matched, term)
+	}
+	if len(matched) < need {
+		return schema.Signal{}, false
+	}
+	return schema.Signal{
+		Code:        schema.SignalPenalty,
+		Rule:        group.Name,
+		Phrase:      matched[0],
+		Delta:       group.Weight,
+		Occurrences: len(matched),
+	}, true
+}
+
+func experienceYearsGate(profile profileschema.Profile, job jobdata.Job) []schema.Signal {
+	if profile.Domain != profileschema.DomainArchitecture {
+		return nil
+	}
+	text := job.Title + "\n" + job.Description
+	maxYears := maxExperienceYears(text)
+	if maxYears <= architectureMaxExperienceYears {
+		return nil
+	}
+	return []schema.Signal{{
+		Code:        schema.SignalGateHard,
+		Rule:        "experience_years",
+		Phrase:      strconv.Itoa(maxYears),
+		Occurrences: 1,
+	}}
+}
+
+func maxExperienceYears(text string) int {
+	folded := foldMatchText(text)
+	max := 0
+	for _, sub := range experienceYearsRange.FindAllStringSubmatch(folded, -1) {
+		max = maxInt(max, atoi(sub[1]), atoi(sub[2]))
+	}
+	for _, sub := range experienceYearsRO.FindAllStringSubmatch(folded, -1) {
+		max = maxInt(max, atoi(sub[1]))
+	}
+	for _, sub := range experienceYearsEN.FindAllStringSubmatch(folded, -1) {
+		max = maxInt(max, atoi(sub[1]))
+	}
+	return max
+}
+
+func atoi(s string) int {
+	n, _ := strconv.Atoi(s)
+	return n
+}
+
+func maxInt(values ...int) int {
+	m := 0
+	for _, v := range values {
+		if v > m {
+			m = v
+		}
+	}
+	return m
+}
+
+func foldMatchText(s string) string {
+	return foldDiacritics.Replace(strings.ToLower(s))
 }
 
 func penaltyOccurrences(titleHits, bodyHits, need int) (int, bool) {
@@ -660,8 +759,8 @@ func activeHits(text, phrase string, checkNegation bool) int {
 	if phrase == "" {
 		return 0
 	}
-	hay := strings.ToLower(text)
-	needle := strings.ToLower(phrase)
+	hay := foldMatchText(text)
+	needle := foldMatchText(phrase)
 	if len(needle) > len(hay) {
 		return 0
 	}

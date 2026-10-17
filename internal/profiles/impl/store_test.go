@@ -227,7 +227,9 @@ func TestFileStoreLoadsAndrew(t *testing.T) {
 	}
 	require.Equal(t, []string{
 		"arhitect proiectant",
+		"arhitect brasov",
 		"peisagist",
+		"peisagist brasov",
 		"urbanist",
 	}, lada.Queries)
 	require.Equal(t, map[string][]string{
@@ -269,7 +271,8 @@ func TestFileStoreLoadsAndrew(t *testing.T) {
 	require.Contains(t, lada.GateRole, "solution architect")
 	require.NotContains(t, lada.GateRole, "technical architect")
 	require.Contains(t, lada.GateHard, "right to work in the uk")
-	require.Contains(t, lada.GateHard, "drept de semnătură")
+	require.Contains(t, lada.GateHard, "drept de semnatura obligatoriu")
+	require.NotContains(t, lada.GateHard, "drept de semnatura")
 	require.NotContains(t, lada.GateHard, "work permit required")
 	require.NotContains(t, lada.GateHard, "itar")
 	require.NotContains(t, lada.GateHard, "govcloud")
@@ -277,7 +280,7 @@ func TestFileStoreLoadsAndrew(t *testing.T) {
 	for _, group := range lada.PenaltiesSoft {
 		ladaPenalties = append(ladaPenalties, group.Name)
 	}
-	require.Equal(t, []string{"agency", "culture_smell", "part_time"}, ladaPenalties)
+	require.Equal(t, []string{"agency", "culture_smell", "mid_level", "not_active", "part_time", "wrong_domain"}, ladaPenalties)
 	for _, phrase := range []string{"designer", "architect", "assistant", "landscape", "junior"} {
 		require.NotContains(t, lada.GateRole, phrase)
 	}
