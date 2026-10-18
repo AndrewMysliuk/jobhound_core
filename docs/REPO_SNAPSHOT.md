@@ -122,7 +122,7 @@ Debug HTTP (`cmd/agent`): `GET /health`, `POST /debug/collectors/{europe_remotel
 
 - Stage 3, Claude / Anthropic, `internal/llm`, the global `user_profile` text, slots, the three-slot cap, and `ManualSlotRunWorkflow`.
 - Client keyword defaults (`defaultStage2Exclude.ts`, `EUROPE_HIRING_OK`, a stage-2 rule builder). Phrases are not posted by the browser.
-- A file named `architecture.yaml`. The architecture profile is `config/profiles/lada.yaml`, and its collectors are on the product path (`docs/02-architecture-profile/`).
+- A file named `architecture.yaml`. The architecture profile is `config/profiles/lada.yaml`, and its collectors are on the product path.
 - Companies and ATS polling, a company-tag signal, `min_score`.
 - Telegram / push, auth, users, payments, scheduled vacancy auto-refresh, GCP deploy.
 - Collectors debug HTTP and `cmd/ipv6proxy` stay; they are not the product path.
@@ -199,7 +199,7 @@ jobhound_core/
 ├── config/profiles/         # andrew.yaml (software), lada.yaml (architecture)
 ├── data/                    # countries.json (ISO lookup for collectors)
 ├── docker/temporal/         # Temporal dynamic config for Compose
-├── docs/                    # REPO_SNAPSHOT.md + feature slices (02-architecture-profile, 04-companies-and-ats)
+├── docs/                    # REPO_SNAPSHOT.md + feature slices (02-companies-and-ats)
 ├── internal/
 │   ├── config/              # JOBHOUND_* names + typed loaders only
 │   ├── domain/              # shared kernel: schema.Job, identity utils
@@ -386,7 +386,7 @@ From `internal/config` (single source). Values not listed.
 | `.cursor/rules/specify-rules.mdc` | yes | Always-applied: stack, `cmd/` vs `internal/`, collectors `schema/`, debughttp layout, Canonical Enum, publicapi JSON Schema, lint gate (`make lint` + fmt/vet; CI), product error registry (`WriteError`, handlers do not pick status or message), anti-patterns, testing, make targets |
 | `.cursor/templates/` | yes | `concept.md`, `schemas-contracts.md`, `tasks.md`, README |
 | `.cursor/skills/audit-feature-tasks/` | yes | audit `*-tasks.md` vs code |
-| `docs/` | `REPO_SNAPSHOT.md`, `02-architecture-profile/`, `04-companies-and-ats/` | — |
+| `docs/` | `REPO_SNAPSHOT.md`, `02-companies-and-ats/` | — |
 
 ## 13. Documentation
 

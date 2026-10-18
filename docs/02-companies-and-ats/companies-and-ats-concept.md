@@ -1,6 +1,6 @@
 # Company database and direct ATS polling — concept
 
-> **Sequence 4.** After [`docs/02-architecture-profile/`](../02-architecture-profile/architecture-profile-concept.md).
+> **Sequence 2.**
 > Contracts and tasks files are intentionally absent until this slice is picked up.
 
 ## Why

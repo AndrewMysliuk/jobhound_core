@@ -848,6 +848,87 @@ func TestEvaluate(t *testing.T) {
 			},
 		},
 		{
+			name: "junior or senior does not fire the level gates",
+			profile: profileschema.Profile{
+				GateRole: []string{"senior", "sr.", "lead", "principal"},
+				Buckets:  review,
+			},
+			job:  jobdata.Job{Title: "Landscape Architect (Junior or Senior)"},
+			want: Outcome{Bucket: schema.BucketReview},
+		},
+		{
+			name: "junior/senior/lead does not fire the level gates",
+			profile: profileschema.Profile{
+				GateRole: []string{"senior", "sr.", "lead", "principal"},
+				Buckets:  review,
+			},
+			job:  jobdata.Job{Title: "Landscape Architect (Junior/Senior/Lead)"},
+			want: Outcome{Bucket: schema.BucketReview},
+		},
+		{
+			name: "jr. or sr. does not fire the level gates",
+			profile: profileschema.Profile{
+				GateRole: []string{"senior", "sr.", "lead", "principal"},
+				Buckets:  review,
+			},
+			job:  jobdata.Job{Title: "Landscape Architect (Jr. or Sr.)"},
+			want: Outcome{Bucket: schema.BucketReview},
+		},
+		{
+			name: "a senior title still rejects",
+			profile: profileschema.Profile{
+				GateRole: []string{"senior", "lead", "principal"},
+				Buckets:  review,
+			},
+			job: jobdata.Job{Title: "Senior Landscape Architect"},
+			want: Outcome{
+				Bucket:  schema.BucketRejected,
+				Signals: []schema.Signal{role("senior", 1)},
+			},
+		},
+		{
+			name: "senior or lead without junior still rejects",
+			profile: profileschema.Profile{
+				GateRole: []string{"senior", "lead", "principal"},
+				Buckets:  review,
+			},
+			job: jobdata.Job{Title: "Senior or Lead Architect"},
+			want: Outcome{
+				Bucket: schema.BucketRejected,
+				Signals: []schema.Signal{
+					role("senior", 1),
+					role("lead", 1),
+				},
+			},
+		},
+		{
+			name: "senior outside a junior disjunction still rejects",
+			profile: profileschema.Profile{
+				GateRole: []string{"senior", "lead", "principal"},
+				Buckets:  review,
+			},
+			job: jobdata.Job{Title: "Senior Architect (Junior or Senior)"},
+			want: Outcome{
+				Bucket:  schema.BucketRejected,
+				Signals: []schema.Signal{role("senior", 1)},
+			},
+		},
+		{
+			name: "deutschkenntnisse is gate hard",
+			profile: profileschema.Profile{
+				GateHard: []string{"deutschkenntnisse", "gute deutschkenntnisse"},
+				Buckets:  review,
+			},
+			job: jobdata.Job{Description: "Wir erwarten sehr gute Deutschkenntnisse."},
+			want: Outcome{
+				Bucket: schema.BucketRejected,
+				Signals: []schema.Signal{
+					hard("deutschkenntnisse", 1),
+					hard("gute deutschkenntnisse", 1),
+				},
+			},
+		},
+		{
 			name: "a gate role with a high score stays rejected",
 			profile: profileschema.Profile{
 				GateRole:    []string{"recruiter"},

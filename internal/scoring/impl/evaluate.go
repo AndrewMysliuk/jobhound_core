@@ -45,13 +45,14 @@ var relocationPhrases = []string{
 }
 
 var (
-	salaryLeadCurrency   = regexp.MustCompile(`(?i)(€|\$|£|\busd\b|\beur\b|\bgbp\b|us\$)\s*(\d{1,3}(?:[, ]\d{3})+|\d+(?:\.\d+)?)(\s*[kK])?(?:\s*(?:-|\bto\b)\s*(?:€|\$|£|\busd\b|\beur\b|\bgbp\b|us\$)?\s*(\d{1,3}(?:[, ]\d{3})+|\d+(?:\.\d+)?)(\s*[kK])?)?`)
-	salaryTrailCurrency  = regexp.MustCompile(`(?i)(\d{1,3}(?:[, ]\d{3})+|\d+(?:\.\d+)?)(\s*[kK])?(?:\s*(?:-|\bto\b)\s*(\d{1,3}(?:[, ]\d{3})+|\d+(?:\.\d+)?)(\s*[kK])?)?\s*\+?\s*-?\s*(€|\$|£|\busd\b|\beur\b|\bgbp\b|us\$)`)
-	salaryPeriod         = regexp.MustCompile(`(?i)^\s*(?:/|\bper\b|\ba\b)?\s*(yearly|annual(?:ly)?|monthly|weekly|hourly|daily|year|month|week|hour|day)\b`)
-	salaryMagnitude      = regexp.MustCompile(`(?i)^\s*(?:million|billion|mm|mn|bn|m|b)\b`)
-	experienceYearsRO    = regexp.MustCompile(`(?i)(\d+)\s*\+?\s*ani\b`)
-	experienceYearsEN    = regexp.MustCompile(`(?i)(\d+)\s*\+?\s*years?\b`)
-	experienceYearsRange = regexp.MustCompile(`(?i)(\d+)\s*[-–]\s*(\d+)\s*\+?\s*(?:years?|ani)\b`)
+	salaryLeadCurrency     = regexp.MustCompile(`(?i)(€|\$|£|\busd\b|\beur\b|\bgbp\b|us\$)\s*(\d{1,3}(?:[, ]\d{3})+|\d+(?:\.\d+)?)(\s*[kK])?(?:\s*(?:-|\bto\b)\s*(?:€|\$|£|\busd\b|\beur\b|\bgbp\b|us\$)?\s*(\d{1,3}(?:[, ]\d{3})+|\d+(?:\.\d+)?)(\s*[kK])?)?`)
+	salaryTrailCurrency    = regexp.MustCompile(`(?i)(\d{1,3}(?:[, ]\d{3})+|\d+(?:\.\d+)?)(\s*[kK])?(?:\s*(?:-|\bto\b)\s*(\d{1,3}(?:[, ]\d{3})+|\d+(?:\.\d+)?)(\s*[kK])?)?\s*\+?\s*-?\s*(€|\$|£|\busd\b|\beur\b|\bgbp\b|us\$)`)
+	salaryPeriod           = regexp.MustCompile(`(?i)^\s*(?:/|\bper\b|\ba\b)?\s*(yearly|annual(?:ly)?|monthly|weekly|hourly|daily|year|month|week|hour|day)\b`)
+	salaryMagnitude        = regexp.MustCompile(`(?i)^\s*(?:million|billion|mm|mn|bn|m|b)\b`)
+	experienceYearsRO      = regexp.MustCompile(`(?i)(\d+)\s*\+?\s*ani\b`)
+	experienceYearsEN      = regexp.MustCompile(`(?i)(\d+)\s*\+?\s*years?\b`)
+	experienceYearsRange   = regexp.MustCompile(`(?i)(\d+)\s*[-–]\s*(\d+)\s*\+?\s*(?:years?|ani)\b`)
+	juniorLevelDisjunction = regexp.MustCompile(`(?i)\b(?:junior|senior|principal|lead|jr\.?|sr\.?)(?:\s*(?:/|[-–—]|\bor\b|\bto\b)\s*(?:junior|senior|principal|lead|jr\.?|sr\.?))+`)
 )
 
 var foldDiacritics = strings.NewReplacer(
@@ -81,7 +82,7 @@ func Evaluate(profile profileschema.Profile, job jobdata.Job) Outcome {
 
 func evaluateAt(profile profileschema.Profile, job jobdata.Job, now time.Time) Outcome {
 	var signals []schema.Signal
-	signals = append(signals, matchPhrases(profile.GateRole, false, "gate_role", schema.SignalGateRole, job.Title)...)
+	signals = append(signals, matchGateRole(profile.GateRole, job.Title)...)
 	signals = append(signals, matchPhrases(profile.GateHard, true, "gate_hard", schema.SignalGateHard, job.Title, job.Description, job.Location.Raw)...)
 	signals = append(signals, experienceYearsGate(profile, job)...)
 	signals = append(signals, matchGateLocation(profile, job, now)...)
@@ -730,6 +731,65 @@ func scoreOf(signals []schema.Signal) int {
 	return score
 }
 
+func matchGateRole(phrases []string, title string) []schema.Signal {
+	spans := juniorLevelSpans(title)
+	var signals []schema.Signal
+	for _, phrase := range phrases {
+		phrase = strings.TrimSpace(phrase)
+		if phrase == "" {
+			continue
+		}
+		var n int
+		if levelGatePhrase(phrase) {
+			n = countHits(title, phrase, false, func(start, length int) bool {
+				end := start + length
+				for _, span := range spans {
+					if start >= span[0] && end <= span[1] {
+						return true
+					}
+				}
+				return false
+			})
+		} else {
+			n = activeHits(title, phrase, false)
+		}
+		if n == 0 {
+			continue
+		}
+		signals = append(signals, schema.Signal{
+			Code:        schema.SignalGateRole,
+			Rule:        "gate_role",
+			Phrase:      phrase,
+			Occurrences: n,
+		})
+	}
+	return signals
+}
+
+func levelGatePhrase(phrase string) bool {
+	switch foldMatchText(phrase) {
+	case "senior", "sr.", "lead", "principal":
+		return true
+	default:
+		return false
+	}
+}
+
+// juniorLevelSpans returns chains like "junior or senior" and "junior/senior/lead".
+// A chain without junior is left for the level gates.
+func juniorLevelSpans(title string) [][2]int {
+	folded := foldMatchText(title)
+	var spans [][2]int
+	for _, loc := range juniorLevelDisjunction.FindAllStringIndex(folded, -1) {
+		span := folded[loc[0]:loc[1]]
+		if activeHits(span, "junior", false) == 0 && activeHits(span, "jr", false) == 0 && activeHits(span, "jr.", false) == 0 {
+			continue
+		}
+		spans = append(spans, [2]int{loc[0], loc[1]})
+	}
+	return spans
+}
+
 func matchPhrases(phrases []string, checkNegation bool, rule string, code schema.SignalCode, fields ...string) []schema.Signal {
 	var signals []schema.Signal
 	for _, phrase := range phrases {
@@ -755,6 +815,10 @@ func matchPhrases(phrases []string, checkNegation bool, rule string, code schema
 }
 
 func activeHits(text, phrase string, checkNegation bool) int {
+	return countHits(text, phrase, checkNegation, nil)
+}
+
+func countHits(text, phrase string, checkNegation bool, skip func(start, length int) bool) int {
 	phrase = strings.TrimSpace(phrase)
 	if phrase == "" {
 		return 0
@@ -771,7 +835,7 @@ func activeHits(text, phrase string, checkNegation bool) int {
 			return n
 		}
 		abs := start + rel
-		if wordBounded(hay, abs, len(needle)) && (!checkNegation || !negated(hay, abs)) {
+		if wordBounded(hay, abs, len(needle)) && (skip == nil || !skip(abs, len(needle))) && (!checkNegation || !negated(hay, abs)) {
 			n++
 		}
 		start = abs + 1
