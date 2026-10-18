@@ -69,8 +69,6 @@ An asserted code needs a quote. The quote is the span in the vacancy (`Bangalore
 
 **Lifecycle:** the profile run scores with phrases immediately. Jobs with no current verdict go to a batch. When the row is written, those jobs are rescored. `user_status` stays as it was.
 
-The one-time backfill is the current TOP and REVIEW pool, plus jobs REJECTED by `GATE_ROLE`. TOP+REVIEW alone never shows the jobs the gate already killed.
-
 Statuses on the job payload: **`off`** (enrich disabled) → **`pending`** (enabled, no row for this hash) → **`ready`**.
 
 ## Answers
@@ -135,7 +133,7 @@ A profile added later is a YAML file over the same verdict. It does not call the
 
 **Start:** `ProfileRunWorkflow` scores the window, then starts `EnrichBatchWorkflow` for job ids that have no row for the current `(prompt_version, model, input_hash)`. The child is abandoned when the parent finishes. Scoring has already completed.
 
-**Backfill:** the same workflow, with the TOP + REVIEW + `GATE_ROLE` set. Not a second code path.
+**Backfill:** the same workflow. Not a second code path. Which vacancies go into the first batch is a decision to make first: [To decide](#to-decide).
 
 **Rescore:** a stored verdict triggers `Evaluate` again for matches of that job. Phrase signals and fact signals are recomputed. `user_status` is not written.
 
@@ -235,6 +233,15 @@ A field's `scored` flag is flipped only after that printout. This slice ships th
 5. After a measured field, set `scored: true` and remove the mapped phrases in that same change. Not in the first implementation pass. The first flip is the five cut answers, not role or stack.
 
 Early check: one fixture vacancy runs through quote coercion and `Evaluate`, produces an `LLM` signal at delta 0, and leaves the bucket on the phrase result.
+
+## To decide
+
+Think this through, then pick one side before the first batch. The catalog is about 4k vacancies.
+
+| Set | What happens |
+| --- | --- |
+| Every raw vacancy, then bucket | One normalized row per text. Top, review, and reject are decided afterwards from those answers. A later profile rescores the same rows and does not call the model. The first pass is the whole catalog. Only a new or changed text goes again. |
+| Reject with today's phrases first, then model only `top` and `review` | The batch is smaller. The rows exist only for what the current profile phrases already kept. A job those phrases rejected never gets answers, including one they rejected by mistake. The next profile, with other phrases, has no row for the rest of the catalog and pays for its own pass. |
 
 ## Out of scope
 
