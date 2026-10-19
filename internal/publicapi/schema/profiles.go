@@ -50,6 +50,7 @@ type ProfileJobOpening struct {
 type ProfileJobSignal struct {
 	Code        string `json:"code"`
 	Rule        string `json:"rule"`
+	Value       string `json:"value,omitempty"`
 	Phrase      string `json:"phrase,omitempty"`
 	Delta       int    `json:"delta"`
 	Occurrences int    `json:"occurrences,omitempty"`
@@ -70,6 +71,7 @@ type ProfileJob struct {
 	LastSeenAt  time.Time           `json:"last_seen_at"`
 	Bucket      string              `json:"bucket"`
 	Score       int                 `json:"score"`
+	FactsStatus string              `json:"facts_status"`
 	Signals     []ProfileJobSignal  `json:"signals"`
 	UserStatus  string              `json:"user_status"`
 }

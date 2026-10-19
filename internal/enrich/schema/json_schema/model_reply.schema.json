@@ -1,0 +1,138 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "office",
+    "hiring_scope",
+    "work_authorization",
+    "timezone",
+    "compensation",
+    "work_mode",
+    "employment_load",
+    "engagement"
+  ],
+  "properties": {
+    "office": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["countries", "regions", "quote", "unknown"],
+      "properties": {
+        "countries": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "regions": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "quote": { "type": ["string", "null"] },
+        "unknown": { "type": "boolean" }
+      }
+    },
+    "hiring_scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "countries", "regions", "quote"],
+      "properties": {
+        "value": {
+          "type": "string",
+          "enum": ["worldwide", "restricted", "unknown"]
+        },
+        "countries": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "regions": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "quote": { "type": ["string", "null"] }
+      }
+    },
+    "work_authorization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "countries", "quote"],
+      "properties": {
+        "value": {
+          "type": "string",
+          "enum": ["none", "required", "unknown"]
+        },
+        "countries": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "quote": { "type": ["string", "null"] }
+      }
+    },
+    "timezone": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "zones", "quote"],
+      "properties": {
+        "value": {
+          "type": "string",
+          "enum": ["open", "restricted", "unknown"]
+        },
+        "zones": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "quote": { "type": ["string", "null"] }
+      }
+    },
+    "compensation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["currency", "min", "max", "period", "quote", "unknown"],
+      "properties": {
+        "currency": { "type": "string" },
+        "min": { "type": ["number", "null"] },
+        "max": { "type": ["number", "null"] },
+        "period": {
+          "type": "string",
+          "enum": ["year", "month", "week", "day", "hour", ""]
+        },
+        "quote": { "type": ["string", "null"] },
+        "unknown": { "type": "boolean" }
+      }
+    },
+    "work_mode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "quote"],
+      "properties": {
+        "value": {
+          "type": "string",
+          "enum": ["remote", "hybrid", "office", "unknown"]
+        },
+        "quote": { "type": ["string", "null"] }
+      }
+    },
+    "employment_load": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "quote"],
+      "properties": {
+        "value": {
+          "type": "string",
+          "enum": ["full_time", "part_time", "unknown"]
+        },
+        "quote": { "type": ["string", "null"] }
+      }
+    },
+    "engagement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "quote"],
+      "properties": {
+        "value": {
+          "type": "string",
+          "enum": ["employment", "contract", "other", "unknown"]
+        },
+        "quote": { "type": ["string", "null"] }
+      }
+    }
+  }
+}

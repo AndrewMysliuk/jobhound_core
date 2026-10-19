@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 
 	jobdata "github.com/andrewmysliuk/jobhound_core/internal/domain/schema"
+	enrichschema "github.com/andrewmysliuk/jobhound_core/internal/enrich/schema"
 	"github.com/andrewmysliuk/jobhound_core/internal/profiles"
 	profileschema "github.com/andrewmysliuk/jobhound_core/internal/profiles/schema"
 	"github.com/andrewmysliuk/jobhound_core/internal/scoring"
@@ -135,6 +136,56 @@ func TestSetUserStatus_notInScope(t *testing.T) {
 	_, err := svc.SetUserStatus(context.Background(), "andrew", "job-1", schema.UserStatusHidden)
 	if !errors.Is(err, scoring.ErrJobNotInScope) {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestListJobs_factsStatusOffWhenNilReader(t *testing.T) {
+	store := &fakeRuns{page: schema.JobPage{
+		Jobs: []schema.ListedJob{{JobID: "a"}, {JobID: "b"}},
+	}}
+	svc := newTestService(store, &fakeStarter{}, time.Now().UTC())
+	got, err := svc.ListJobs(context.Background(), schema.ListJobsParams{ProfileID: "andrew"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Jobs[0].FactsStatus != enrichschema.FactsStatusOff.String() || got.Jobs[1].FactsStatus != enrichschema.FactsStatusOff.String() {
+		t.Fatalf("facts_status = %#v", got.Jobs)
+	}
+}
+
+func TestListJobs_factsStatusFromReader(t *testing.T) {
+	store := &fakeRuns{page: schema.JobPage{
+		Jobs: []schema.ListedJob{{JobID: "ready"}, {JobID: "pending"}},
+	}}
+	statuses := &fakeFactsStatuses{byJob: map[string]enrichschema.FactsStatus{
+		"ready":   enrichschema.FactsStatusReady,
+		"pending": enrichschema.FactsStatusPending,
+	}}
+	svc := New(fakeProfiles{}, store, nil, &fakeStarter{}, nil, statuses)
+	got, err := svc.ListJobs(context.Background(), schema.ListJobsParams{ProfileID: "andrew"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if statuses.calls != 1 {
+		t.Fatalf("Statuses calls = %d", statuses.calls)
+	}
+	if got.Jobs[0].FactsStatus != enrichschema.FactsStatusReady.String() || got.Jobs[1].FactsStatus != enrichschema.FactsStatusPending.String() {
+		t.Fatalf("facts_status = %#v", got.Jobs)
+	}
+}
+
+func TestSetUserStatus_fillsFactsStatus(t *testing.T) {
+	store := &fakeRuns{updated: schema.ListedJob{JobID: "job-1", UserStatus: schema.UserStatusHidden}}
+	statuses := &fakeFactsStatuses{byJob: map[string]enrichschema.FactsStatus{
+		"job-1": enrichschema.FactsStatusReady,
+	}}
+	svc := New(fakeProfiles{}, store, nil, &fakeStarter{}, nil, statuses)
+	got, err := svc.SetUserStatus(context.Background(), "andrew", "job-1", schema.UserStatusHidden)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.FactsStatus != enrichschema.FactsStatusReady.String() {
+		t.Fatalf("facts_status = %q", got.FactsStatus)
 	}
 }
 
@@ -287,7 +338,7 @@ func TestScore(t *testing.T) {
 				upsertErr: tt.upsertErr,
 			}
 			jobs := &fakeJobs{jobs: tt.jobs}
-			svc := New(fakeProfiles{profile: profile}, store, jobs, nil)
+			svc := New(fakeProfiles{profile: profile}, store, jobs, nil, nil, nil)
 			n, err := svc.Score(context.Background(), "andrew", 7)
 			if tt.wantErr {
 				if err == nil {
@@ -326,6 +377,114 @@ func TestScore(t *testing.T) {
 	}
 }
 
+func TestRescoreJobs(t *testing.T) {
+	started := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
+	quote := "Full-time"
+	job := jobdata.Job{
+		ID:          "job-1",
+		Title:       "Vue Engineer",
+		Description: "Full-time. Vue.",
+		FirstSeenAt: started.Add(-24 * time.Hour),
+	}
+	profile := profileschema.Profile{
+		ID:   "andrew",
+		Name: "Andrew",
+		Buckets: profileschema.Buckets{Top: 1},
+	}
+	verdict := enrichschema.Verdict{
+		JobID: job.ID,
+		Facts: enrichschema.ModelReply{
+			Office:            enrichschema.Office{Unknown: true},
+			HiringScope:       enrichschema.HiringScope{Value: "unknown"},
+			WorkAuthorization: enrichschema.WorkAuthorization{Value: "unknown"},
+			Timezone:          enrichschema.TimezoneConstraint{Value: "unknown"},
+			Compensation:      enrichschema.Compensation{Unknown: true},
+			WorkMode:          enrichschema.QuotedValue{Value: "unknown"},
+			EmploymentLoad:    enrichschema.QuotedValue{Value: "full_time", Quote: &quote},
+			Engagement:        enrichschema.QuotedValue{Value: "unknown"},
+		},
+	}
+
+	t.Run("empty ids", func(t *testing.T) {
+		store := &fakeRuns{}
+		svc := New(fakeProfiles{profile: profile}, store, &fakeJobs{}, nil, nil, nil)
+		if err := svc.RescoreJobs(context.Background(), nil); err != nil {
+			t.Fatal(err)
+		}
+		if len(store.matches) != 0 {
+			t.Fatalf("matches = %#v", store.matches)
+		}
+	})
+
+	t.Run("rescored matches keep user_status and emit fact signals", func(t *testing.T) {
+		store := &fakeRuns{
+			runs: []schema.Run{{
+				ID:        7,
+				ProfileID: "andrew",
+				Status:    schema.RunStatusSucceeded,
+				StartedAt: started,
+			}},
+			matches: []schema.Match{
+				{
+					ProfileID:  "andrew",
+					JobID:      job.ID,
+					Bucket:     schema.BucketReview,
+					Score:      4,
+					UserStatus: schema.UserStatusHidden,
+					RunID:      7,
+				},
+				{
+					ProfileID:  "lada",
+					JobID:      job.ID,
+					Bucket:     schema.BucketReview,
+					Score:      2,
+					UserStatus: schema.UserStatusNew,
+					RunID:      7,
+				},
+			},
+		}
+		jobsStore := &fakeJobs{jobs: []jobdata.Job{job}}
+		verdicts := fakeVerdicts{byJob: map[string]enrichschema.Verdict{job.ID: verdict}}
+		svc := New(fakeProfiles{profile: profile}, store, jobsStore, nil, verdicts, nil)
+		if err := svc.RescoreJobs(context.Background(), []string{job.ID}); err != nil {
+			t.Fatal(err)
+		}
+		if len(store.matches) != 2 {
+			t.Fatalf("matches = %#v", store.matches)
+		}
+		byProfile := map[string]schema.Match{}
+		for _, m := range store.matches {
+			byProfile[m.ProfileID] = m
+		}
+		andrew := byProfile["andrew"]
+		if andrew.UserStatus != schema.UserStatusHidden {
+			t.Fatalf("andrew user_status = %s, want HIDDEN", andrew.UserStatus)
+		}
+		if andrew.RunID != 7 {
+			t.Fatalf("andrew run_id = %d, want 7", andrew.RunID)
+		}
+		if !hasLLMSignal(andrew.Signals, "employment_load", "full_time", quote) {
+			t.Fatalf("andrew signals = %#v", andrew.Signals)
+		}
+		lada := byProfile["lada"]
+		if lada.UserStatus != schema.UserStatusNew {
+			t.Fatalf("lada user_status = %s, want NEW", lada.UserStatus)
+		}
+		if !hasLLMSignal(lada.Signals, "employment_load", "full_time", quote) {
+			t.Fatalf("lada signals = %#v", lada.Signals)
+		}
+	})
+}
+
+func hasLLMSignal(signals []schema.Signal, rule, value, phrase string) bool {
+	for _, s := range signals {
+		if s.Code == schema.SignalLLM && s.Rule == rule && s.Value == value && s.Phrase == phrase {
+			return true
+		}
+	}
+	return false
+}
+
 func sameSignals(got, want []schema.Signal) bool {
 	if len(got) != len(want) {
 		return false
@@ -339,7 +498,7 @@ func sameSignals(got, want []schema.Signal) bool {
 }
 
 func newTestService(store *fakeRuns, starter *fakeStarter, now time.Time) *Service {
-	svc := New(fakeProfiles{}, store, nil, starter)
+	svc := New(fakeProfiles{}, store, nil, starter, nil, nil)
 	svc.now = func() time.Time { return now }
 	return svc
 }
@@ -380,6 +539,15 @@ type fakeJobs struct {
 	postedBefore time.Time
 }
 
+func (f *fakeJobs) GetByID(_ context.Context, id string) (jobdata.Job, error) {
+	for _, job := range f.jobs {
+		if job.ID == id {
+			return job, nil
+		}
+	}
+	return jobdata.Job{}, errors.New("job not found")
+}
+
 func (f *fakeJobs) ListFirstSeenSince(_ context.Context, since time.Time) ([]jobdata.Job, error) {
 	f.since = since
 	out := make([]jobdata.Job, 0, len(f.jobs))
@@ -410,6 +578,7 @@ type fakeRuns struct {
 	nextID    int64
 	listed    schema.ListJobsParams
 	page      schema.JobPage
+	updated   schema.ListedJob
 	upsertErr error
 }
 
@@ -507,11 +676,65 @@ func (f *fakeRuns) UpsertMatch(_ context.Context, m schema.Match) error {
 	return nil
 }
 
+func (f *fakeRuns) ListMatchesByJobIDs(_ context.Context, jobIDs []string) ([]schema.Match, error) {
+	want := make(map[string]struct{}, len(jobIDs))
+	for _, id := range jobIDs {
+		want[id] = struct{}{}
+	}
+	out := make([]schema.Match, 0, len(f.matches))
+	for _, m := range f.matches {
+		if _, ok := want[m.JobID]; !ok {
+			continue
+		}
+		out = append(out, schema.Match{
+			ProfileID: m.ProfileID,
+			JobID:     m.JobID,
+			RunID:     m.RunID,
+		})
+	}
+	return out, nil
+}
+
 func (f *fakeRuns) List(_ context.Context, p schema.ListJobsParams) (schema.JobPage, error) {
 	f.listed = p
 	return f.page, nil
 }
 
-func (f *fakeRuns) SetUserStatus(context.Context, string, string, schema.UserStatus) (schema.ListedJob, error) {
-	return schema.ListedJob{}, storage.ErrMatchNotFound
+func (f *fakeRuns) SetUserStatus(_ context.Context, _, _ string, status schema.UserStatus) (schema.ListedJob, error) {
+	if f.updated.JobID == "" {
+		return schema.ListedJob{}, storage.ErrMatchNotFound
+	}
+	out := f.updated
+	out.UserStatus = status
+	return out, nil
+}
+
+type fakeFactsStatuses struct {
+	byJob map[string]enrichschema.FactsStatus
+	calls int
+}
+
+func (f *fakeFactsStatuses) Statuses(_ context.Context, jobIDs []string) (map[string]enrichschema.FactsStatus, error) {
+	f.calls++
+	out := make(map[string]enrichschema.FactsStatus, len(jobIDs))
+	for _, id := range jobIDs {
+		if st, ok := f.byJob[id]; ok {
+			out[id] = st
+		}
+	}
+	return out, nil
+}
+
+type fakeVerdicts struct {
+	byJob map[string]enrichschema.Verdict
+}
+
+func (f fakeVerdicts) ReadyByJobs(_ context.Context, jobs []jobdata.Job) (map[string]enrichschema.Verdict, error) {
+	out := make(map[string]enrichschema.Verdict, len(jobs))
+	for _, job := range jobs {
+		if v, ok := f.byJob[job.ID]; ok {
+			out[job.ID] = v
+		}
+	}
+	return out, nil
 }

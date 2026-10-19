@@ -8,6 +8,8 @@ import (
 
 	"github.com/rs/zerolog"
 
+	jobdata "github.com/andrewmysliuk/jobhound_core/internal/domain/schema"
+	enrichschema "github.com/andrewmysliuk/jobhound_core/internal/enrich/schema"
 	"github.com/andrewmysliuk/jobhound_core/internal/jobs"
 	"github.com/andrewmysliuk/jobhound_core/internal/platform/logging"
 	"github.com/andrewmysliuk/jobhound_core/internal/profiles"
@@ -28,11 +30,18 @@ const (
 	SetRunCountersActivityName = "SetRunCounters"
 )
 
+// VerdictLookup returns ready enrich verdicts for Score. Nil means phrase-only (every job pending).
+// *enrichimpl.Service implements it. Scoring does not import enrich/impl here.
+type VerdictLookup interface {
+	ReadyByJobs(ctx context.Context, jobs []jobdata.Job) (map[string]enrichschema.Verdict, error)
+}
+
 // Activities scores one profile run. It re-reads the YAML; the workflow payload does not carry phrases.
 type Activities struct {
 	Profiles profiles.Store
 	Runs     *storage.Repository
 	Jobs     jobs.JobRepository
+	Verdicts VerdictLookup
 	Log      zerolog.Logger
 }
 
@@ -54,7 +63,7 @@ func (a *Activities) ScoreProfile(ctx context.Context, in schema.ProfileRunInput
 		return schema.ScoreProfileResult{}, fmt.Errorf("score activity: profiles, runs, and jobs are required")
 	}
 	log := logging.EnrichWithContext(ctx, logging.LoggerWithActivity(ctx, a.Log, ScoreProfileActivityName))
-	n, err := scoringimpl.New(a.Profiles, a.Runs, a.Jobs, nil).Score(ctx, in.ProfileID, in.RunID)
+	n, err := scoringimpl.New(a.Profiles, a.Runs, a.Jobs, nil, a.Verdicts, nil).Score(ctx, in.ProfileID, in.RunID)
 	if err != nil {
 		return schema.ScoreProfileResult{}, err
 	}

@@ -27,13 +27,21 @@ type Config struct {
 	Browser BrowserConfig
 	// EuropeRemotely configures the euremotejobs.com collector (optional outbound proxy).
 	EuropeRemotely EuropeRemotelyConfig
+	// Enrich configures the Anthropic batch client. Enabled is false when the API key is empty.
+	Enrich Enrich
 }
 
 // Load reads supported environment variables into Config.
 // For Temporal (worker / client), call LoadTemporalFromEnv separately — it enforces a required address.
 // A non-positive JOBHOUND_JOB_RETENTION_DAYS is an error. Callers pass JobRetentionDays into the retention cutoff.
+// An empty JOBHOUND_ANTHROPIC_API_KEY disables enrich and ignores JOBHOUND_ENRICH_MODEL.
+// A set key with an empty model is an error.
 func Load() (Config, error) {
 	days, err := loadJobRetentionDaysFromEnv()
+	if err != nil {
+		return Config{}, err
+	}
+	enrich, err := loadEnrichFromEnv()
 	if err != nil {
 		return Config{}, err
 	}
@@ -50,5 +58,6 @@ func Load() (Config, error) {
 		BuiltinCollector:   LoadBuiltinCollectorFromEnv(),
 		Browser:            LoadBrowserFromEnv(),
 		EuropeRemotely:     LoadEuropeRemotelyFromEnv(),
+		Enrich:             enrich,
 	}, nil
 }

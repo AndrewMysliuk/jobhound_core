@@ -7,7 +7,7 @@ ENV_FILE ?= .env
 # Pass --env-file only when present (compose still auto-loads .env for interpolation when file exists).
 COMPOSE_ENV := $(shell test -f $(ENV_FILE) && printf '%s' '--env-file $(ENV_FILE)')
 
-.PHONY: build build-retention run run-debug run-worker test test-integration fmt vet lint tidy migrate-up migrate-down migrate-version \
+.PHONY: build build-retention run run-debug run-worker eval test test-integration fmt vet lint tidy migrate-up migrate-down migrate-version \
 	docker-up docker-down docker-down-volumes docker-ps docker-logs docker-migrate \
 	start-ipv6-proxy stop-ipv6-proxy
 
@@ -31,6 +31,9 @@ run-debug: build
 
 run-worker: build
 	bash -c 'if [ -f $(ENV_FILE) ]; then set -a && source $(ENV_FILE) && set +a; fi; exec ./bin/worker'
+
+eval:
+	go run ./cmd/eval
 
 test:
 	go test ./...

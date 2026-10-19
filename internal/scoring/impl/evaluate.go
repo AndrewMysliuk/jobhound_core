@@ -12,6 +12,7 @@ import (
 	"unicode/utf8"
 
 	jobdata "github.com/andrewmysliuk/jobhound_core/internal/domain/schema"
+	enrichschema "github.com/andrewmysliuk/jobhound_core/internal/enrich/schema"
 	profileschema "github.com/andrewmysliuk/jobhound_core/internal/profiles/schema"
 	"github.com/andrewmysliuk/jobhound_core/internal/scoring/schema"
 )
@@ -59,6 +60,7 @@ var foldDiacritics = strings.NewReplacer(
 	"ă", "a", "â", "a", "î", "i", "ș", "s", "ț", "t",
 	"Ă", "A", "Â", "A", "Î", "I", "Ș", "S", "Ț", "T",
 	"ş", "s", "ţ", "t", "Ş", "S", "Ţ", "T",
+	"ä", "a", "ö", "o", "ü", "u", "ß", "ss",
 )
 
 const (
@@ -75,12 +77,13 @@ type Outcome struct {
 
 // Evaluate applies one profile to one job. It does not read storage or the network.
 // The clock is time.Now. Score passes the run start via evaluateAt.
-// All five steps run. The bucket is chosen only after the signals are collected.
-func Evaluate(profile profileschema.Profile, job jobdata.Job) Outcome {
-	return evaluateAt(profile, job, time.Now().UTC())
+// A nil verdict is pending: phrase steps run, fact signals are not added.
+// All five phrase steps run. The bucket is chosen only after the signals are collected.
+func Evaluate(profile profileschema.Profile, job jobdata.Job, verdict *enrichschema.Verdict) Outcome {
+	return evaluateAt(profile, job, time.Now().UTC(), verdict)
 }
 
-func evaluateAt(profile profileschema.Profile, job jobdata.Job, now time.Time) Outcome {
+func evaluateAt(profile profileschema.Profile, job jobdata.Job, now time.Time, verdict *enrichschema.Verdict) Outcome {
 	var signals []schema.Signal
 	signals = append(signals, matchGateRole(profile.GateRole, job.Title)...)
 	signals = append(signals, matchPhrases(profile.GateHard, true, "gate_hard", schema.SignalGateHard, job.Title, job.Description, job.Location.Raw)...)
@@ -88,6 +91,9 @@ func evaluateAt(profile profileschema.Profile, job jobdata.Job, now time.Time) O
 	signals = append(signals, matchGateLocation(profile, job, now)...)
 	signals = append(signals, matchSignalsPlus(profile, job, now)...)
 	signals = append(signals, matchPenaltiesSoft(profile, job)...)
+	if verdict != nil {
+		signals = append(signals, factSignals(profile, job, *verdict)...)
+	}
 	score := scoreOf(signals)
 	return Outcome{
 		Bucket:  chooseBucket(profile, score, signals),
@@ -690,10 +696,21 @@ func postedAtStale(posted, now time.Time, rejectDays int) bool {
 }
 
 func chooseBucket(profile profileschema.Profile, score int, signals []schema.Signal) schema.Bucket {
+	// Phrase / role / location / posted_at gates reject. Fact cuts (facts.*) go to
+	// review so model misses stay visible instead of disappearing into rejected.
+	factCut := false
 	for _, signal := range signals {
-		if isGate(signal.Code) {
-			return schema.BucketRejected
+		if !isGate(signal.Code) {
+			continue
 		}
+		if isFactCut(signal) {
+			factCut = true
+			continue
+		}
+		return schema.BucketRejected
+	}
+	if factCut {
+		return schema.BucketReview
 	}
 	top := profile.Buckets.Top
 	if score >= top {
@@ -703,6 +720,10 @@ func chooseBucket(profile profileschema.Profile, score int, signals []schema.Sig
 		return schema.BucketTop
 	}
 	return schema.BucketReview
+}
+
+func isFactCut(signal schema.Signal) bool {
+	return signal.Code == schema.SignalGateHard && strings.HasPrefix(signal.Rule, "facts.")
 }
 
 func hasTitlePlusSignal(signals []schema.Signal) bool {

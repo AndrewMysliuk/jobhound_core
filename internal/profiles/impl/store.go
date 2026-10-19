@@ -50,6 +50,49 @@ type fileProfile struct {
 	SignalsPlus    fileSignalsPlus             `yaml:"signals_plus"`
 	PenaltiesSoft  map[string]filePenaltyGroup `yaml:"penalties_soft"`
 	Buckets        fileBuckets                 `yaml:"buckets"`
+	Facts          fileFacts                   `yaml:"facts"`
+}
+
+type fileFacts struct {
+	ResidenceRegions  []string                   `yaml:"residence_regions"`
+	Office            fileFactsOffice            `yaml:"office"`
+	HiringScope       fileFactField              `yaml:"hiring_scope"`
+	WorkAuthorization fileFactsWorkAuthorization `yaml:"work_authorization"`
+	Timezone          fileFactsTimezone          `yaml:"timezone"`
+	Compensation      fileFactsCompensation      `yaml:"compensation"`
+	WorkMode          fileFactField              `yaml:"work_mode"`
+	EmploymentLoad    fileFactField              `yaml:"employment_load"`
+	Engagement        fileFactField              `yaml:"engagement"`
+}
+
+type fileFactField struct {
+	Scored bool `yaml:"scored"`
+	Delta  int  `yaml:"delta"`
+}
+
+type fileFactsOffice struct {
+	Scored         bool     `yaml:"scored"`
+	Delta          int      `yaml:"delta"`
+	AllowCountries []string `yaml:"allow_countries"`
+	AllowRegions   []string `yaml:"allow_regions"`
+}
+
+type fileFactsWorkAuthorization struct {
+	Scored bool     `yaml:"scored"`
+	Delta  int      `yaml:"delta"`
+	Gates  []string `yaml:"gates"`
+}
+
+type fileFactsTimezone struct {
+	Scored bool     `yaml:"scored"`
+	Delta  int      `yaml:"delta"`
+	Allow  []string `yaml:"allow"`
+}
+
+type fileFactsCompensation struct {
+	Scored          bool     `yaml:"scored"`
+	Delta           int      `yaml:"delta"`
+	AllowCurrencies []string `yaml:"allow_currencies"`
 }
 
 type fileGateLocation struct {
@@ -195,7 +238,51 @@ func (s *FileStore) load(path, wantID string) (schema.Profile, error) {
 		},
 		PenaltiesSoft: flattenPenalties(raw.PenaltiesSoft),
 		Buckets:       schema.Buckets{Top: raw.Buckets.Top},
+		Facts:         mapFacts(raw.Facts),
 	}, nil
+}
+
+func mapFacts(raw fileFacts) schema.Facts {
+	return schema.Facts{
+		ResidenceRegions: raw.ResidenceRegions,
+		Office: schema.FactsOffice{
+			Scored:         raw.Office.Scored,
+			Delta:          raw.Office.Delta,
+			AllowCountries: raw.Office.AllowCountries,
+			AllowRegions:   raw.Office.AllowRegions,
+		},
+		HiringScope: schema.FactField{
+			Scored: raw.HiringScope.Scored,
+			Delta:  raw.HiringScope.Delta,
+		},
+		WorkAuthorization: schema.FactsWorkAuthorization{
+			Scored: raw.WorkAuthorization.Scored,
+			Delta:  raw.WorkAuthorization.Delta,
+			Gates:  raw.WorkAuthorization.Gates,
+		},
+		Timezone: schema.FactsTimezone{
+			Scored: raw.Timezone.Scored,
+			Delta:  raw.Timezone.Delta,
+			Allow:  raw.Timezone.Allow,
+		},
+		Compensation: schema.FactsCompensation{
+			Scored:          raw.Compensation.Scored,
+			Delta:           raw.Compensation.Delta,
+			AllowCurrencies: raw.Compensation.AllowCurrencies,
+		},
+		WorkMode: schema.FactField{
+			Scored: raw.WorkMode.Scored,
+			Delta:  raw.WorkMode.Delta,
+		},
+		EmploymentLoad: schema.FactField{
+			Scored: raw.EmploymentLoad.Scored,
+			Delta:  raw.EmploymentLoad.Delta,
+		},
+		Engagement: schema.FactField{
+			Scored: raw.Engagement.Scored,
+			Delta:  raw.Engagement.Delta,
+		},
+	}
 }
 
 func flattenPenalties(raw map[string]filePenaltyGroup) []schema.PenaltyGroup {

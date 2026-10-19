@@ -6,6 +6,8 @@ import (
 	"time"
 
 	jobdata "github.com/andrewmysliuk/jobhound_core/internal/domain/schema"
+	enrichschema "github.com/andrewmysliuk/jobhound_core/internal/enrich/schema"
+	profileschema "github.com/andrewmysliuk/jobhound_core/internal/profiles/schema"
 	"github.com/andrewmysliuk/jobhound_core/internal/scoring/schema"
 )
 
@@ -36,17 +38,108 @@ func (s *Service) Score(ctx context.Context, profileID string, runID int64) (int
 		return 0, err
 	}
 	rejectDays := PostedAtRejectDaysForProfile(profile)
-	scored := 0
+	toScore := make([]jobdata.Job, 0, len(listed)+len(stale))
 	for _, job := range scoreJobs(listed, stale) {
 		if job.FirstSeenAt.UTC().Before(since) && !postedAtStale(job.PostedAt, started, rejectDays) {
 			continue
 		}
-		if err := s.runs.UpsertMatch(ctx, matchFrom(profileID, runID, job, evaluateAt(profile, job, started))); err != nil {
+		toScore = append(toScore, job)
+	}
+	verdicts, err := s.loadVerdicts(ctx, toScore)
+	if err != nil {
+		return 0, err
+	}
+	scored := 0
+	for _, job := range toScore {
+		out := evaluateAt(profile, job, started, verdictPtr(verdicts, job.ID))
+		if err := s.runs.UpsertMatch(ctx, matchFrom(profileID, runID, job, out)); err != nil {
 			return scored, err
 		}
 		scored++
 	}
 	return scored, nil
+}
+
+// RescoreJobs re-evaluates existing matches for the given jobs after a verdict is stored.
+// It is not on scoring.API. UpsertMatch leaves user_status unchanged.
+func (s *Service) RescoreJobs(ctx context.Context, jobIDs []string) error {
+	if s == nil || s.profiles == nil || s.runs == nil || s.jobs == nil {
+		return errors.New("scoring: profiles, runs, and jobs are required")
+	}
+	if len(jobIDs) == 0 {
+		return nil
+	}
+	matches, err := s.runs.ListMatchesByJobIDs(ctx, jobIDs)
+	if err != nil {
+		return err
+	}
+	if len(matches) == 0 {
+		return nil
+	}
+
+	jobsByID := make(map[string]jobdata.Job, len(jobIDs))
+	toLoad := make([]jobdata.Job, 0, len(jobIDs))
+	for _, m := range matches {
+		if _, ok := jobsByID[m.JobID]; ok {
+			continue
+		}
+		job, err := s.jobs.GetByID(ctx, m.JobID)
+		if err != nil {
+			return err
+		}
+		jobsByID[m.JobID] = job
+		toLoad = append(toLoad, job)
+	}
+	verdicts, err := s.loadVerdicts(ctx, toLoad)
+	if err != nil {
+		return err
+	}
+
+	profiles := make(map[string]profileschema.Profile)
+	runStarted := make(map[int64]time.Time)
+	for _, m := range matches {
+		profile, ok := profiles[m.ProfileID]
+		if !ok {
+			profile, err = s.profiles.Get(ctx, m.ProfileID)
+			if err != nil {
+				return err
+			}
+			profiles[m.ProfileID] = profile
+		}
+		started, ok := runStarted[m.RunID]
+		if !ok {
+			run, err := s.runs.GetRun(ctx, m.RunID)
+			if err != nil {
+				return err
+			}
+			started = run.StartedAt.UTC()
+			runStarted[m.RunID] = started
+		}
+		job := jobsByID[m.JobID]
+		out := evaluateAt(profile, job, started, verdictPtr(verdicts, job.ID))
+		if err := s.runs.UpsertMatch(ctx, matchFrom(m.ProfileID, m.RunID, job, out)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Service) loadVerdicts(ctx context.Context, jobs []jobdata.Job) (map[string]enrichschema.Verdict, error) {
+	if s.verdicts == nil || len(jobs) == 0 {
+		return nil, nil
+	}
+	return s.verdicts.ReadyByJobs(ctx, jobs)
+}
+
+func verdictPtr(verdicts map[string]enrichschema.Verdict, jobID string) *enrichschema.Verdict {
+	if verdicts == nil {
+		return nil
+	}
+	v, ok := verdicts[jobID]
+	if !ok {
+		return nil
+	}
+	return &v
 }
 
 func scoreJobs(inWindow, stale []jobdata.Job) []jobdata.Job {

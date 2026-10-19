@@ -13,6 +13,8 @@ import (
 
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/sourceids"
 	"github.com/andrewmysliuk/jobhound_core/internal/config"
+	enrichimpl "github.com/andrewmysliuk/jobhound_core/internal/enrich/impl"
+	enrichstorage "github.com/andrewmysliuk/jobhound_core/internal/enrich/storage"
 	jobsstorage "github.com/andrewmysliuk/jobhound_core/internal/jobs/storage"
 	"github.com/andrewmysliuk/jobhound_core/internal/platform/logging"
 	"github.com/andrewmysliuk/jobhound_core/internal/platform/pgsql"
@@ -71,11 +73,20 @@ func main() {
 	defer temporalClient.Close()
 
 	getter := pgsql.NewGetter(gdb)
+	jobsRepo := jobsstorage.NewRepository(getter)
+	runsRepo := scoringstorage.NewRepository(getter)
 	profileStore := profilesimpl.NewFileStore(appCfg.ProfilesDir, sourceids.KnownSourceIDs())
-	scoringSvc := scoringimpl.New(profileStore, scoringstorage.NewRepository(getter), jobsstorage.NewRepository(getter), &scoringworkflows.Starter{
+	starter := &scoringworkflows.Starter{
 		Client:    temporalClient,
 		TaskQueue: temporalCfg.TaskQueue,
-	})
+	}
+	var scoringSvc *scoringimpl.Service
+	if appCfg.Enrich.Enabled {
+		enrichSvc := enrichimpl.New(enrichstorage.NewRepository(getter), jobsRepo, nil, appCfg.Enrich.Model)
+		scoringSvc = scoringimpl.New(profileStore, runsRepo, jobsRepo, starter, nil, enrichSvc)
+	} else {
+		scoringSvc = scoringimpl.New(profileStore, runsRepo, jobsRepo, starter, nil, nil)
+	}
 
 	handler := publicapihandlers.NewHTTPHandler(appCfg.API.CORSAllowedOrigins, publicapihandlers.Deps{
 		Logger:   log,

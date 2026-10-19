@@ -1,0 +1,140 @@
+package impl
+
+import enrichschema "github.com/andrewmysliuk/jobhound_core/internal/enrich/schema"
+
+// factPhraseMaps lists which current phrase lines a facts field replaces for CONFLICT.
+// Strings are explicit copies from config/profiles/*.yaml. lpa, ctc annually, and
+// seniority / role / stack / language / licence lines are intentionally absent.
+var factPhraseMaps = []enrichschema.PhraseMap{
+	{Field: enrichschema.FieldNameOffice, Phrases: locationFactPhrases},
+	{Field: enrichschema.FieldNameHiringScope, Phrases: locationFactPhrases},
+	{Field: enrichschema.FieldNameWorkMode, Phrases: workModeFactPhrases},
+	{Field: enrichschema.FieldNameWorkAuthorization, Phrases: workAuthorizationFactPhrases},
+	{Field: enrichschema.FieldNameTimezone, Phrases: timezoneFactPhrases},
+}
+
+// ambiguous_us plus place / coast / commute / based / located / live / reside
+// lines from office_pressure and matching gate_hard location lines.
+var locationFactPhrases = []string{
+	"must reside in the us",
+	"must reside in the eastern",
+	"must be based in the us",
+	"based in the united states",
+	"based in the us",
+	"reside in the united states",
+	"located in the united states",
+	"us based only",
+	"hiring only within the u.s",
+	"remote in the us",
+	"remote in the usa",
+	"remote in usa",
+	"must live in the state",
+	"candidates residing in the us",
+	"anywhere in the us",
+	"anywhere in the united states",
+	"remote - united states",
+	"remote - usa",
+	"remote (us)",
+	"remote, us",
+	"remote us",
+	"remote - us",
+	"remote within canada or united states",
+	"area applicants",
+	"commuting distance",
+	"commutable",
+	"bay area",
+	"west coast",
+	"east coast",
+	"western hemisphere",
+	"must be based in",
+	"must be located in",
+	"must live in",
+	"should already be based",
+	"candidates who are residing in",
+	"individuals living in",
+	"may live in the following locations",
+	"preference for candidates near",
+	"open to relocation",
+	"open to relocating",
+	"reside or are open to",
+	"relocate to",
+	"willing and able to relocate",
+	"is your home base",
+	"geographic zones",
+	"must reside in switzerland",
+	"usa only",
+	"must be based in the uk",
+	"based in the united kingdom",
+}
+
+// Hybrid and onsite lines from office_pressure.
+var workModeFactPhrases = []string{
+	"in-office",
+	"in office",
+	"hybrid schedule",
+	"hybrid work model",
+	"hybrid role",
+	"hybrid roles",
+	"hybrid-first",
+	"hybrid dynamic",
+	"on-site presence",
+	"onsite presence",
+	"work onsite",
+	"onsite a minimum",
+	"5 days onsite",
+	"onsite five days per week",
+	"not remote/hybrid",
+	"regular time on-site",
+	"location type: on-site",
+	"able to work on-site",
+	"office attendance in",
+	"week from the office",
+	"week in the office",
+	"days/week in office",
+}
+
+// Right-to-work, authorized-to-work, no-visa-sponsorship, and work-permit lines
+// from gate_hard and office_pressure.
+var workAuthorizationFactPhrases = []string{
+	"authorized to work in the united states",
+	"authorized to work in the u.s",
+	"authorized to work in the us",
+	"authorized to work in the usa",
+	"authorized to work lawfully",
+	"authorization to work in the us",
+	"us work authorization",
+	"authorised to work in the uk",
+	"work authorization",
+	"no visa sponsorship",
+	"visa sponsorship is not available",
+	"visa sponsorship: none",
+	"without sponsorship",
+	"no sponsorship needed",
+	"not eligible for visa sponsorship",
+	"right to work in germany",
+	"eligible to work in germany",
+	"right to work in the uk",
+	"eligible to work in the uk",
+	"eligibility to work in the uk",
+	"right to work in france",
+	"eligible to work in france",
+	"right to work in ireland",
+	"eligible to work in ireland",
+	"work permit required",
+}
+
+// gate_location.reject_timezones from both profiles.
+var timezoneFactPhrases = []string{
+	"apac timezone only",
+	"pacific time",
+	"pacific or mountain time",
+	"us pacific",
+	"americas overlap",
+	"us hours",
+	"us working hours",
+	"us eastern time",
+	"eastern standard time",
+	"pacific standard time",
+	"est zone",
+	"time zone between",
+}

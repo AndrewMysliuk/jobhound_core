@@ -15,6 +15,7 @@ type Profile struct {
 	SignalsPlus    SignalsPlus
 	PenaltiesSoft  []PenaltyGroup
 	Buckets        Buckets
+	Facts          Facts
 }
 
 // GateLocation is the allow lists and the rejected timezone phrases.

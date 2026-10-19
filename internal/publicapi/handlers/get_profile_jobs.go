@@ -145,6 +145,7 @@ func (h *HTTPHandler) profileJobPage(page scoringschema.JobPage) schema.ProfileJ
 			signals = append(signals, schema.ProfileJobSignal{
 				Code:        signal.Code.String(),
 				Rule:        signal.Rule,
+				Value:       signal.Value,
 				Phrase:      signal.Phrase,
 				Delta:       signal.Delta,
 				Occurrences: signal.Occurrences,
@@ -183,6 +184,7 @@ func (h *HTTPHandler) profileJobPage(page scoringschema.JobPage) schema.ProfileJ
 			LastSeenAt:  job.LastSeenAt,
 			Bucket:      job.Bucket.String(),
 			Score:       job.Score,
+			FactsStatus: job.FactsStatus,
 			Signals:     signals,
 			UserStatus:  job.UserStatus.String(),
 		})

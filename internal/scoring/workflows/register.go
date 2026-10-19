@@ -19,10 +19,12 @@ type Registrar interface {
 }
 
 // Deps is the set of stores a profile run reads. The workflow payload does not carry the YAML.
+// Verdicts may be nil when enrich is off: Score then adds no fact signals.
 type Deps struct {
 	Profiles profiles.Store
 	Runs     *storage.Repository
 	Jobs     jobs.JobRepository
+	Verdicts scoring_activities.VerdictLookup
 	Log      zerolog.Logger
 }
 
@@ -35,6 +37,7 @@ func New(w Registrar, deps Deps) {
 		Profiles: deps.Profiles,
 		Runs:     deps.Runs,
 		Jobs:     deps.Jobs,
+		Verdicts: deps.Verdicts,
 		Log:      deps.Log,
 	}
 	w.RegisterActivityWithOptions(acts.LoadProfile, activity.RegisterOptions{

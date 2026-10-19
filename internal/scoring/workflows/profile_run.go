@@ -7,6 +7,9 @@ import (
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 
+	enrichschema "github.com/andrewmysliuk/jobhound_core/internal/enrich/schema"
+	enrich_workflows "github.com/andrewmysliuk/jobhound_core/internal/enrich/workflows"
+	enrich_activities "github.com/andrewmysliuk/jobhound_core/internal/enrich/workflows/activities"
 	ingestschema "github.com/andrewmysliuk/jobhound_core/internal/ingest/schema"
 	ingest_workflows "github.com/andrewmysliuk/jobhound_core/internal/ingest/workflows"
 	"github.com/andrewmysliuk/jobhound_core/internal/platform/logging"
@@ -18,8 +21,9 @@ import (
 // ProfileRunWorkflowName is the registered workflow type.
 const ProfileRunWorkflowName = "ProfileRunWorkflow"
 
-// ProfileRunWorkflow ingests the profile's sources, scores the window, and marks the run succeeded.
+// ProfileRunWorkflow ingests the profile's sources, scores the window, kicks off enrich, and marks the run succeeded.
 // A locked, cooling-down, rate-limited, or missing collector child is skipped.
+// Enrich is fire-and-forget: the parent does not wait for the batch.
 func ProfileRunWorkflow(ctx workflow.Context, in scoringschema.ProfileRunInput) error {
 	logger := workflow.GetLogger(ctx)
 	logger.Info("profile run start",
@@ -127,6 +131,7 @@ func ProfileRunWorkflow(ctx workflow.Context, in scoringschema.ProfileRunInput) 
 		logger.Error("score failed", "failure_stage", "score", "error", err.Error())
 		return markFailed(ctx, in.RunID, scoredN, skipped, err)
 	}
+	startEnrichBatch(ctx)
 	err := workflow.ExecuteActivity(ctx, scoring_activities.MarkRunFinishedActivityName, scoringschema.MarkRunFinishedInput{
 		RunID:          in.RunID,
 		Status:         scoringschema.RunStatusSucceeded,
@@ -137,6 +142,34 @@ func ProfileRunWorkflow(ctx workflow.Context, in scoringschema.ProfileRunInput) 
 		return err
 	}
 	return nil
+}
+
+// startEnrichBatch lists jobs without a current verdict and fire-and-forgets EnrichBatchWorkflow.
+// Empty list skips the child. A failed ListMissing or child start does not fail the profile run.
+func startEnrichBatch(ctx workflow.Context) {
+	logger := workflow.GetLogger(ctx)
+	var missing enrichschema.ListMissingResult
+	if err := workflow.ExecuteActivity(ctx, enrich_activities.ListMissingActivityName, enrichschema.ListMissingInput{}).Get(ctx, &missing); err != nil {
+		logger.Warn("enrich list missing skipped", "error", err.Error())
+		return
+	}
+	if len(missing.JobIDs) == 0 {
+		return
+	}
+	childCtx := workflow.WithChildOptions(ctx, workflow.ChildWorkflowOptions{
+		WorkflowID:            enrich_workflows.WorkflowID(missing.PromptVersion, missing.Model, missing.JobIDs),
+		WorkflowIDReusePolicy: enumspb.WORKFLOW_ID_REUSE_POLICY_ALLOW_DUPLICATE_FAILED_ONLY,
+		ParentClosePolicy:     enumspb.PARENT_CLOSE_POLICY_ABANDON,
+	})
+	fut := workflow.ExecuteChildWorkflow(childCtx, enrich_workflows.EnrichBatchWorkflow, enrichschema.EnrichBatchInput{
+		JobIDs:        missing.JobIDs,
+		PromptVersion: missing.PromptVersion,
+		Model:         missing.Model,
+	})
+	// Wait only for the child to be scheduled; do not wait for it to finish.
+	if err := fut.GetChildWorkflowExecution().Get(ctx, nil); err != nil {
+		logger.Warn("enrich child start skipped", "error", err.Error())
+	}
 }
 
 func runIngestChild(ctx workflow.Context, child ingestschema.IngestSourceInput) (ingestschema.IngestSourceOutput, error) {

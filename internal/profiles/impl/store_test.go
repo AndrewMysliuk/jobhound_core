@@ -83,12 +83,7 @@ func TestFileStoreLoadsAndrew(t *testing.T) {
 		"IS", "LI", "NO", "CH", "GB",
 	}, got.GateLocation.AllowCountries)
 	require.Equal(t, []string{"WORLDWIDE", "EUROPE", "EMEA"}, got.GateLocation.AllowRegions)
-	for _, phrase := range []string{"pacific time", "apac timezone only", "americas overlap"} {
-		require.Contains(t, got.GateLocation.RejectTimezones, phrase)
-	}
-	for _, phrase := range got.GateLocation.RejectTimezones {
-		require.NotContains(t, phrase, "utc")
-	}
+	require.Empty(t, got.GateLocation.RejectTimezones)
 
 	require.Contains(t, got.GateRole, "recruiter")
 	require.Contains(t, got.GateRole, "manager")
@@ -110,15 +105,19 @@ func TestFileStoreLoadsAndrew(t *testing.T) {
 	}
 
 	for _, phrase := range []string{
-		"authorized to work in the us",
-		"authorized to work in the united states",
-		"us work authorization",
 		"security clearance",
-		"no visa sponsorship",
 		"deferred compensation",
 	} {
 		require.Contains(t, got.GateHard, phrase)
 		require.NotContains(t, got.GateRole, phrase)
+	}
+	for _, phrase := range []string{
+		"authorized to work in the us",
+		"authorized to work in the united states",
+		"us work authorization",
+		"no visa sponsorship",
+	} {
+		require.NotContains(t, got.GateHard, phrase)
 	}
 
 	require.Equal(t, map[string]int{
@@ -137,6 +136,20 @@ func TestFileStoreLoadsAndrew(t *testing.T) {
 	require.Equal(t, 2, got.SignalsPlus.Freshness.Days3)
 	require.Equal(t, 1, got.SignalsPlus.Freshness.Days7)
 	require.Equal(t, 6, got.Buckets.Top)
+	require.Equal(t, []string{"EUROPE", "US"}, got.Facts.ResidenceRegions)
+	require.True(t, got.Facts.Office.Scored)
+	require.Equal(t, got.GateLocation.AllowCountries, got.Facts.Office.AllowCountries)
+	require.Equal(t, []string{"EUROPE", "EMEA", "WORLDWIDE"}, got.Facts.Office.AllowRegions)
+	require.True(t, got.Facts.HiringScope.Scored)
+	require.True(t, got.Facts.WorkAuthorization.Scored)
+	require.Equal(t, []string{"required"}, got.Facts.WorkAuthorization.Gates)
+	require.True(t, got.Facts.Timezone.Scored)
+	require.Equal(t, []string{"CET", "GMT", "EET"}, got.Facts.Timezone.Allow)
+	require.False(t, got.Facts.Compensation.Scored)
+	require.Equal(t, []string{"EUR", "USD", "GBP"}, got.Facts.Compensation.AllowCurrencies)
+	require.False(t, got.Facts.WorkMode.Scored)
+	require.False(t, got.Facts.EmploymentLoad.Scored)
+	require.False(t, got.Facts.Engagement.Scored)
 
 	names := make([]string, 0, len(got.PenaltiesSoft))
 	byName := make(map[string]schema.PenaltyGroup, len(got.PenaltiesSoft))
@@ -146,7 +159,6 @@ func TestFileStoreLoadsAndrew(t *testing.T) {
 	}
 	require.Equal(t, []string{
 		"agency",
-		"ambiguous_us",
 		"culture_smell",
 		"foreign_domain",
 		"foreign_stack",
@@ -162,12 +174,12 @@ func TestFileStoreLoadsAndrew(t *testing.T) {
 	require.Contains(t, byName["foreign_stack"].Terms, "php")
 	require.Contains(t, byName["foreign_stack"].Terms, "react-native")
 	require.NotContains(t, byName["foreign_stack"].Terms, "java")
-	require.Contains(t, byName["office_pressure"].Terms, "work permit required")
-	require.Contains(t, byName["office_pressure"].Terms, "right to work in germany")
-	require.True(t, byName["ambiguous_us"].CheckNegation)
+	require.Contains(t, byName["office_pressure"].Terms, "hybrid role")
+	require.NotContains(t, byName["office_pressure"].Terms, "work permit required")
+	require.NotContains(t, byName["office_pressure"].Terms, "right to work in germany")
+	require.NotContains(t, byName["office_pressure"].Terms, "must be based in")
 	require.True(t, byName["part_time"].CheckNegation)
 	require.Contains(t, byName["part_time"].Terms, "part-time")
-	require.Contains(t, byName["ambiguous_us"].Terms, "must reside in the us")
 	for _, name := range names {
 		if name == "foreign_stack" {
 			continue
@@ -180,7 +192,6 @@ func TestFileStoreLoadsAndrew(t *testing.T) {
 	}
 
 	for _, phrase := range []string{"uk only", "russia", "india", "argentina", "must be based in germany", "poland only", "canada only"} {
-		require.NotContains(t, byName["ambiguous_us"].Terms, phrase)
 		require.NotContains(t, byName["office_pressure"].Terms, phrase)
 	}
 	for _, phrase := range []string{"swift", "fraud", "wallet", "machine learning", "android", "soc 2", "java"} {
@@ -264,13 +275,27 @@ func TestFileStoreLoadsAndrew(t *testing.T) {
 	require.Equal(t, 4, lada.SignalsPlus.Text.MaxTotal)
 	require.Equal(t, 6, lada.Buckets.Top)
 	require.NotContains(t, lada.GateLocation.AllowCountries, "US")
+	require.Equal(t, []string{"EUROPE"}, lada.Facts.ResidenceRegions)
+	require.True(t, lada.Facts.Office.Scored)
+	require.Equal(t, lada.GateLocation.AllowCountries, lada.Facts.Office.AllowCountries)
+	require.NotContains(t, lada.Facts.Office.AllowCountries, "US")
+	require.Equal(t, []string{"EUROPE", "EMEA", "WORLDWIDE"}, lada.Facts.Office.AllowRegions)
+	require.True(t, lada.Facts.HiringScope.Scored)
+	require.True(t, lada.Facts.WorkAuthorization.Scored)
+	require.Equal(t, []string{"required"}, lada.Facts.WorkAuthorization.Gates)
+	require.True(t, lada.Facts.Timezone.Scored)
+	require.False(t, lada.Facts.Compensation.Scored)
+	require.False(t, lada.Facts.WorkMode.Scored)
+	require.False(t, lada.Facts.EmploymentLoad.Scored)
+	require.False(t, lada.Facts.Engagement.Scored)
 	require.Empty(t, lada.WellfoundRoles)
+	require.Empty(t, lada.GateLocation.RejectTimezones)
 	require.NotContains(t, lada.GateRole, "intern")
 	require.NotContains(t, lada.GateRole, "internship")
 	require.Contains(t, lada.GateRole, "interior designer")
 	require.Contains(t, lada.GateRole, "solution architect")
 	require.NotContains(t, lada.GateRole, "technical architect")
-	require.Contains(t, lada.GateHard, "right to work in the uk")
+	require.NotContains(t, lada.GateHard, "right to work in the uk")
 	require.Contains(t, lada.GateHard, "drept de semnatura obligatoriu")
 	require.Contains(t, lada.GateHard, "deutschkenntnisse")
 	require.Contains(t, lada.GateHard, "verhandlungssicheres deutsch")
@@ -352,6 +377,17 @@ buckets:
 		{Name: "zebra", Weight: -1, MinOccurrences: 0, CheckNegation: false, Terms: []string{"zzz"}},
 	}, got.PenaltiesSoft)
 	require.Equal(t, 6, got.Buckets.Top)
+	require.Empty(t, got.Facts.ResidenceRegions)
+	require.False(t, got.Facts.Office.Scored)
+	require.False(t, got.Facts.HiringScope.Scored)
+	require.False(t, got.Facts.WorkAuthorization.Scored)
+	require.False(t, got.Facts.Timezone.Scored)
+	require.False(t, got.Facts.Compensation.Scored)
+	require.False(t, got.Facts.WorkMode.Scored)
+	require.False(t, got.Facts.EmploymentLoad.Scored)
+	require.False(t, got.Facts.Engagement.Scored)
+	require.Zero(t, got.Facts.Office.Delta)
+	require.Zero(t, got.Facts.HiringScope.Delta)
 }
 
 func TestFileStoreRejectsUnknownKey(t *testing.T) {

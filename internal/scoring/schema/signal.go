@@ -13,6 +13,8 @@ const (
 	SignalCutPostedAt SignalCode = "CUT_POSTED_AT"
 	SignalPlus        SignalCode = "PLUS"
 	SignalPenalty     SignalCode = "PENALTY"
+	SignalLLM         SignalCode = "LLM"
+	SignalConflict    SignalCode = "CONFLICT"
 )
 
 func (c SignalCode) String() string { return string(c) }
@@ -23,7 +25,7 @@ func (c SignalCode) Pointer() *SignalCode { return &c }
 
 func (c SignalCode) FromValue(s string) (SignalCode, error) {
 	switch SignalCode(s) {
-	case SignalGateRole, SignalGateHard, SignalCutLocation, SignalCutTimezone, SignalCutPostedAt, SignalPlus, SignalPenalty:
+	case SignalGateRole, SignalGateHard, SignalCutLocation, SignalCutTimezone, SignalCutPostedAt, SignalPlus, SignalPenalty, SignalLLM, SignalConflict:
 		return SignalCode(s), nil
 	default:
 		return "", fmt.Errorf("unknown SignalCode %q: valid values are %v", s, ValuesSignalCode())
@@ -31,7 +33,7 @@ func (c SignalCode) FromValue(s string) (SignalCode, error) {
 }
 
 func ValuesSignalCode() []SignalCode {
-	return []SignalCode{SignalGateRole, SignalGateHard, SignalCutLocation, SignalCutTimezone, SignalCutPostedAt, SignalPlus, SignalPenalty}
+	return []SignalCode{SignalGateRole, SignalGateHard, SignalCutLocation, SignalCutTimezone, SignalCutPostedAt, SignalPlus, SignalPenalty, SignalLLM, SignalConflict}
 }
 
 func FromStringSignalCode(s string) (SignalCode, error) {
@@ -46,4 +48,5 @@ type Signal struct {
 	Phrase      string     `json:"phrase,omitempty"`
 	Delta       int        `json:"delta"`
 	Occurrences int        `json:"occurrences,omitempty"`
+	Value       string     `json:"value,omitempty"`
 }

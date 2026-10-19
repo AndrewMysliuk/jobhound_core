@@ -7,6 +7,7 @@ import (
 	"time"
 
 	jobdata "github.com/andrewmysliuk/jobhound_core/internal/domain/schema"
+	enrichschema "github.com/andrewmysliuk/jobhound_core/internal/enrich/schema"
 	profileschema "github.com/andrewmysliuk/jobhound_core/internal/profiles/schema"
 	"github.com/andrewmysliuk/jobhound_core/internal/scoring/schema"
 )
@@ -929,6 +930,20 @@ func TestEvaluate(t *testing.T) {
 			},
 		},
 		{
+			name: "german diacritics fold for gate hard",
+			profile: profileschema.Profile{
+				GateHard: []string{"spate munchner grosse"},
+				Buckets:  review,
+			},
+			job: jobdata.Job{Description: "Späte Münchner Größe"},
+			want: Outcome{
+				Bucket: schema.BucketRejected,
+				Signals: []schema.Signal{
+					hard("spate munchner grosse", 1),
+				},
+			},
+		},
+		{
 			name: "a gate role with a high score stays rejected",
 			profile: profileschema.Profile{
 				GateRole:    []string{"recruiter"},
@@ -1069,9 +1084,798 @@ func TestEvaluate(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			got := evaluateAt(tt.profile, tt.job, now)
+			got := evaluateAt(tt.profile, tt.job, now, nil)
 			if got.Bucket != tt.want.Bucket || got.Score != tt.want.Score || !reflect.DeepEqual(got.Signals, tt.want.Signals) {
 				t.Fatalf("got %+v\nwant %+v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestFactSignals(t *testing.T) {
+	t.Parallel()
+
+	quote := func(s string) *string { return &s }
+	review := profileschema.Buckets{Top: 1}
+	baseFacts := profileschema.Facts{
+		ResidenceRegions: []string{"EUROPE"},
+		Office: profileschema.FactsOffice{
+			AllowCountries: []string{"US", "DE", "FR", "RO", "GB"},
+			AllowRegions:   []string{"EUROPE", "EMEA", "WORLDWIDE"},
+		},
+		WorkAuthorization: profileschema.FactsWorkAuthorization{Gates: []string{"required"}},
+		Timezone:          profileschema.FactsTimezone{Allow: []string{"CET", "GMT", "EET"}},
+		Compensation:      profileschema.FactsCompensation{AllowCurrencies: []string{"EUR", "USD", "GBP"}},
+	}
+
+	tests := []struct {
+		name    string
+		profile profileschema.Profile
+		job     jobdata.Job
+		verdict *enrichschema.Verdict
+		want    []schema.Signal
+	}{
+		{
+			name:    "nil verdict adds no fact signals",
+			profile: profileschema.Profile{Facts: baseFacts, Buckets: review},
+			job:     jobdata.Job{Description: "Remote in Europe"},
+			verdict: nil,
+			want:    nil,
+		},
+		{
+			name:    "unknown fields emit nothing",
+			profile: profileschema.Profile{Facts: baseFacts, Buckets: review},
+			job:     jobdata.Job{Description: "A role"},
+			verdict: &enrichschema.Verdict{Facts: enrichschema.ModelReply{
+				Office:            enrichschema.Office{Unknown: true},
+				HiringScope:       enrichschema.HiringScope{Value: "unknown"},
+				WorkAuthorization: enrichschema.WorkAuthorization{Value: "unknown"},
+				Timezone:          enrichschema.TimezoneConstraint{Value: "unknown"},
+				Compensation:      enrichschema.Compensation{Unknown: true},
+				WorkMode:          enrichschema.QuotedValue{Value: "unknown"},
+				EmploymentLoad:    enrichschema.QuotedValue{Value: "unknown"},
+				Engagement:        enrichschema.QuotedValue{Value: "unknown"},
+			}},
+			want: nil,
+		},
+		{
+			name: "scored false emits LLM at delta 0",
+			profile: profileschema.Profile{
+				Facts:   baseFacts,
+				Buckets: review,
+			},
+			job: jobdata.Job{Description: "Company in Berlin"},
+			verdict: &enrichschema.Verdict{Facts: enrichschema.ModelReply{
+				Office: enrichschema.Office{
+					Countries: []string{"DE"},
+					Quote:     quote("Berlin"),
+				},
+				HiringScope:       enrichschema.HiringScope{Value: "unknown"},
+				WorkAuthorization: enrichschema.WorkAuthorization{Value: "unknown"},
+				Timezone:          enrichschema.TimezoneConstraint{Value: "unknown"},
+				Compensation:      enrichschema.Compensation{Unknown: true},
+				WorkMode:          enrichschema.QuotedValue{Value: "unknown"},
+				EmploymentLoad:    enrichschema.QuotedValue{Value: "unknown"},
+				Engagement:        enrichschema.QuotedValue{Value: "unknown"},
+			}},
+			want: []schema.Signal{{
+				Code:   schema.SignalLLM,
+				Rule:   "office",
+				Phrase: "Berlin",
+				Value:  "DE",
+				Delta:  0,
+			}},
+		},
+		{
+			name: "scored true uses YAML delta",
+			profile: profileschema.Profile{
+				Facts: func() profileschema.Facts {
+					f := baseFacts
+					f.Office.Scored = true
+					f.Office.Delta = 2
+					return f
+				}(),
+				Buckets: review,
+			},
+			job: jobdata.Job{Description: "Company in Berlin"},
+			verdict: &enrichschema.Verdict{Facts: enrichschema.ModelReply{
+				Office: enrichschema.Office{
+					Countries: []string{"DE"},
+					Quote:     quote("Berlin"),
+				},
+				HiringScope:       enrichschema.HiringScope{Value: "unknown"},
+				WorkAuthorization: enrichschema.WorkAuthorization{Value: "unknown"},
+				Timezone:          enrichschema.TimezoneConstraint{Value: "unknown"},
+				Compensation:      enrichschema.Compensation{Unknown: true},
+				WorkMode:          enrichschema.QuotedValue{Value: "unknown"},
+				EmploymentLoad:    enrichschema.QuotedValue{Value: "unknown"},
+				Engagement:        enrichschema.QuotedValue{Value: "unknown"},
+			}},
+			want: []schema.Signal{{
+				Code:   schema.SignalLLM,
+				Rule:   "office",
+				Phrase: "Berlin",
+				Value:  "DE",
+				Delta:  2,
+			}},
+		},
+		{
+			name: "mapped phrase on allow-side office emits CONFLICT",
+			profile: profileschema.Profile{
+				GateHard: []string{"must be based in the us"},
+				Facts:    baseFacts,
+				Buckets:  review,
+			},
+			job: jobdata.Job{Description: "Must be based in the US. HQ in Berlin."},
+			verdict: &enrichschema.Verdict{Facts: enrichschema.ModelReply{
+				Office: enrichschema.Office{
+					Countries: []string{"DE"},
+					Quote:     quote("Berlin"),
+				},
+				HiringScope:       enrichschema.HiringScope{Value: "unknown"},
+				WorkAuthorization: enrichschema.WorkAuthorization{Value: "unknown"},
+				Timezone:          enrichschema.TimezoneConstraint{Value: "unknown"},
+				Compensation:      enrichschema.Compensation{Unknown: true},
+				WorkMode:          enrichschema.QuotedValue{Value: "unknown"},
+				EmploymentLoad:    enrichschema.QuotedValue{Value: "unknown"},
+				Engagement:        enrichschema.QuotedValue{Value: "unknown"},
+			}},
+			want: []schema.Signal{
+				{
+					Code:        schema.SignalGateHard,
+					Rule:        "gate_hard",
+					Phrase:      "must be based in the us",
+					Occurrences: 1,
+				},
+				{
+					Code:   schema.SignalLLM,
+					Rule:   "office",
+					Phrase: "Berlin",
+					Value:  "DE",
+					Delta:  0,
+				},
+				{
+					Code:   schema.SignalConflict,
+					Rule:   "office",
+					Phrase: "Berlin",
+					Value:  "DE",
+					Delta:  0,
+				},
+			},
+		},
+		{
+			name: "unmapped phrase does not emit CONFLICT",
+			profile: profileschema.Profile{
+				GateHard: []string{"security clearance"},
+				Facts:    baseFacts,
+				Buckets:  review,
+			},
+			job: jobdata.Job{Description: "Security clearance required. HQ in Berlin."},
+			verdict: &enrichschema.Verdict{Facts: enrichschema.ModelReply{
+				Office: enrichschema.Office{
+					Countries: []string{"DE"},
+					Quote:     quote("Berlin"),
+				},
+				HiringScope:       enrichschema.HiringScope{Value: "unknown"},
+				WorkAuthorization: enrichschema.WorkAuthorization{Value: "unknown"},
+				Timezone:          enrichschema.TimezoneConstraint{Value: "unknown"},
+				Compensation:      enrichschema.Compensation{Unknown: true},
+				WorkMode:          enrichschema.QuotedValue{Value: "unknown"},
+				EmploymentLoad:    enrichschema.QuotedValue{Value: "unknown"},
+				Engagement:        enrichschema.QuotedValue{Value: "unknown"},
+			}},
+			want: []schema.Signal{
+				{
+					Code:        schema.SignalGateHard,
+					Rule:        "gate_hard",
+					Phrase:      "security clearance",
+					Occurrences: 1,
+				},
+				{
+					Code:   schema.SignalLLM,
+					Rule:   "office",
+					Phrase: "Berlin",
+					Value:  "DE",
+					Delta:  0,
+				},
+			},
+		},
+		{
+			name: "cut-side office does not emit CONFLICT",
+			profile: profileschema.Profile{
+				GateHard: []string{"must be based in the us"},
+				Facts:    baseFacts,
+				Buckets:  review,
+			},
+			job: jobdata.Job{Description: "Must be based in the US. Bangalore office."},
+			verdict: &enrichschema.Verdict{Facts: enrichschema.ModelReply{
+				Office: enrichschema.Office{
+					Countries: []string{"IN"},
+					Quote:     quote("Bangalore"),
+				},
+				HiringScope:       enrichschema.HiringScope{Value: "unknown"},
+				WorkAuthorization: enrichschema.WorkAuthorization{Value: "unknown"},
+				Timezone:          enrichschema.TimezoneConstraint{Value: "unknown"},
+				Compensation:      enrichschema.Compensation{Unknown: true},
+				WorkMode:          enrichschema.QuotedValue{Value: "unknown"},
+				EmploymentLoad:    enrichschema.QuotedValue{Value: "unknown"},
+				Engagement:        enrichschema.QuotedValue{Value: "unknown"},
+			}},
+			want: []schema.Signal{
+				{
+					Code:        schema.SignalGateHard,
+					Rule:        "gate_hard",
+					Phrase:      "must be based in the us",
+					Occurrences: 1,
+				},
+				{
+					Code:   schema.SignalLLM,
+					Rule:   "office",
+					Phrase: "Bangalore",
+					Value:  "IN",
+					Delta:  0,
+				},
+			},
+		},
+		{
+			name: "employment_load emits LLM and does not gate",
+			profile: profileschema.Profile{
+				Facts:   baseFacts,
+				Buckets: review,
+			},
+			job: jobdata.Job{Description: "Full-time role"},
+			verdict: &enrichschema.Verdict{Facts: enrichschema.ModelReply{
+				Office:            enrichschema.Office{Unknown: true},
+				HiringScope:       enrichschema.HiringScope{Value: "unknown"},
+				WorkAuthorization: enrichschema.WorkAuthorization{Value: "unknown"},
+				Timezone:          enrichschema.TimezoneConstraint{Value: "unknown"},
+				Compensation:      enrichschema.Compensation{Unknown: true},
+				WorkMode:          enrichschema.QuotedValue{Value: "unknown"},
+				EmploymentLoad:    enrichschema.QuotedValue{Value: "full_time", Quote: quote("Full-time")},
+				Engagement:        enrichschema.QuotedValue{Value: "unknown"},
+			}},
+			want: []schema.Signal{{
+				Code:   schema.SignalLLM,
+				Rule:   "employment_load",
+				Phrase: "Full-time",
+				Value:  "full_time",
+				Delta:  0,
+			}},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got := evaluateAt(tt.profile, tt.job, time.Now().UTC(), tt.verdict)
+			if !reflect.DeepEqual(got.Signals, tt.want) {
+				t.Fatalf("signals got %+v\nwant %+v", got.Signals, tt.want)
+			}
+			if tt.name == "employment_load emits LLM and does not gate" && got.Bucket == schema.BucketRejected {
+				t.Fatalf("employment_load must not gate, bucket=%s", got.Bucket)
+			}
+			if strings.Contains(tt.name, "CONFLICT") || strings.Contains(tt.name, "mapped phrase") {
+				if got.Bucket != schema.BucketRejected {
+					t.Fatalf("phrase gate must still reject, bucket=%s", got.Bucket)
+				}
+			}
+		})
+	}
+}
+
+func TestFactCuts(t *testing.T) {
+	t.Parallel()
+
+	quote := func(s string) *string { return &s }
+	review := profileschema.Buckets{Top: 1}
+	unknownRest := enrichschema.ModelReply{
+		Office:            enrichschema.Office{Unknown: true},
+		HiringScope:       enrichschema.HiringScope{Value: "unknown"},
+		WorkAuthorization: enrichschema.WorkAuthorization{Value: "unknown"},
+		Timezone:          enrichschema.TimezoneConstraint{Value: "unknown"},
+		Compensation:      enrichschema.Compensation{Unknown: true},
+		WorkMode:          enrichschema.QuotedValue{Value: "unknown"},
+		EmploymentLoad:    enrichschema.QuotedValue{Value: "unknown"},
+		Engagement:        enrichschema.QuotedValue{Value: "unknown"},
+	}
+	baseFacts := profileschema.Facts{
+		ResidenceRegions: []string{"EUROPE"},
+		Office: profileschema.FactsOffice{
+			AllowCountries: []string{"US", "DE", "FR", "RO", "GB"},
+			AllowRegions:   []string{"EUROPE", "EMEA", "WORLDWIDE"},
+		},
+		WorkAuthorization: profileschema.FactsWorkAuthorization{Gates: []string{"required"}},
+		Timezone:          profileschema.FactsTimezone{Allow: []string{"CET", "GMT", "EET"}},
+		Compensation:      profileschema.FactsCompensation{AllowCurrencies: []string{"EUR", "USD", "GBP"}},
+	}
+
+	tests := []struct {
+		name       string
+		profile    profileschema.Profile
+		job        jobdata.Job
+		verdict    *enrichschema.Verdict
+		want       []schema.Signal
+		wantReview bool // fact cuts land in review, not rejected
+	}{
+		{
+			name: "unscored INR emits LLM and ignores cut",
+			profile: profileschema.Profile{
+				Facts:   baseFacts,
+				Buckets: review,
+			},
+			job: jobdata.Job{Description: "25 LPA"},
+			verdict: &enrichschema.Verdict{Facts: func() enrichschema.ModelReply {
+				f := unknownRest
+				f.Compensation = enrichschema.Compensation{Currency: "INR", Quote: quote("25 LPA")}
+				return f
+			}()},
+			want: []schema.Signal{{
+				Code:   schema.SignalLLM,
+				Rule:   "compensation",
+				Phrase: "25 LPA",
+				Value:  "INR",
+				Delta:  0,
+			}},
+		},
+		{
+			name: "unknown does not cut when scored",
+			profile: profileschema.Profile{
+				Facts: func() profileschema.Facts {
+					f := baseFacts
+					f.Compensation.Scored = true
+					f.Office.Scored = true
+					f.HiringScope.Scored = true
+					f.WorkAuthorization.Scored = true
+					f.Timezone.Scored = true
+					return f
+				}(),
+				Buckets: review,
+			},
+			job:     jobdata.Job{Description: "A role"},
+			verdict: &enrichschema.Verdict{Facts: unknownRest},
+			want:    nil,
+		},
+		{
+			name: "scored INR fact-cut goes to review",
+			profile: profileschema.Profile{
+				Facts: func() profileschema.Facts {
+					f := baseFacts
+					f.Compensation.Scored = true
+					return f
+				}(),
+				Buckets: review,
+			},
+			job: jobdata.Job{Description: "25 LPA"},
+			verdict: &enrichschema.Verdict{Facts: func() enrichschema.ModelReply {
+				f := unknownRest
+				f.Compensation = enrichschema.Compensation{Currency: "INR", Quote: quote("25 LPA")}
+				return f
+			}()},
+			want: []schema.Signal{
+				{
+					Code:   schema.SignalLLM,
+					Rule:   "compensation",
+					Phrase: "25 LPA",
+					Value:  "INR",
+					Delta:  0,
+				},
+				{
+					Code:   schema.SignalGateHard,
+					Rule:   "facts.compensation",
+					Phrase: "25 LPA",
+					Value:  "INR",
+					Delta:  0,
+				},
+			},
+			wantReview: true,
+		},
+		{
+			name: "scored INR does not invent an IN office cut",
+			profile: profileschema.Profile{
+				Facts: func() profileschema.Facts {
+					f := baseFacts
+					f.Compensation.Scored = true
+					f.Office.Scored = true
+					return f
+				}(),
+				Buckets: review,
+			},
+			job: jobdata.Job{Description: "25 LPA"},
+			verdict: &enrichschema.Verdict{Facts: func() enrichschema.ModelReply {
+				f := unknownRest
+				f.Compensation = enrichschema.Compensation{Currency: "INR", Quote: quote("25 LPA")}
+				return f
+			}()},
+			want: []schema.Signal{
+				{
+					Code:   schema.SignalLLM,
+					Rule:   "compensation",
+					Phrase: "25 LPA",
+					Value:  "INR",
+					Delta:  0,
+				},
+				{
+					Code:   schema.SignalGateHard,
+					Rule:   "facts.compensation",
+					Phrase: "25 LPA",
+					Value:  "INR",
+					Delta:  0,
+				},
+			},
+			wantReview: true,
+		},
+		{
+			name: "scored office US allowed does not gate",
+			profile: profileschema.Profile{
+				Facts: func() profileschema.Facts {
+					f := baseFacts
+					f.Office.Scored = true
+					return f
+				}(),
+				Buckets: review,
+			},
+			job: jobdata.Job{Description: "US company"},
+			verdict: &enrichschema.Verdict{Facts: func() enrichschema.ModelReply {
+				f := unknownRest
+				f.Office = enrichschema.Office{Countries: []string{"US"}, Quote: quote("United States")}
+				return f
+			}()},
+			want: []schema.Signal{{
+				Code:   schema.SignalLLM,
+				Rule:   "office",
+				Phrase: "United States",
+				Value:  "US",
+				Delta:  0,
+			}},
+		},
+		{
+			name: "scored office US outside allow goes to review",
+			profile: profileschema.Profile{
+				Facts: func() profileschema.Facts {
+					f := baseFacts
+					f.Office.Scored = true
+					f.Office.AllowCountries = []string{"DE", "FR", "RO", "GB"}
+					return f
+				}(),
+				Buckets: review,
+			},
+			job: jobdata.Job{Description: "US company"},
+			verdict: &enrichschema.Verdict{Facts: func() enrichschema.ModelReply {
+				f := unknownRest
+				f.Office = enrichschema.Office{Countries: []string{"US"}, Quote: quote("United States")}
+				return f
+			}()},
+			want: []schema.Signal{
+				{
+					Code:   schema.SignalLLM,
+					Rule:   "office",
+					Phrase: "United States",
+					Value:  "US",
+					Delta:  0,
+				},
+				{
+					Code:   schema.SignalGateHard,
+					Rule:   "facts.office",
+					Phrase: "United States",
+					Value:  "US",
+					Delta:  0,
+				},
+			},
+			wantReview: true,
+		},
+		{
+			name: "scored restricted US goes to review against residence EUROPE only",
+			profile: profileschema.Profile{
+				Facts: func() profileschema.Facts {
+					f := baseFacts
+					f.HiringScope.Scored = true
+					return f
+				}(),
+				Buckets: review,
+			},
+			job: jobdata.Job{Description: "US residents only"},
+			verdict: &enrichschema.Verdict{Facts: func() enrichschema.ModelReply {
+				f := unknownRest
+				f.HiringScope = enrichschema.HiringScope{
+					Value:     "restricted",
+					Countries: []string{"US"},
+					Quote:     quote("US residents only"),
+				}
+				return f
+			}()},
+			want: []schema.Signal{
+				{
+					Code:   schema.SignalLLM,
+					Rule:   "hiring_scope",
+					Phrase: "US residents only",
+					Value:  "US",
+					Delta:  0,
+				},
+				{
+					Code:   schema.SignalGateHard,
+					Rule:   "facts.hiring_scope",
+					Phrase: "US residents only",
+					Value:  "US",
+					Delta:  0,
+				},
+			},
+			wantReview: true,
+		},
+		{
+			name: "scored restricted US allowed when residence includes US",
+			profile: profileschema.Profile{
+				Facts: func() profileschema.Facts {
+					f := baseFacts
+					f.ResidenceRegions = []string{"EUROPE", "US"}
+					f.HiringScope.Scored = true
+					return f
+				}(),
+				Buckets: review,
+			},
+			job: jobdata.Job{Description: "US residents only"},
+			verdict: &enrichschema.Verdict{Facts: func() enrichschema.ModelReply {
+				f := unknownRest
+				f.HiringScope = enrichschema.HiringScope{
+					Value:     "restricted",
+					Countries: []string{"US"},
+					Quote:     quote("US residents only"),
+				}
+				return f
+			}()},
+			want: []schema.Signal{{
+				Code:   schema.SignalLLM,
+				Rule:   "hiring_scope",
+				Phrase: "US residents only",
+				Value:  "US",
+				Delta:  0,
+			}},
+		},
+		{
+			name: "scored restricted FR does not gate against residence EUROPE",
+			profile: profileschema.Profile{
+				Facts: func() profileschema.Facts {
+					f := baseFacts
+					f.HiringScope.Scored = true
+					return f
+				}(),
+				Buckets: review,
+			},
+			job: jobdata.Job{Description: "Candidates in France"},
+			verdict: &enrichschema.Verdict{Facts: func() enrichschema.ModelReply {
+				f := unknownRest
+				f.HiringScope = enrichschema.HiringScope{
+					Value:     "restricted",
+					Countries: []string{"FR"},
+					Quote:     quote("Candidates in France"),
+				}
+				return f
+			}()},
+			want: []schema.Signal{{
+				Code:   schema.SignalLLM,
+				Rule:   "hiring_scope",
+				Phrase: "Candidates in France",
+				Value:  "FR",
+				Delta:  0,
+			}},
+		},
+		{
+			name: "scored restricted EMEA does not gate against residence EUROPE",
+			profile: profileschema.Profile{
+				Facts: func() profileschema.Facts {
+					f := baseFacts
+					f.HiringScope.Scored = true
+					return f
+				}(),
+				Buckets: review,
+			},
+			job: jobdata.Job{Description: "EMEA only"},
+			verdict: &enrichschema.Verdict{Facts: func() enrichschema.ModelReply {
+				f := unknownRest
+				f.HiringScope = enrichschema.HiringScope{
+					Value:   "restricted",
+					Regions: []string{"EMEA"},
+					Quote:   quote("EMEA only"),
+				}
+				return f
+			}()},
+			want: []schema.Signal{{
+				Code:   schema.SignalLLM,
+				Rule:   "hiring_scope",
+				Phrase: "EMEA only",
+				Value:  "EMEA",
+				Delta:  0,
+			}},
+		},
+		{
+			name: "scored restricted LATAM goes to review against residence EUROPE",
+			profile: profileschema.Profile{
+				Facts: func() profileschema.Facts {
+					f := baseFacts
+					f.HiringScope.Scored = true
+					return f
+				}(),
+				Buckets: review,
+			},
+			job: jobdata.Job{Description: "LATAM only"},
+			verdict: &enrichschema.Verdict{Facts: func() enrichschema.ModelReply {
+				f := unknownRest
+				f.HiringScope = enrichschema.HiringScope{
+					Value:   "restricted",
+					Regions: []string{"LATAM"},
+					Quote:   quote("LATAM only"),
+				}
+				return f
+			}()},
+			want: []schema.Signal{
+				{
+					Code:   schema.SignalLLM,
+					Rule:   "hiring_scope",
+					Phrase: "LATAM only",
+					Value:  "LATAM",
+					Delta:  0,
+				},
+				{
+					Code:   schema.SignalGateHard,
+					Rule:   "facts.hiring_scope",
+					Phrase: "LATAM only",
+					Value:  "LATAM",
+					Delta:  0,
+				},
+			},
+			wantReview: true,
+		},
+		{
+			name: "fact cut demotes would-be top into review",
+			profile: profileschema.Profile{
+				Facts: func() profileschema.Facts {
+					f := baseFacts
+					f.HiringScope.Scored = true
+					return f
+				}(),
+				Buckets: profileschema.Buckets{Top: 0},
+			},
+			job: jobdata.Job{Description: "LATAM only"},
+			verdict: &enrichschema.Verdict{Facts: func() enrichschema.ModelReply {
+				f := unknownRest
+				f.HiringScope = enrichschema.HiringScope{
+					Value:   "restricted",
+					Regions: []string{"LATAM"},
+					Quote:   quote("LATAM only"),
+				}
+				return f
+			}()},
+			want: []schema.Signal{
+				{
+					Code:   schema.SignalLLM,
+					Rule:   "hiring_scope",
+					Phrase: "LATAM only",
+					Value:  "LATAM",
+					Delta:  0,
+				},
+				{
+					Code:   schema.SignalGateHard,
+					Rule:   "facts.hiring_scope",
+					Phrase: "LATAM only",
+					Value:  "LATAM",
+					Delta:  0,
+				},
+			},
+			wantReview: true,
+		},
+		{
+			name: "scored work_authorization required goes to review",
+			profile: profileschema.Profile{
+				Facts: func() profileschema.Facts {
+					f := baseFacts
+					f.WorkAuthorization.Scored = true
+					return f
+				}(),
+				Buckets: review,
+			},
+			job: jobdata.Job{Description: "Authorized to work in the US"},
+			verdict: &enrichschema.Verdict{Facts: func() enrichschema.ModelReply {
+				f := unknownRest
+				f.WorkAuthorization = enrichschema.WorkAuthorization{
+					Value: "required",
+					Quote: quote("Authorized to work in the US"),
+				}
+				return f
+			}()},
+			want: []schema.Signal{
+				{
+					Code:   schema.SignalLLM,
+					Rule:   "work_authorization",
+					Phrase: "Authorized to work in the US",
+					Value:  "required",
+					Delta:  0,
+				},
+				{
+					Code:   schema.SignalGateHard,
+					Rule:   "facts.work_authorization",
+					Phrase: "Authorized to work in the US",
+					Value:  "required",
+					Delta:  0,
+				},
+			},
+			wantReview: true,
+		},
+		{
+			name: "scored timezone restricted with no allow zone goes to review",
+			profile: profileschema.Profile{
+				Facts: func() profileschema.Facts {
+					f := baseFacts
+					f.Timezone.Scored = true
+					return f
+				}(),
+				Buckets: review,
+			},
+			job: jobdata.Job{Description: "US Eastern hours"},
+			verdict: &enrichschema.Verdict{Facts: func() enrichschema.ModelReply {
+				f := unknownRest
+				f.Timezone = enrichschema.TimezoneConstraint{
+					Value: "restricted",
+					Zones: []string{"US_EASTERN"},
+					Quote: quote("US Eastern hours"),
+				}
+				return f
+			}()},
+			want: []schema.Signal{
+				{
+					Code:   schema.SignalLLM,
+					Rule:   "timezone",
+					Phrase: "US Eastern hours",
+					Value:  "US_EASTERN",
+					Delta:  0,
+				},
+				{
+					Code:   schema.SignalGateHard,
+					Rule:   "facts.timezone",
+					Phrase: "US Eastern hours",
+					Value:  "US_EASTERN",
+					Delta:  0,
+				},
+			},
+			wantReview: true,
+		},
+		{
+			name: "scored employment_load does not gate",
+			profile: profileschema.Profile{
+				Facts: func() profileschema.Facts {
+					f := baseFacts
+					f.EmploymentLoad.Scored = true
+					f.EmploymentLoad.Delta = 1
+					return f
+				}(),
+				Buckets: review,
+			},
+			job: jobdata.Job{Description: "Full-time role"},
+			verdict: &enrichschema.Verdict{Facts: func() enrichschema.ModelReply {
+				f := unknownRest
+				f.EmploymentLoad = enrichschema.QuotedValue{Value: "full_time", Quote: quote("Full-time")}
+				return f
+			}()},
+			want: []schema.Signal{{
+				Code:   schema.SignalLLM,
+				Rule:   "employment_load",
+				Phrase: "Full-time",
+				Value:  "full_time",
+				Delta:  1,
+			}},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got := evaluateAt(tt.profile, tt.job, time.Now().UTC(), tt.verdict)
+			if !reflect.DeepEqual(got.Signals, tt.want) {
+				t.Fatalf("signals got %+v\nwant %+v", got.Signals, tt.want)
+			}
+			if got.Bucket == schema.BucketRejected {
+				t.Fatalf("fact cuts must not reject, bucket=%s", got.Bucket)
+			}
+			if tt.wantReview && got.Bucket != schema.BucketReview {
+				t.Fatalf("bucket=%s want REVIEW", got.Bucket)
 			}
 		})
 	}

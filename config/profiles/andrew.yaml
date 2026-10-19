@@ -195,16 +195,10 @@ gate_role:
   - "prompt engineer"
 
 gate_hard:
-  - "authorized to work in the united states"
-  - "authorized to work in the u.s"
-  - "authorized to work in the us"
-  - "authorized to work in the usa"
-  - "authorized to work lawfully"
-  - "authorization to work in the us"
+  # work_authorization / hiring_scope facts replace visa and "must be based" phrase gates
   - "u.s. citizen"
   - "u.s. citizenship"
   - "us citizenship"
-  - "us work authorization"
   - "department of defense"
   - "department of war"
   - "security clearance"
@@ -218,12 +212,6 @@ gate_hard:
   - "u.s. person"
   - "us person"
   - "govcloud"
-  - "no visa sponsorship"
-  - "visa sponsorship is not available"
-  - "visa sponsorship: none"
-  - "without sponsorship"
-  - "no sponsorship needed"
-  - "not eligible for visa sponsorship"
   - "deferred compensation"
   - "no salary until"
   - "compensation will be deferred"
@@ -267,19 +255,8 @@ gate_location:
     - "WORLDWIDE"
     - "EUROPE"
     - "EMEA"
-  reject_timezones:
-    - "apac timezone only"
-    - "pacific time"
-    - "pacific or mountain time"
-    - "us pacific"
-    - "americas overlap"
-    - "us hours"
-    - "us working hours"
-    - "us eastern time"
-    - "eastern standard time"
-    - "pacific standard time"
-    - "est zone"
-    - "time zone between"
+  # timezone fact replaces reject_timezones phrase list
+  reject_timezones: []
 
 signals_plus:
   title:
@@ -385,31 +362,10 @@ penalties_soft:
     min_occurrences: 1
     check_negation: false
     terms:
+      # location / work-auth / reside lines removed — hiring_scope + work_authorization facts
       - "umowa o prac"
       - "lpa"
       - "ctc annually"
-      - "area applicants"
-      - "commuting distance"
-      - "commutable"
-      - "bay area"
-      - "west coast"
-      - "east coast"
-      - "western hemisphere"
-      - "must be based in"
-      - "must be located in"
-      - "must live in"
-      - "should already be based"
-      - "candidates who are residing in"
-      - "individuals living in"
-      - "may live in the following locations"
-      - "preference for candidates near"
-      - "open to relocation"
-      - "open to relocating"
-      - "reside or are open to"
-      - "relocate to"
-      - "willing and able to relocate"
-      - "is your home base"
-      - "geographic zones"
       - "in-office"
       - "in office"
       - "hybrid schedule"
@@ -432,11 +388,6 @@ penalties_soft:
       - "week from the office"
       - "week in the office"
       - "days/week in office"
-      - "right to work in germany"
-      - "must reside in switzerland"
-      - "right to work in the uk"
-      - "eligible to work in france"
-      - "work permit required"
   agency:
     weight: -3
     min_occurrences: 1
@@ -470,34 +421,6 @@ penalties_soft:
       - "crypto"
       - "web3"
       - "defi"
-  ambiguous_us:
-    weight: -3
-    min_occurrences: 1
-    check_negation: true
-    terms:
-      - "must reside in the us"
-      - "must reside in the eastern"
-      - "must be based in the us"
-      - "based in the united states"
-      - "based in the us"
-      - "reside in the united states"
-      - "located in the united states"
-      - "us based only"
-      - "hiring only within the u.s"
-      - "remote in the us"
-      - "remote in the usa"
-      - "remote in usa"
-      - "must live in the state"
-      - "candidates residing in the us"
-      - "anywhere in the us"
-      - "anywhere in the united states"
-      - "remote - united states"
-      - "remote - usa"
-      - "remote (us)"
-      - "remote, us"
-      - "remote us"
-      - "remote - us"
-      - "remote within canada or united states"
   part_time:
     weight: -3
     min_occurrences: 1
@@ -550,3 +473,61 @@ penalties_soft:
 
 buckets:
   top: 6
+
+facts:
+  # EUROPE = scorer Europe set; US = remote US-only scopes stay eligible
+  residence_regions: [EUROPE, US]
+  office:
+    scored: true
+    allow_countries:
+      - "US"
+      - "AT"
+      - "BE"
+      - "BG"
+      - "CY"
+      - "CZ"
+      - "DE"
+      - "DK"
+      - "EE"
+      - "ES"
+      - "FI"
+      - "FR"
+      - "GR"
+      - "HR"
+      - "HU"
+      - "IE"
+      - "IT"
+      - "LT"
+      - "LU"
+      - "LV"
+      - "MT"
+      - "NL"
+      - "PL"
+      - "PT"
+      - "RO"
+      - "SE"
+      - "SI"
+      - "SK"
+      - "IS"
+      - "LI"
+      - "NO"
+      - "CH"
+      - "GB"
+    allow_regions: [EUROPE, EMEA, WORLDWIDE]
+  hiring_scope:
+    scored: true
+  work_authorization:
+    scored: true
+    gates: [required]
+  timezone:
+    scored: true
+    allow: [CET, GMT, EET]
+  compensation:
+    scored: false
+    allow_currencies: [EUR, USD, GBP]
+  work_mode:
+    scored: false
+  employment_load:
+    scored: false
+  engagement:
+    scored: false

@@ -160,6 +160,31 @@ func (r *Repository) SetRunCounters(ctx context.Context, id int64, jobsScored, s
 	return nil
 }
 
+// ListMatchesByJobIDs returns every match whose job_id is in jobIDs.
+// Only ProfileID, JobID, and RunID are populated; empty jobIDs returns nil.
+func (r *Repository) ListMatchesByJobIDs(ctx context.Context, jobIDs []string) ([]schema.Match, error) {
+	if len(jobIDs) == 0 {
+		return nil, nil
+	}
+	var rows []ProfileMatch
+	err := r.get().WithContext(ctx).
+		Select("profile_id", "job_id", "run_id").
+		Where("job_id IN ?", jobIDs).
+		Find(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	out := make([]schema.Match, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, schema.Match{
+			ProfileID: row.ProfileID,
+			JobID:     row.JobID,
+			RunID:     row.RunID,
+		})
+	}
+	return out, nil
+}
+
 // UpsertMatch inserts a match or overwrites bucket, score, signals, run_id, and updated_at.
 // user_status is written on insert only. A later upsert leaves it unchanged.
 func (r *Repository) UpsertMatch(ctx context.Context, m schema.Match) error {

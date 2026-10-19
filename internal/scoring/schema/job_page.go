@@ -33,6 +33,8 @@ type ListedJob struct {
 	Score       int
 	Signals     []Signal
 	UserStatus  UserStatus
+	// FactsStatus is off | pending | ready. List and SetUserStatus fill it from enrich.
+	FactsStatus string
 }
 
 // JobPage is one page of scored jobs.

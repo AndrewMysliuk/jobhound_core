@@ -10,7 +10,9 @@ import (
 	"github.com/alicebob/miniredis/v2"
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
+	"github.com/stretchr/testify/mock"
 	"go.temporal.io/sdk/activity"
+	"go.temporal.io/sdk/converter"
 	"go.temporal.io/sdk/testsuite"
 	"go.temporal.io/sdk/workflow"
 	"gorm.io/driver/sqlite"
@@ -18,6 +20,9 @@ import (
 
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors"
 	jobdata "github.com/andrewmysliuk/jobhound_core/internal/domain/schema"
+	enrichschema "github.com/andrewmysliuk/jobhound_core/internal/enrich/schema"
+	enrich_workflows "github.com/andrewmysliuk/jobhound_core/internal/enrich/workflows"
+	enrich_activities "github.com/andrewmysliuk/jobhound_core/internal/enrich/workflows/activities"
 	"github.com/andrewmysliuk/jobhound_core/internal/ingest"
 	ingest_workflows "github.com/andrewmysliuk/jobhound_core/internal/ingest/workflows"
 	ingest_activities "github.com/andrewmysliuk/jobhound_core/internal/ingest/workflows/activities"
@@ -117,18 +122,151 @@ func TestProfileRunWorkflow_scoresKeepsHiddenAndSkipsMissingSource(t *testing.T)
 	}
 }
 
-func runWorkflow(t *testing.T, deps Deps, ing *ingest_activities.IngestActivities, runID int64) {
+func TestProfileRunWorkflow_enrichEmptyMissingStartsNoChild(t *testing.T) {
+	deps, ing, runID := profileRunFixture(t)
+	env := newProfileRunEnv(t, deps, ing)
+
+	var enrichStarts int
+	env.SetOnChildWorkflowStartedListener(func(info *workflow.Info, _ workflow.Context, _ converter.EncodedValues) {
+		if info.WorkflowType.Name == enrich_workflows.EnrichBatchWorkflowName {
+			enrichStarts++
+		}
+	})
+
+	env.ExecuteWorkflow(ProfileRunWorkflow, scoringschema.ProfileRunInput{
+		ProfileID: "andrew",
+		RunID:     runID,
+	})
+	if !env.IsWorkflowCompleted() {
+		t.Fatal("workflow did not complete")
+	}
+	if err := env.GetWorkflowError(); err != nil {
+		t.Fatal(err)
+	}
+	if enrichStarts != 0 {
+		t.Fatalf("enrich children started = %d, want 0", enrichStarts)
+	}
+}
+
+func TestProfileRunWorkflow_enrichChildStableIDAndParentDoesNotWait(t *testing.T) {
+	deps, ing, runID := profileRunFixture(t)
+	env := newProfileRunEnv(t, deps, ing)
+
+	missing := enrichschema.ListMissingResult{
+		JobIDs:        []string{"job-b", "job-a"},
+		PromptVersion: enrichschema.PromptVersion,
+		Model:         "claude-test",
+	}
+	wantID := enrich_workflows.WorkflowID(missing.PromptVersion, missing.Model, missing.JobIDs)
+	if got := enrich_workflows.WorkflowID(missing.PromptVersion, missing.Model, []string{"job-a", "job-b"}); got != wantID {
+		t.Fatalf("WorkflowID not stable for same sorted ids: %q vs %q", wantID, got)
+	}
+
+	env.OnActivity(enrich_activities.ListMissingActivityName, mock.Anything, mock.Anything).Return(missing, nil)
+	// Long sleep: parent must finish without waiting for the enrich child.
+	env.OnWorkflow(enrich_workflows.EnrichBatchWorkflow, mock.Anything, mock.Anything).Return(
+		func(ctx workflow.Context, _ enrichschema.EnrichBatchInput) error {
+			return workflow.Sleep(ctx, 1000*time.Hour)
+		},
+	)
+	env.SetDetachedChildWait(false)
+
+	var enrichIDs []string
+	env.SetOnChildWorkflowStartedListener(func(info *workflow.Info, _ workflow.Context, _ converter.EncodedValues) {
+		if info.WorkflowType.Name == enrich_workflows.EnrichBatchWorkflowName {
+			enrichIDs = append(enrichIDs, info.WorkflowExecution.ID)
+		}
+	})
+
+	env.ExecuteWorkflow(ProfileRunWorkflow, scoringschema.ProfileRunInput{
+		ProfileID: "andrew",
+		RunID:     runID,
+	})
+	if !env.IsWorkflowCompleted() {
+		t.Fatal("workflow did not complete")
+	}
+	if err := env.GetWorkflowError(); err != nil {
+		t.Fatal(err)
+	}
+	if len(enrichIDs) != 1 {
+		t.Fatalf("enrich children started = %d, want 1", len(enrichIDs))
+	}
+	if enrichIDs[0] != wantID {
+		t.Fatalf("enrich workflow id = %q, want %q", enrichIDs[0], wantID)
+	}
+}
+
+func profileRunFixture(t *testing.T) (Deps, *ingest_activities.IngestActivities, int64) {
+	t.Helper()
+	db := testRunDB(t)
+	getter := pgsql.NewGetter(db)
+	jobsRepo := jobsstorage.NewRepository(getter)
+	runs := scoringstorage.NewRepository(getter)
+
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	t.Cleanup(func() { _ = rdb.Close() })
+
+	vueJob := jobdata.Job{
+		ID:          "job-vue",
+		Source:      "himalayas",
+		Title:       "Vue Engineer",
+		Company:     "Acme",
+		URL:         "https://example.test/vue",
+		Description: "frontend-engineer builds vue",
+		Location:    jobdata.Location{Type: jobdata.LocationRemote, Raw: "Berlin"},
+	}
+	profile := profileschema.Profile{
+		ID:             "andrew",
+		Name:           "Andrew",
+		Domain:         profileschema.DomainSoftware,
+		Sources:        []string{"himalayas"},
+		Queries:        []string{"vue"},
+		WellfoundRoles: []string{"frontend-engineer"},
+		SignalsPlus: profileschema.SignalsPlus{
+			Title: map[string]int{"vue": 1},
+		},
+		Buckets: profileschema.Buckets{Top: 1},
+	}
+	deps := Deps{
+		Profiles: staticProfiles{profile: profile},
+		Runs:     runs,
+		Jobs:     jobsRepo,
+		Log:      logging.Nop(),
+	}
+	ing := &ingest_activities.IngestActivities{
+		Redis:      ingest.NewRedisCoordinator(rdb),
+		Jobs:       jobsRepo,
+		Watermarks: ingest.NewGormWatermarkStore(getter),
+		Collectors: map[string]collectors.Collector{
+			"himalayas": stubCollector{jobs: []jobdata.Job{vueJob}},
+		},
+		Log: logging.Nop(),
+	}
+	run := createRunning(t, runs, profile.ID)
+	return deps, ing, run.ID
+}
+
+func newProfileRunEnv(t *testing.T, deps Deps, ing *ingest_activities.IngestActivities) *testsuite.TestWorkflowEnvironment {
 	t.Helper()
 	var suite testsuite.WorkflowTestSuite
 	env := suite.NewTestWorkflowEnvironment()
 	env.SetTestTimeout(time.Minute)
 	New(env, deps)
+	// Default ListMissing stub returns an empty list (enrich disabled).
+	enrich_workflows.New(env, enrich_workflows.Deps{Log: logging.Nop()})
 	env.RegisterActivityWithOptions(ing.RunIngestSource, activity.RegisterOptions{
 		Name: ingest_activities.RunIngestSourceActivityName,
 	})
 	env.RegisterWorkflowWithOptions(ingest_workflows.IngestSourceWorkflow, workflow.RegisterOptions{
 		Name: ingest_workflows.IngestSourceWorkflowName,
 	})
+	return env
+}
+
+func runWorkflow(t *testing.T, deps Deps, ing *ingest_activities.IngestActivities, runID int64) {
+	t.Helper()
+	env := newProfileRunEnv(t, deps, ing)
 	env.ExecuteWorkflow(ProfileRunWorkflow, scoringschema.ProfileRunInput{
 		ProfileID: "andrew",
 		RunID:     runID,

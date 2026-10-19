@@ -1,4 +1,4 @@
-// Command worker runs the Temporal worker: registers ingest, job retention, and profile runs.
+// Command worker runs the Temporal worker: registers ingest, job retention, profile runs, and enrich.
 package main
 
 import (
@@ -32,6 +32,10 @@ import (
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/workingnomads"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/worldarchitects"
 	"github.com/andrewmysliuk/jobhound_core/internal/config"
+	enrichimpl "github.com/andrewmysliuk/jobhound_core/internal/enrich/impl"
+	enrichstorage "github.com/andrewmysliuk/jobhound_core/internal/enrich/storage"
+	enrich_workflows "github.com/andrewmysliuk/jobhound_core/internal/enrich/workflows"
+	enrich_activities "github.com/andrewmysliuk/jobhound_core/internal/enrich/workflows/activities"
 	"github.com/andrewmysliuk/jobhound_core/internal/ingest"
 	ingest_workflows "github.com/andrewmysliuk/jobhound_core/internal/ingest/workflows"
 	"github.com/andrewmysliuk/jobhound_core/internal/jobs"
@@ -41,8 +45,10 @@ import (
 	"github.com/andrewmysliuk/jobhound_core/internal/platform/pgsql"
 	"github.com/andrewmysliuk/jobhound_core/internal/platform/temporalopts"
 	profilesimpl "github.com/andrewmysliuk/jobhound_core/internal/profiles/impl"
+	scoringimpl "github.com/andrewmysliuk/jobhound_core/internal/scoring/impl"
 	scoringstorage "github.com/andrewmysliuk/jobhound_core/internal/scoring/storage"
 	scoring_workflows "github.com/andrewmysliuk/jobhound_core/internal/scoring/workflows"
+	scoring_activities "github.com/andrewmysliuk/jobhound_core/internal/scoring/workflows/activities"
 	"github.com/redis/go-redis/v9"
 	"go.temporal.io/sdk/client"
 	"go.temporal.io/sdk/worker"
@@ -78,6 +84,8 @@ func main() {
 	var (
 		jobsRepo              jobs.JobRepository
 		scoringRuns           *scoringstorage.Repository
+		enrichSvc             *enrichimpl.Service
+		enrichRescore         enrich_activities.Rescorer
 		ingestRedis           *ingest.RedisCoordinator
 		ingestWatermarks      ingest.WatermarkStore
 		ingestCollectors      map[string]collectors.Collector
@@ -94,6 +102,23 @@ func main() {
 		getter := pgsql.NewGetter(gdb)
 		jobsRepo = jobsstorage.NewRepository(getter)
 		scoringRuns = scoringstorage.NewRepository(getter)
+
+		if appCfg.Enrich.Enabled {
+			enrichSvc = enrichimpl.New(
+				enrichstorage.NewRepository(getter),
+				jobsRepo,
+				&enrichimpl.BatchesClient{APIKey: appCfg.Enrich.APIKey, Model: appCfg.Enrich.Model},
+				appCfg.Enrich.Model,
+			)
+			enrichRescore = scoringimpl.New(
+				profilesimpl.NewFileStore(appCfg.ProfilesDir, sourceids.KnownSourceIDs()),
+				scoringRuns,
+				jobsRepo,
+				nil,
+				enrichSvc,
+				nil,
+			)
+		}
 
 		if ru := strings.TrimSpace(appCfg.Ingest.RedisURL); ru != "" {
 			opt, err := redis.ParseURL(ru)
@@ -129,11 +154,21 @@ func main() {
 		DefaultExplicitRefresh: ingestExplicitRefresh,
 		Log:                    log,
 	})
+	var scoreVerdicts scoring_activities.VerdictLookup
+	if enrichSvc != nil {
+		scoreVerdicts = enrichSvc
+	}
 	scoring_workflows.New(w, scoring_workflows.Deps{
 		Profiles: profilesimpl.NewFileStore(appCfg.ProfilesDir, sourceids.KnownSourceIDs()),
 		Runs:     scoringRuns,
 		Jobs:     jobsRepo,
+		Verdicts: scoreVerdicts,
 		Log:      log,
+	})
+	enrich_workflows.New(w, enrich_workflows.Deps{
+		Enrich:  enrichSvc,
+		Rescore: enrichRescore,
+		Log:     log,
 	})
 
 	if jobsRepo != nil && config.LoadJobRetentionScheduleUpsertFromEnv() {

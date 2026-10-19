@@ -99,6 +99,66 @@ func insertJob(t *testing.T, db *gorm.DB, id, title string, firstSeen time.Time)
 	}
 }
 
+func TestRepository_ListMatchesByJobIDs(t *testing.T) {
+	ctx := context.Background()
+	db := testScoringDB(t)
+	repo := NewRepository(pgsql.NewGetter(db))
+	seen := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	insertJob(t, db, "job-1", "Engineer", seen)
+	insertJob(t, db, "job-2", "Designer", seen)
+
+	run, err := repo.CreateRun(ctx, schema.Run{
+		ProfileID:      "andrew",
+		Status:         schema.RunStatusRunning,
+		StartedAt:      seen,
+		IdempotencyKey: uuid.New(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range []schema.Match{
+		{ProfileID: "andrew", JobID: "job-1", Bucket: schema.BucketReview, Score: 1, RunID: run.ID},
+		{ProfileID: "lada", JobID: "job-1", Bucket: schema.BucketTop, Score: 3, RunID: run.ID},
+		{ProfileID: "andrew", JobID: "job-2", Bucket: schema.BucketReview, Score: 2, RunID: run.ID},
+	} {
+		if err := repo.UpsertMatch(ctx, m); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	got, err := repo.ListMatchesByJobIDs(ctx, []string{"job-1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("got %#v, want 2 matches", got)
+	}
+	seenProfiles := map[string]int64{}
+	for _, m := range got {
+		if m.JobID != "job-1" {
+			t.Fatalf("job_id = %s, want job-1", m.JobID)
+		}
+		if m.RunID != run.ID {
+			t.Fatalf("run_id = %d, want %d", m.RunID, run.ID)
+		}
+		seenProfiles[m.ProfileID] = m.RunID
+	}
+	if _, ok := seenProfiles["andrew"]; !ok {
+		t.Fatal("missing andrew")
+	}
+	if _, ok := seenProfiles["lada"]; !ok {
+		t.Fatal("missing lada")
+	}
+
+	empty, err := repo.ListMatchesByJobIDs(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(empty) != 0 {
+		t.Fatalf("empty ids = %#v", empty)
+	}
+}
+
 func TestRepository_UpsertMatch_overwritesScoreKeepsHidden(t *testing.T) {
 	ctx := context.Background()
 	db := testScoringDB(t)

@@ -127,35 +127,12 @@ gate_role:
   - "proiectant instalatii"
 
 gate_hard:
-  - "no visa sponsorship"
-  - "visa sponsorship is not available"
-  - "visa sponsorship: none"
-  - "without sponsorship"
-  - "no sponsorship needed"
-  - "not eligible for visa sponsorship"
+  # work_authorization / hiring_scope facts replace visa and location phrase gates
   - "deferred compensation"
   - "no salary until"
   - "compensation will be deferred"
-  - "right to work in the uk"
-  - "eligible to work in the uk"
-  - "right to work in germany"
-  - "eligible to work in germany"
-  - "right to work in france"
-  - "eligible to work in france"
-  - "right to work in ireland"
-  - "eligible to work in ireland"
-  - "must reside in switzerland"
   - "detinerea dreptului de semnatura"
   - "drept de semnatura obligatoriu"
-  - "authorized to work in the us"
-  - "authorised to work in the uk"
-  - "eligibility to work in the uk"
-  - "work authorization"
-  - "usa only"
-  - "remote in usa"
-  - "must be based in the uk"
-  - "based in the united kingdom"
-  - "based in the united states"
   - "riba part 2"
   - "riba part ii"
   - "part 3"
@@ -210,19 +187,8 @@ gate_location:
     - "WORLDWIDE"
     - "EUROPE"
     - "EMEA"
-  reject_timezones:
-    - "apac timezone only"
-    - "pacific time"
-    - "pacific or mountain time"
-    - "us pacific"
-    - "americas overlap"
-    - "us hours"
-    - "us working hours"
-    - "us eastern time"
-    - "eastern standard time"
-    - "pacific standard time"
-    - "est zone"
-    - "time zone between"
+  # timezone fact replaces reject_timezones phrase list
+  reject_timezones: []
 
 signals_plus:
   title:
@@ -357,3 +323,59 @@ penalties_soft:
 
 buckets:
   top: 6
+
+facts:
+  residence_regions: [EUROPE]
+  office:
+    scored: true
+    allow_countries:
+      - "AT"
+      - "BE"
+      - "BG"
+      - "CY"
+      - "CZ"
+      - "DE"
+      - "DK"
+      - "EE"
+      - "ES"
+      - "FI"
+      - "FR"
+      - "GR"
+      - "HR"
+      - "HU"
+      - "IE"
+      - "IT"
+      - "LT"
+      - "LU"
+      - "LV"
+      - "MT"
+      - "NL"
+      - "PL"
+      - "PT"
+      - "RO"
+      - "SE"
+      - "SI"
+      - "SK"
+      - "IS"
+      - "LI"
+      - "NO"
+      - "CH"
+      - "GB"
+    allow_regions: [EUROPE, EMEA, WORLDWIDE]
+  hiring_scope:
+    scored: true
+  work_authorization:
+    scored: true
+    gates: [required]
+  timezone:
+    scored: true
+    allow: [CET, GMT, EET]
+  compensation:
+    scored: false
+    allow_currencies: [EUR, USD, GBP]
+  work_mode:
+    scored: false
+  employment_load:
+    scored: false
+  engagement:
+    scored: false

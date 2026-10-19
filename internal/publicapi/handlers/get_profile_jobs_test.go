@@ -124,10 +124,10 @@ func TestGetProfileJobs(t *testing.T) {
 		if len(job.Sources) != 1 || job.Sources[0] != "himalayas" {
 			t.Fatalf("sources %#v", job.Sources)
 		}
-		if len(job.Signals) != 1 || job.Signals[0].Code != "PLUS" || job.Signals[0].Rule != "signals_plus.title" || job.Signals[0].Phrase != "golang" || job.Signals[0].Delta != 1 || job.Signals[0].Occurrences != 1 {
+		if len(job.Signals) != 1 || job.Signals[0].Code != "PLUS" || job.Signals[0].Rule != "signals_plus.title" || job.Signals[0].Phrase != "golang" || job.Signals[0].Delta != 1 || job.Signals[0].Occurrences != 1 || job.Signals[0].Value != "" {
 			t.Fatalf("signals %#v", job.Signals)
 		}
-		if strings.Contains(rec.Body.String(), `"points"`) || strings.Contains(rec.Body.String(), `"terms"`) {
+		if strings.Contains(rec.Body.String(), `"value"`) || strings.Contains(rec.Body.String(), `"points"`) || strings.Contains(rec.Body.String(), `"terms"`) {
 			t.Fatalf("old signal fields in body %s", rec.Body.String())
 		}
 		if job.PostedAt == nil || !job.PostedAt.Equal(posted) || !job.FirstSeenAt.Equal(seen) || !job.LastSeenAt.Equal(seen) {
@@ -271,8 +271,70 @@ func TestGetProfileJobs(t *testing.T) {
 		if job.Bucket != "REJECTED" || job.Score != -10 || job.UserStatus != "NEW" || job.PostedAt != nil {
 			t.Fatalf("job %#v", job)
 		}
-		if job.Sources == nil || job.Signals == nil || len(job.Signals) != 1 || job.Signals[0].Code != "GATE_ROLE" || job.Signals[0].Rule != "gate_role" || job.Signals[0].Phrase != "intern" || job.Signals[0].Delta != 0 || job.Signals[0].Occurrences != 1 {
+		if job.Sources == nil || job.Signals == nil || len(job.Signals) != 1 || job.Signals[0].Code != "GATE_ROLE" || job.Signals[0].Rule != "gate_role" || job.Signals[0].Phrase != "intern" || job.Signals[0].Delta != 0 || job.Signals[0].Occurrences != 1 || job.Signals[0].Value != "" {
 			t.Fatalf("lists sources %#v signals %#v", job.Sources, job.Signals)
+		}
+		if strings.Contains(rec.Body.String(), `"value"`) {
+			t.Fatalf("phrase signal value in body %s", rec.Body.String())
+		}
+	})
+
+	t.Run("facts ready INR gate", func(t *testing.T) {
+		api := &profileJobsScoring{page: scoringschema.JobPage{
+			Page:  1,
+			Limit: schema.DefaultJobListLimit,
+			Total: 1,
+			Jobs: []scoringschema.ListedJob{{
+				JobID:       "job-inr",
+				Title:       "Backend",
+				Company:     "Acme",
+				URL:         "https://example.com/inr",
+				ApplyURL:    "https://example.com/inr/apply",
+				Location:    jobdata.Location{Type: jobdata.LocationRemote, Raw: "Remote"},
+				FirstSeenAt: seen,
+				LastSeenAt:  seen,
+				Bucket:      scoringschema.BucketRejected,
+				Score:       0,
+				FactsStatus: "ready",
+				Signals: []scoringschema.Signal{{
+					Code:   scoringschema.SignalGateHard,
+					Rule:   "facts.compensation",
+					Value:  "INR",
+					Phrase: "25 LPA",
+					Delta:  0,
+				}},
+				UserStatus: scoringschema.UserStatusNew,
+			}},
+		}}
+		h := NewHTTPHandler(nil, Deps{
+			Logger:   zerolog.Nop(),
+			Profiles: profileJobsStore{},
+			Scoring:  api,
+		})
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/profiles/andrew/jobs?bucket=REJECTED", nil)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status %d %s", rec.Code, rec.Body.String())
+		}
+		var got schema.ProfileJobPage
+		if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+			t.Fatal(err)
+		}
+		if len(got.Jobs) != 1 {
+			t.Fatalf("jobs %#v", got.Jobs)
+		}
+		job := got.Jobs[0]
+		if job.FactsStatus != "ready" {
+			t.Fatalf("facts_status %q", job.FactsStatus)
+		}
+		if len(job.Signals) != 1 ||
+			job.Signals[0].Code != "GATE_HARD" ||
+			job.Signals[0].Rule != "facts.compensation" ||
+			job.Signals[0].Value != "INR" ||
+			job.Signals[0].Phrase != "25 LPA" ||
+			job.Signals[0].Delta != 0 {
+			t.Fatalf("signals %#v", job.Signals)
 		}
 	})
 

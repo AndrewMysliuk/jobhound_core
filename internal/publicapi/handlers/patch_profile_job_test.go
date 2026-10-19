@@ -83,14 +83,49 @@ func TestPatchProfileJob(t *testing.T) {
 		if got.Bucket != scoringschema.BucketTop.String() || got.Score != 1 || got.UserStatus != scoringschema.UserStatusHidden.String() {
 			t.Fatalf("score %#v", got)
 		}
-		if len(got.Signals) != 1 || got.Signals[0].Code != scoringschema.SignalPlus.String() || got.Signals[0].Rule != "signals_plus.title" || got.Signals[0].Phrase != "vue" || got.Signals[0].Delta != 1 || got.Signals[0].Occurrences != 1 {
+		if len(got.Signals) != 1 || got.Signals[0].Code != scoringschema.SignalPlus.String() || got.Signals[0].Rule != "signals_plus.title" || got.Signals[0].Phrase != "vue" || got.Signals[0].Delta != 1 || got.Signals[0].Occurrences != 1 || got.Signals[0].Value != "" {
 			t.Fatalf("signals %#v", got.Signals)
 		}
-		if strings.Contains(rec.Body.String(), `"points"`) || strings.Contains(rec.Body.String(), `"terms"`) {
+		if strings.Contains(rec.Body.String(), `"value"`) || strings.Contains(rec.Body.String(), `"points"`) || strings.Contains(rec.Body.String(), `"terms"`) {
 			t.Fatalf("old signal fields in body %s", rec.Body.String())
 		}
 		if got.Openings == nil || len(got.Openings) != 0 {
 			t.Fatalf("openings %#v", got.Openings)
+		}
+	})
+
+	t.Run("facts ready INR gate", func(t *testing.T) {
+		job := stored
+		job.Bucket = scoringschema.BucketRejected
+		job.Score = 0
+		job.FactsStatus = "ready"
+		job.Signals = []scoringschema.Signal{{
+			Code:   scoringschema.SignalGateHard,
+			Rule:   "facts.compensation",
+			Value:  "INR",
+			Phrase: "25 LPA",
+			Delta:  0,
+		}}
+		api := &patchScoring{job: job}
+		h := patchHandler(api, nil)
+		rec := patchRequest(t, h, "/api/v1/profiles/andrew/jobs/job-1", `{"user_status":"HIDDEN"}`)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status %d %s", rec.Code, rec.Body.String())
+		}
+		var got schema.ProfileJob
+		if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+			t.Fatal(err)
+		}
+		if got.FactsStatus != "ready" {
+			t.Fatalf("facts_status %q", got.FactsStatus)
+		}
+		if len(got.Signals) != 1 ||
+			got.Signals[0].Code != scoringschema.SignalGateHard.String() ||
+			got.Signals[0].Rule != "facts.compensation" ||
+			got.Signals[0].Value != "INR" ||
+			got.Signals[0].Phrase != "25 LPA" ||
+			got.Signals[0].Delta != 0 {
+			t.Fatalf("signals %#v", got.Signals)
 		}
 	})
 
