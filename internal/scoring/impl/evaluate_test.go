@@ -132,6 +132,37 @@ func TestEvaluate(t *testing.T) {
 			want: Outcome{Bucket: schema.BucketReview},
 		},
 		{
+			name: "gate role allow rejects titles outside the whitelist",
+			profile: profileschema.Profile{
+				GateRoleAllow: []string{"software engineer", "vue developer"},
+			},
+			job: jobdata.Job{Title: "Platform Engineer"},
+			want: Outcome{
+				Bucket: schema.BucketRejected,
+				Signals: []schema.Signal{{
+					Code: schema.SignalGateRole,
+					Rule: "gate_role_allow",
+				}},
+			},
+		},
+		{
+			name: "gate role allow passes a matching title",
+			profile: profileschema.Profile{
+				GateRoleAllow: []string{"software engineer", "vue developer"},
+				Buckets:       review,
+			},
+			job:  jobdata.Job{Title: "Senior Software Engineer"},
+			want: Outcome{Bucket: schema.BucketReview},
+		},
+		{
+			name: "empty gate role allow leaves the allow gate off",
+			profile: profileschema.Profile{
+				Buckets: review,
+			},
+			job:  jobdata.Job{Title: "Whatever Role"},
+			want: Outcome{Bucket: schema.BucketReview},
+		},
+		{
 			name: "hard gate counts title description and the location line",
 			profile: profileschema.Profile{
 				GateHard: []string{"clearance"},
@@ -294,7 +325,7 @@ func TestEvaluate(t *testing.T) {
 			},
 		},
 		{
-			name: "pacific utc offset in collector timezone is a cut",
+			name:    "pacific utc offset in collector timezone is a cut",
 			profile: profileschema.Profile{Buckets: review},
 			job: jobdata.Job{Location: jobdata.Location{
 				Type:     jobdata.LocationRemote,
@@ -310,7 +341,7 @@ func TestEvaluate(t *testing.T) {
 			},
 		},
 		{
-			name: "europe utc offset alone is not a pacific cut",
+			name:    "europe utc offset alone is not a pacific cut",
 			profile: profileschema.Profile{Buckets: review},
 			job: jobdata.Job{Location: jobdata.Location{
 				Type:     jobdata.LocationRemote,
@@ -796,16 +827,25 @@ func TestEvaluate(t *testing.T) {
 			want: Outcome{Bucket: schema.BucketReview},
 		},
 		{
-			name: "freshness falls back to first seen",
+			name: "missing posted_at does not use first seen for freshness bonus",
 			profile: profileschema.Profile{
 				SignalsPlus: profileschema.SignalsPlus{Freshness: profileschema.FreshnessSignals{Days3: 4, Days7: 1}},
 				Buckets:     review,
 			},
+			job:  jobdata.Job{FirstSeenAt: now.Add(-2 * day)},
+			want: Outcome{Bucket: schema.BucketReview},
+		},
+		{
+			name: "missing posted_at applies unknown_posted_at",
+			profile: profileschema.Profile{
+				SignalsPlus: profileschema.SignalsPlus{Freshness: profileschema.FreshnessSignals{Days3: 4, Days7: 1, UnknownPostedAt: -2}},
+				Buckets:     review,
+			},
 			job: jobdata.Job{FirstSeenAt: now.Add(-2 * day)},
 			want: Outcome{
-				Bucket:  schema.BucketTop,
-				Score:   4,
-				Signals: []schema.Signal{plus("signals_plus.freshness", "", 4, 0)},
+				Bucket:  schema.BucketReview,
+				Score:   -2,
+				Signals: []schema.Signal{plus("signals_plus.freshness.unknown_posted_at", "", -2, 0)},
 			},
 		},
 		{
@@ -1482,12 +1522,13 @@ func TestFactCuts(t *testing.T) {
 	}
 
 	tests := []struct {
-		name       string
-		profile    profileschema.Profile
-		job        jobdata.Job
-		verdict    *enrichschema.Verdict
-		want       []schema.Signal
-		wantReview bool // fact cuts land in review, not rejected
+		name         string
+		profile      profileschema.Profile
+		job          jobdata.Job
+		verdict      *enrichschema.Verdict
+		want         []schema.Signal
+		wantReview   bool // office/timezone/compensation fact cuts stay in review
+		wantRejected bool // hiring_scope / work_authorization fact cuts reject
 	}{
 		{
 			name: "unscored INR emits LLM and ignores cut",
@@ -1656,7 +1697,253 @@ func TestFactCuts(t *testing.T) {
 			wantReview: true,
 		},
 		{
-			name: "scored restricted US goes to review against residence EUROPE only",
+			name: "work_mode hybrid fact-cut goes to review",
+			profile: profileschema.Profile{
+				Facts: func() profileschema.Facts {
+					f := baseFacts
+					f.WorkMode.Scored = true
+					f.WorkMode.Gates = []string{"hybrid", "office"}
+					return f
+				}(),
+				Buckets: profileschema.Buckets{Top: 0},
+			},
+			job: jobdata.Job{Title: "Webontwikkelaar TypeScript/Vue", Description: "Hybrid flexibility"},
+			verdict: &enrichschema.Verdict{Facts: func() enrichschema.ModelReply {
+				f := unknownRest
+				f.WorkMode = enrichschema.QuotedValue{Value: "hybrid", Quote: quote("Hybrid flexibility")}
+				return f
+			}()},
+			want: []schema.Signal{
+				{
+					Code:   schema.SignalLLM,
+					Rule:   "work_mode",
+					Phrase: "Hybrid flexibility",
+					Value:  "hybrid",
+					Delta:  0,
+				},
+				{
+					Code:   schema.SignalGateHard,
+					Rule:   "facts.work_mode",
+					Phrase: "Hybrid flexibility",
+					Value:  "hybrid",
+					Delta:  0,
+				},
+			},
+			wantReview: true,
+		},
+		{
+			name: "work_mode remote does not cut",
+			profile: profileschema.Profile{
+				Facts: func() profileschema.Facts {
+					f := baseFacts
+					f.WorkMode.Scored = true
+					f.WorkMode.Gates = []string{"hybrid", "office"}
+					return f
+				}(),
+				Buckets: review,
+			},
+			job: jobdata.Job{Description: "Fully remote"},
+			verdict: &enrichschema.Verdict{Facts: func() enrichschema.ModelReply {
+				f := unknownRest
+				f.WorkMode = enrichschema.QuotedValue{Value: "remote", Quote: quote("Fully remote")}
+				return f
+			}()},
+			want: []schema.Signal{{
+				Code:   schema.SignalLLM,
+				Rule:   "work_mode",
+				Phrase: "Fully remote",
+				Value:  "remote",
+				Delta:  0,
+			}},
+		},
+		{
+			name: "office US cut suppressed when remote and worldwide scope",
+			profile: profileschema.Profile{
+				Facts: func() profileschema.Facts {
+					f := baseFacts
+					f.Office.Scored = true
+					f.Office.AllowCountries = []string{"DE", "FR", "RO", "GB"}
+					return f
+				}(),
+				Buckets: review,
+			},
+			job: jobdata.Job{Description: "Headquarters: New York City. Worldwide remote."},
+			verdict: &enrichschema.Verdict{Facts: func() enrichschema.ModelReply {
+				f := unknownRest
+				f.Office = enrichschema.Office{Countries: []string{"US"}, Quote: quote("Headquarters: New York City")}
+				f.WorkMode = enrichschema.QuotedValue{Value: "remote", Quote: quote("Worldwide remote")}
+				f.HiringScope = enrichschema.HiringScope{Value: "worldwide", Quote: quote("Worldwide remote")}
+				return f
+			}()},
+			want: []schema.Signal{
+				{
+					Code:   schema.SignalLLM,
+					Rule:   "office",
+					Phrase: "Headquarters: New York City",
+					Value:  "US",
+					Delta:  0,
+				},
+				{
+					Code:   schema.SignalLLM,
+					Rule:   "hiring_scope",
+					Phrase: "Worldwide remote",
+					Value:  "worldwide",
+					Delta:  0,
+				},
+				{
+					Code:   schema.SignalLLM,
+					Rule:   "work_mode",
+					Phrase: "Worldwide remote",
+					Value:  "remote",
+					Delta:  0,
+				},
+			},
+		},
+		{
+			name: "office US cut stays when remote but hiring_scope unknown",
+			profile: profileschema.Profile{
+				Facts: func() profileschema.Facts {
+					f := baseFacts
+					f.Office.Scored = true
+					f.Office.AllowCountries = []string{"DE", "FR", "RO", "GB"}
+					return f
+				}(),
+				Buckets: review,
+			},
+			job: jobdata.Job{Description: "U.S. based company, fully remote"},
+			verdict: &enrichschema.Verdict{Facts: func() enrichschema.ModelReply {
+				f := unknownRest
+				f.Office = enrichschema.Office{Countries: []string{"US"}, Quote: quote("U.S. based company")}
+				f.WorkMode = enrichschema.QuotedValue{Value: "remote", Quote: quote("fully remote")}
+				return f
+			}()},
+			want: []schema.Signal{
+				{
+					Code:   schema.SignalLLM,
+					Rule:   "office",
+					Phrase: "U.S. based company",
+					Value:  "US",
+					Delta:  0,
+				},
+				{
+					Code:   schema.SignalGateHard,
+					Rule:   "facts.office",
+					Phrase: "U.S. based company",
+					Value:  "US",
+					Delta:  0,
+				},
+				{
+					Code:   schema.SignalLLM,
+					Rule:   "work_mode",
+					Phrase: "fully remote",
+					Value:  "remote",
+					Delta:  0,
+				},
+			},
+			wantReview: true,
+		},
+		{
+			name: "hiring_scope delta once for worldwide",
+			profile: profileschema.Profile{
+				Facts: func() profileschema.Facts {
+					f := baseFacts
+					f.HiringScope.Scored = true
+					f.HiringScope.Delta = 5
+					return f
+				}(),
+				Buckets: review,
+			},
+			job: jobdata.Job{Description: "Work from anywhere"},
+			verdict: &enrichschema.Verdict{Facts: func() enrichschema.ModelReply {
+				f := unknownRest
+				f.HiringScope = enrichschema.HiringScope{Value: "worldwide", Quote: quote("Work from anywhere")}
+				return f
+			}()},
+			want: []schema.Signal{{
+				Code:   schema.SignalLLM,
+				Rule:   "hiring_scope",
+				Phrase: "Work from anywhere",
+				Value:  "worldwide",
+				Delta:  5,
+			}},
+		},
+		{
+			name: "hiring_scope delta once for EMEA region not per country",
+			profile: profileschema.Profile{
+				Facts: func() profileschema.Facts {
+					f := baseFacts
+					f.HiringScope.Scored = true
+					f.HiringScope.Delta = 5
+					return f
+				}(),
+				Buckets: review,
+			},
+			job: jobdata.Job{Description: "Remote EMEA"},
+			verdict: &enrichschema.Verdict{Facts: func() enrichschema.ModelReply {
+				f := unknownRest
+				f.HiringScope = enrichschema.HiringScope{
+					Value:     "restricted",
+					Countries: []string{"DE", "FR"},
+					Regions:   []string{"EMEA"},
+					Quote:     quote("Remote EMEA"),
+				}
+				return f
+			}()},
+			want: []schema.Signal{
+				{
+					Code:   schema.SignalLLM,
+					Rule:   "hiring_scope",
+					Phrase: "Remote EMEA",
+					Value:  "DE",
+					Delta:  0,
+				},
+				{
+					Code:   schema.SignalLLM,
+					Rule:   "hiring_scope",
+					Phrase: "Remote EMEA",
+					Value:  "FR",
+					Delta:  0,
+				},
+				{
+					Code:   schema.SignalLLM,
+					Rule:   "hiring_scope",
+					Phrase: "Remote EMEA",
+					Value:  "EMEA",
+					Delta:  5,
+				},
+			},
+		},
+		{
+			name: "hiring_scope delta does not apply to single-country FR",
+			profile: profileschema.Profile{
+				Facts: func() profileschema.Facts {
+					f := baseFacts
+					f.HiringScope.Scored = true
+					f.HiringScope.Delta = 5
+					return f
+				}(),
+				Buckets: review,
+			},
+			job: jobdata.Job{Description: "France only"},
+			verdict: &enrichschema.Verdict{Facts: func() enrichschema.ModelReply {
+				f := unknownRest
+				f.HiringScope = enrichschema.HiringScope{
+					Value:     "restricted",
+					Countries: []string{"FR"},
+					Quote:     quote("France only"),
+				}
+				return f
+			}()},
+			want: []schema.Signal{{
+				Code:   schema.SignalLLM,
+				Rule:   "hiring_scope",
+				Phrase: "France only",
+				Value:  "FR",
+				Delta:  0,
+			}},
+		},
+		{
+			name: "scored restricted US rejects against residence EUROPE only",
 			profile: profileschema.Profile{
 				Facts: func() profileschema.Facts {
 					f := baseFacts
@@ -1691,7 +1978,7 @@ func TestFactCuts(t *testing.T) {
 					Delta:  0,
 				},
 			},
-			wantReview: true,
+			wantRejected: true,
 		},
 		{
 			name: "scored restricted US allowed when residence includes US",
@@ -1751,6 +2038,114 @@ func TestFactCuts(t *testing.T) {
 			}},
 		},
 		{
+			name: "narrow FR soft-penalizes when residence_countries omit FR",
+			profile: profileschema.Profile{
+				Facts: func() profileschema.Facts {
+					f := baseFacts
+					f.ResidenceCountries = []string{"RO"}
+					f.HiringScope.Scored = true
+					f.HiringScope.NarrowPenalty = -4
+					return f
+				}(),
+				Buckets: review,
+			},
+			job: jobdata.Job{Description: "Remote in France only"},
+			verdict: &enrichschema.Verdict{Facts: func() enrichschema.ModelReply {
+				f := unknownRest
+				f.HiringScope = enrichschema.HiringScope{
+					Value:     "restricted",
+					Countries: []string{"FR"},
+					Quote:     quote("Remote in France only"),
+				}
+				return f
+			}()},
+			want: []schema.Signal{
+				{
+					Code:   schema.SignalLLM,
+					Rule:   "hiring_scope",
+					Phrase: "Remote in France only",
+					Value:  "FR",
+					Delta:  0,
+				},
+				{
+					Code:   schema.SignalPenalty,
+					Rule:   "facts.hiring_scope.narrow",
+					Phrase: "Remote in France only",
+					Value:  "FR",
+					Delta:  -4,
+				},
+			},
+		},
+		{
+			name: "narrow skips EUROPE region even without RO",
+			profile: profileschema.Profile{
+				Facts: func() profileschema.Facts {
+					f := baseFacts
+					f.ResidenceCountries = []string{"RO"}
+					f.HiringScope.Scored = true
+					f.HiringScope.NarrowPenalty = -4
+					return f
+				}(),
+				Buckets: review,
+			},
+			job: jobdata.Job{Description: "Remote across Europe"},
+			verdict: &enrichschema.Verdict{Facts: func() enrichschema.ModelReply {
+				f := unknownRest
+				f.HiringScope = enrichschema.HiringScope{
+					Value:   "restricted",
+					Regions: []string{"EUROPE"},
+					Quote:   quote("Remote across Europe"),
+				}
+				return f
+			}()},
+			want: []schema.Signal{{
+				Code:   schema.SignalLLM,
+				Rule:   "hiring_scope",
+				Phrase: "Remote across Europe",
+				Value:  "EUROPE",
+				Delta:  0,
+			}},
+		},
+		{
+			name: "narrow skips when RO is in the country list",
+			profile: profileschema.Profile{
+				Facts: func() profileschema.Facts {
+					f := baseFacts
+					f.ResidenceCountries = []string{"RO"}
+					f.HiringScope.Scored = true
+					f.HiringScope.NarrowPenalty = -4
+					return f
+				}(),
+				Buckets: review,
+			},
+			job: jobdata.Job{Description: "Remote from RO or PL"},
+			verdict: &enrichschema.Verdict{Facts: func() enrichschema.ModelReply {
+				f := unknownRest
+				f.HiringScope = enrichschema.HiringScope{
+					Value:     "restricted",
+					Countries: []string{"RO", "PL"},
+					Quote:     quote("Remote from RO or PL"),
+				}
+				return f
+			}()},
+			want: []schema.Signal{
+				{
+					Code:   schema.SignalLLM,
+					Rule:   "hiring_scope",
+					Phrase: "Remote from RO or PL",
+					Value:  "RO",
+					Delta:  0,
+				},
+				{
+					Code:   schema.SignalLLM,
+					Rule:   "hiring_scope",
+					Phrase: "Remote from RO or PL",
+					Value:  "PL",
+					Delta:  0,
+				},
+			},
+		},
+		{
 			name: "scored restricted EMEA does not gate against residence EUROPE",
 			profile: profileschema.Profile{
 				Facts: func() profileschema.Facts {
@@ -1779,7 +2174,7 @@ func TestFactCuts(t *testing.T) {
 			}},
 		},
 		{
-			name: "scored restricted LATAM goes to review against residence EUROPE",
+			name: "scored restricted LATAM rejects against residence EUROPE",
 			profile: profileschema.Profile{
 				Facts: func() profileschema.Facts {
 					f := baseFacts
@@ -1814,10 +2209,10 @@ func TestFactCuts(t *testing.T) {
 					Delta:  0,
 				},
 			},
-			wantReview: true,
+			wantRejected: true,
 		},
 		{
-			name: "fact cut demotes would-be top into review",
+			name: "hiring_scope fact cut rejects would-be top",
 			profile: profileschema.Profile{
 				Facts: func() profileschema.Facts {
 					f := baseFacts
@@ -1852,10 +2247,10 @@ func TestFactCuts(t *testing.T) {
 					Delta:  0,
 				},
 			},
-			wantReview: true,
+			wantRejected: true,
 		},
 		{
-			name: "scored work_authorization required goes to review",
+			name: "scored work_authorization required rejects",
 			profile: profileschema.Profile{
 				Facts: func() profileschema.Facts {
 					f := baseFacts
@@ -1889,7 +2284,7 @@ func TestFactCuts(t *testing.T) {
 					Delta:  0,
 				},
 			},
-			wantReview: true,
+			wantRejected: true,
 		},
 		{
 			name: "scored timezone restricted with no allow zone goes to review",
@@ -1963,11 +2358,17 @@ func TestFactCuts(t *testing.T) {
 			if !reflect.DeepEqual(got.Signals, tt.want) {
 				t.Fatalf("signals got %+v\nwant %+v", got.Signals, tt.want)
 			}
-			if got.Bucket == schema.BucketRejected {
-				t.Fatalf("fact cuts must not reject, bucket=%s", got.Bucket)
-			}
-			if tt.wantReview && got.Bucket != schema.BucketReview {
-				t.Fatalf("bucket=%s want REVIEW", got.Bucket)
+			switch {
+			case tt.wantRejected:
+				if got.Bucket != schema.BucketRejected {
+					t.Fatalf("bucket=%s want REJECTED", got.Bucket)
+				}
+			case tt.wantReview:
+				if got.Bucket != schema.BucketReview {
+					t.Fatalf("bucket=%s want REVIEW", got.Bucket)
+				}
+			case got.Bucket == schema.BucketRejected:
+				t.Fatalf("unexpected REJECTED for %s", tt.name)
 			}
 		})
 	}

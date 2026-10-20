@@ -45,6 +45,7 @@ type fileProfile struct {
 	Children       map[string][]string         `yaml:"children"`
 	WellfoundRoles []string                    `yaml:"wellfound_roles"`
 	GateRole       []string                    `yaml:"gate_role"`
+	GateRoleAllow  []string                    `yaml:"gate_role_allow"`
 	GateHard       []string                    `yaml:"gate_hard"`
 	GateLocation   fileGateLocation            `yaml:"gate_location"`
 	SignalsPlus    fileSignalsPlus             `yaml:"signals_plus"`
@@ -54,20 +55,27 @@ type fileProfile struct {
 }
 
 type fileFacts struct {
-	ResidenceRegions  []string                   `yaml:"residence_regions"`
-	Office            fileFactsOffice            `yaml:"office"`
-	HiringScope       fileFactField              `yaml:"hiring_scope"`
-	WorkAuthorization fileFactsWorkAuthorization `yaml:"work_authorization"`
-	Timezone          fileFactsTimezone          `yaml:"timezone"`
-	Compensation      fileFactsCompensation      `yaml:"compensation"`
-	WorkMode          fileFactField              `yaml:"work_mode"`
-	EmploymentLoad    fileFactField              `yaml:"employment_load"`
-	Engagement        fileFactField              `yaml:"engagement"`
+	ResidenceRegions   []string                   `yaml:"residence_regions"`
+	ResidenceCountries []string                   `yaml:"residence_countries"`
+	Office             fileFactsOffice            `yaml:"office"`
+	HiringScope        fileFactsHiringScope       `yaml:"hiring_scope"`
+	WorkAuthorization  fileFactsWorkAuthorization `yaml:"work_authorization"`
+	Timezone           fileFactsTimezone          `yaml:"timezone"`
+	Compensation       fileFactsCompensation      `yaml:"compensation"`
+	WorkMode           fileFactsWorkMode          `yaml:"work_mode"`
+	EmploymentLoad     fileFactField              `yaml:"employment_load"`
+	Engagement         fileFactField              `yaml:"engagement"`
 }
 
 type fileFactField struct {
 	Scored bool `yaml:"scored"`
 	Delta  int  `yaml:"delta"`
+}
+
+type fileFactsHiringScope struct {
+	Scored        bool `yaml:"scored"`
+	Delta         int  `yaml:"delta"`
+	NarrowPenalty int  `yaml:"narrow_penalty"`
 }
 
 type fileFactsOffice struct {
@@ -78,6 +86,12 @@ type fileFactsOffice struct {
 }
 
 type fileFactsWorkAuthorization struct {
+	Scored bool     `yaml:"scored"`
+	Delta  int      `yaml:"delta"`
+	Gates  []string `yaml:"gates"`
+}
+
+type fileFactsWorkMode struct {
 	Scored bool     `yaml:"scored"`
 	Delta  int      `yaml:"delta"`
 	Gates  []string `yaml:"gates"`
@@ -122,8 +136,9 @@ type fileSalarySignals struct {
 }
 
 type fileFreshnessSignals struct {
-	Days3 int `yaml:"days_3"`
-	Days7 int `yaml:"days_7"`
+	Days3           int `yaml:"days_3"`
+	Days7           int `yaml:"days_7"`
+	UnknownPostedAt int `yaml:"unknown_posted_at"`
 }
 
 type filePenaltyGroup struct {
@@ -212,6 +227,7 @@ func (s *FileStore) load(path, wantID string) (schema.Profile, error) {
 		Children:       raw.Children,
 		WellfoundRoles: raw.WellfoundRoles,
 		GateRole:       raw.GateRole,
+		GateRoleAllow:  raw.GateRoleAllow,
 		GateHard:       raw.GateHard,
 		GateLocation: schema.GateLocation{
 			AllowCountries:  raw.GateLocation.AllowCountries,
@@ -232,8 +248,9 @@ func (s *FileStore) load(path, wantID string) (schema.Profile, error) {
 				PenaltyIfBelow: raw.SignalsPlus.Salary.PenaltyIfBelow,
 			},
 			Freshness: schema.FreshnessSignals{
-				Days3: raw.SignalsPlus.Freshness.Days3,
-				Days7: raw.SignalsPlus.Freshness.Days7,
+				Days3:           raw.SignalsPlus.Freshness.Days3,
+				Days7:           raw.SignalsPlus.Freshness.Days7,
+				UnknownPostedAt: raw.SignalsPlus.Freshness.UnknownPostedAt,
 			},
 		},
 		PenaltiesSoft: flattenPenalties(raw.PenaltiesSoft),
@@ -244,16 +261,18 @@ func (s *FileStore) load(path, wantID string) (schema.Profile, error) {
 
 func mapFacts(raw fileFacts) schema.Facts {
 	return schema.Facts{
-		ResidenceRegions: raw.ResidenceRegions,
+		ResidenceRegions:   raw.ResidenceRegions,
+		ResidenceCountries: raw.ResidenceCountries,
 		Office: schema.FactsOffice{
 			Scored:         raw.Office.Scored,
 			Delta:          raw.Office.Delta,
 			AllowCountries: raw.Office.AllowCountries,
 			AllowRegions:   raw.Office.AllowRegions,
 		},
-		HiringScope: schema.FactField{
-			Scored: raw.HiringScope.Scored,
-			Delta:  raw.HiringScope.Delta,
+		HiringScope: schema.FactsHiringScope{
+			Scored:        raw.HiringScope.Scored,
+			Delta:         raw.HiringScope.Delta,
+			NarrowPenalty: raw.HiringScope.NarrowPenalty,
 		},
 		WorkAuthorization: schema.FactsWorkAuthorization{
 			Scored: raw.WorkAuthorization.Scored,
@@ -270,9 +289,10 @@ func mapFacts(raw fileFacts) schema.Facts {
 			Delta:           raw.Compensation.Delta,
 			AllowCurrencies: raw.Compensation.AllowCurrencies,
 		},
-		WorkMode: schema.FactField{
+		WorkMode: schema.FactsWorkMode{
 			Scored: raw.WorkMode.Scored,
 			Delta:  raw.WorkMode.Delta,
+			Gates:  raw.WorkMode.Gates,
 		},
 		EmploymentLoad: schema.FactField{
 			Scored: raw.EmploymentLoad.Scored,

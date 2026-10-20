@@ -17,11 +17,12 @@ func factSignals(profile profileschema.Profile, job jobdata.Job, verdict enrichs
 	var signals []schema.Signal
 
 	signals = append(signals, officeFactSignals(facts.Office, verdict.Facts.Office)...)
-	signals = append(signals, officeCutSignals(facts.Office, verdict.Facts.Office)...)
+	signals = append(signals, officeCutSignals(facts.Office, verdict.Facts.Office, verdict.Facts.WorkMode, verdict.Facts.HiringScope)...)
 	signals = append(signals, conflictIf(enrichschema.FieldNameOffice, officeOnAllowSide(verdict.Facts.Office, facts.Office), job, quoteOf(verdict.Facts.Office.Quote), officePrimaryValue(verdict.Facts.Office))...)
 
 	signals = append(signals, hiringScopeFactSignals(facts.HiringScope, verdict.Facts.HiringScope)...)
 	signals = append(signals, hiringScopeCutSignals(facts.HiringScope, facts.ResidenceRegions, verdict.Facts.HiringScope)...)
+	signals = append(signals, hiringScopeNarrowPenalty(facts.HiringScope, facts.ResidenceRegions, facts.ResidenceCountries, verdict.Facts.HiringScope)...)
 	signals = append(signals, conflictIf(enrichschema.FieldNameHiringScope, hiringScopeOnAllowSide(verdict.Facts.HiringScope, facts.ResidenceRegions), job, quoteOf(verdict.Facts.HiringScope.Quote), hiringScopePrimaryValue(verdict.Facts.HiringScope))...)
 
 	signals = append(signals, workAuthFactSignals(facts.WorkAuthorization, verdict.Facts.WorkAuthorization)...)
@@ -36,8 +37,9 @@ func factSignals(profile profileschema.Profile, job jobdata.Job, verdict enrichs
 	signals = append(signals, compensationCutSignals(facts.Compensation, verdict.Facts.Compensation)...)
 	// compensation has no mapped phrases in this slice; conflictIf is a no-op.
 
-	signals = append(signals, quotedFactSignals(enrichschema.FieldNameWorkMode.String(), facts.WorkMode, verdict.Facts.WorkMode)...)
-	signals = append(signals, conflictIf(enrichschema.FieldNameWorkMode, workModeOnAllowSide(verdict.Facts.WorkMode), job, quoteOf(verdict.Facts.WorkMode.Quote), strings.TrimSpace(verdict.Facts.WorkMode.Value))...)
+	signals = append(signals, workModeFactSignals(facts.WorkMode, verdict.Facts.WorkMode)...)
+	signals = append(signals, workModeCutSignals(facts.WorkMode, verdict.Facts.WorkMode)...)
+	signals = append(signals, conflictIf(enrichschema.FieldNameWorkMode, workModeOnAllowSide(verdict.Facts.WorkMode, facts.WorkMode), job, quoteOf(verdict.Facts.WorkMode.Quote), strings.TrimSpace(verdict.Facts.WorkMode.Value))...)
 
 	signals = append(signals, quotedFactSignals(enrichschema.FieldNameEmploymentLoad.String(), facts.EmploymentLoad, verdict.Facts.EmploymentLoad)...)
 	signals = append(signals, quotedFactSignals(enrichschema.FieldNameEngagement.String(), facts.Engagement, verdict.Facts.Engagement)...)
@@ -45,8 +47,13 @@ func factSignals(profile profileschema.Profile, job jobdata.Job, verdict enrichs
 	return signals
 }
 
-func officeCutSignals(cfg profileschema.FactsOffice, office enrichschema.Office) []schema.Signal {
+func officeCutSignals(cfg profileschema.FactsOffice, office enrichschema.Office, workMode enrichschema.QuotedValue, scope enrichschema.HiringScope) []schema.Signal {
 	if !cfg.Scored || office.Unknown {
+		return nil
+	}
+	// HQ location is not a presence requirement when the role is fully remote
+	// and hiring_scope already allows Europe / worldwide.
+	if officeCutSuppressed(workMode, scope) {
 		return nil
 	}
 	allowC := compact(cfg.AllowCountries)
@@ -66,7 +73,30 @@ func officeCutSignals(cfg profileschema.FactsOffice, office enrichschema.Office)
 	return out
 }
 
-func hiringScopeCutSignals(cfg profileschema.FactField, residence []string, scope enrichschema.HiringScope) []schema.Signal {
+// officeCutSuppressed reports remote + Europe-compatible hiring_scope.
+// Unknown scope keeps the office cut (HQ is the only location signal).
+func officeCutSuppressed(workMode enrichschema.QuotedValue, scope enrichschema.HiringScope) bool {
+	if !enrichschema.WorkModeRemote.Equals(strings.TrimSpace(workMode.Value)) {
+		return false
+	}
+	return hiringScopeEuropeCompatible(scope)
+}
+
+// hiringScopeEuropeCompatible is worldwide, or restricted that intersects EUROPE.
+func hiringScopeEuropeCompatible(scope enrichschema.HiringScope) bool {
+	if isUnknownValue(scope.Value) {
+		return false
+	}
+	if enrichschema.ScopeWorldwide.Equals(scope.Value) {
+		return true
+	}
+	if !enrichschema.ScopeRestricted.Equals(scope.Value) {
+		return false
+	}
+	return residenceIntersects([]string{"EUROPE"}, scope.Countries, scope.Regions)
+}
+
+func hiringScopeCutSignals(cfg profileschema.FactsHiringScope, residence []string, scope enrichschema.HiringScope) []schema.Signal {
 	if !cfg.Scored || isUnknownValue(scope.Value) {
 		return nil
 	}
@@ -77,6 +107,59 @@ func hiringScopeCutSignals(cfg profileschema.FactField, residence []string, scop
 		return nil
 	}
 	return []schema.Signal{factGate(enrichschema.FieldNameHiringScope, quoteOf(scope.Quote), hiringScopePrimaryValue(scope))}
+}
+
+// maxNarrowScopeCountries is the largest restricted country list that still
+// counts as "narrow" for residence_countries soft penalty. Broader lists and
+// EUROPE/EMEA/WORLDWIDE regions are left alone.
+const maxNarrowScopeCountries = 2
+
+// hiringScopeNarrowPenalty soft-hits when restricted scope lists 1–2 countries
+// that omit residence_countries and has no broad region. Skips when the hard
+// residence_regions cut already applies. Does not reject.
+func hiringScopeNarrowPenalty(cfg profileschema.FactsHiringScope, residenceRegions, residenceCountries []string, scope enrichschema.HiringScope) []schema.Signal {
+	if !cfg.Scored || cfg.NarrowPenalty == 0 || isUnknownValue(scope.Value) {
+		return nil
+	}
+	if !enrichschema.ScopeRestricted.Equals(scope.Value) {
+		return nil
+	}
+	if !residenceIntersects(residenceRegions, scope.Countries, scope.Regions) {
+		return nil
+	}
+	residence := compact(residenceCountries)
+	if len(residence) == 0 {
+		return nil
+	}
+	if hiringScopeBroadRegion(scope.Regions) {
+		return nil
+	}
+	countries := compact(scope.Countries)
+	if len(countries) == 0 || len(countries) > maxNarrowScopeCountries {
+		return nil
+	}
+	for _, code := range residence {
+		if containsFold(countries, code) {
+			return nil
+		}
+	}
+	return []schema.Signal{{
+		Code:   schema.SignalPenalty,
+		Rule:   "facts.hiring_scope.narrow",
+		Phrase: quoteOf(scope.Quote),
+		Value:  hiringScopePrimaryValue(scope),
+		Delta:  cfg.NarrowPenalty,
+	}}
+}
+
+func hiringScopeBroadRegion(regions []string) bool {
+	for _, region := range compact(regions) {
+		switch strings.ToUpper(region) {
+		case "EUROPE", "EMEA", "WORLDWIDE":
+			return true
+		}
+	}
+	return false
 }
 
 func workAuthCutSignals(cfg profileschema.FactsWorkAuthorization, auth enrichschema.WorkAuthorization) []schema.Signal {
@@ -190,28 +273,62 @@ func officeFactSignals(cfg profileschema.FactsOffice, office enrichschema.Office
 	return out
 }
 
-func hiringScopeFactSignals(cfg profileschema.FactField, scope enrichschema.HiringScope) []schema.Signal {
+func hiringScopeFactSignals(cfg profileschema.FactsHiringScope, scope enrichschema.HiringScope) []schema.Signal {
 	if isUnknownValue(scope.Value) {
 		return nil
 	}
-	delta := factDelta(cfg.Scored, cfg.Delta)
 	quote := quoteOf(scope.Quote)
+	bonus := 0
+	if cfg.Scored && cfg.Delta != 0 && hiringScopeBonusEligible(scope) {
+		bonus = cfg.Delta
+	}
 	if enrichschema.ScopeWorldwide.Equals(scope.Value) {
-		return []schema.Signal{llmSignal(enrichschema.FieldNameHiringScope.String(), quote, enrichschema.ScopeWorldwide.String(), delta)}
+		return []schema.Signal{llmSignal(enrichschema.FieldNameHiringScope.String(), quote, enrichschema.ScopeWorldwide.String(), bonus)}
 	}
 	countries := compact(scope.Countries)
 	regions := compact(scope.Regions)
 	if len(countries) == 0 && len(regions) == 0 {
-		return []schema.Signal{llmSignal(enrichschema.FieldNameHiringScope.String(), quote, strings.TrimSpace(scope.Value), delta)}
+		return []schema.Signal{llmSignal(enrichschema.FieldNameHiringScope.String(), quote, strings.TrimSpace(scope.Value), 0)}
 	}
 	out := make([]schema.Signal, 0, len(countries)+len(regions))
 	for _, code := range countries {
-		out = append(out, llmSignal(enrichschema.FieldNameHiringScope.String(), quote, code, delta))
+		out = append(out, llmSignal(enrichschema.FieldNameHiringScope.String(), quote, code, 0))
 	}
 	for _, code := range regions {
-		out = append(out, llmSignal(enrichschema.FieldNameHiringScope.String(), quote, code, delta))
+		d := 0
+		if bonus != 0 && hiringScopeBonusRegion(code) {
+			d = bonus
+			bonus = 0
+		}
+		out = append(out, llmSignal(enrichschema.FieldNameHiringScope.String(), quote, code, d))
 	}
+	// Restricted to countries only (no broad region): no scope bonus.
 	return out
+}
+
+// hiringScopeBonusEligible is worldwide, or restricted with EUROPE/EMEA/WORLDWIDE.
+func hiringScopeBonusEligible(scope enrichschema.HiringScope) bool {
+	if enrichschema.ScopeWorldwide.Equals(scope.Value) {
+		return true
+	}
+	if !enrichschema.ScopeRestricted.Equals(scope.Value) {
+		return false
+	}
+	for _, region := range compact(scope.Regions) {
+		if hiringScopeBonusRegion(region) {
+			return true
+		}
+	}
+	return false
+}
+
+func hiringScopeBonusRegion(region string) bool {
+	switch strings.ToUpper(strings.TrimSpace(region)) {
+	case "EUROPE", "EMEA", "WORLDWIDE":
+		return true
+	default:
+		return false
+	}
 }
 
 func workAuthFactSignals(cfg profileschema.FactsWorkAuthorization, auth enrichschema.WorkAuthorization) []schema.Signal {
@@ -369,8 +486,42 @@ func timezoneOnAllowSide(tz enrichschema.TimezoneConstraint, cfg profileschema.F
 	return false
 }
 
-func workModeOnAllowSide(mode enrichschema.QuotedValue) bool {
-	return enrichschema.WorkModeRemote.Equals(strings.TrimSpace(mode.Value))
+func workModeFactSignals(cfg profileschema.FactsWorkMode, mode enrichschema.QuotedValue) []schema.Signal {
+	if isUnknownValue(mode.Value) {
+		return nil
+	}
+	return []schema.Signal{llmSignal(
+		enrichschema.FieldNameWorkMode.String(),
+		quoteOf(mode.Quote),
+		strings.TrimSpace(mode.Value),
+		factDelta(cfg.Scored, cfg.Delta),
+	)}
+}
+
+func workModeCutSignals(cfg profileschema.FactsWorkMode, mode enrichschema.QuotedValue) []schema.Signal {
+	if !cfg.Scored || isUnknownValue(mode.Value) {
+		return nil
+	}
+	value := strings.TrimSpace(mode.Value)
+	for _, gate := range cfg.Gates {
+		if strings.EqualFold(strings.TrimSpace(gate), value) {
+			return []schema.Signal{factGate(enrichschema.FieldNameWorkMode, quoteOf(mode.Quote), value)}
+		}
+	}
+	return nil
+}
+
+func workModeOnAllowSide(mode enrichschema.QuotedValue, cfg profileschema.FactsWorkMode) bool {
+	if isUnknownValue(mode.Value) {
+		return false
+	}
+	value := strings.TrimSpace(mode.Value)
+	for _, gate := range cfg.Gates {
+		if strings.EqualFold(strings.TrimSpace(gate), value) {
+			return false
+		}
+	}
+	return enrichschema.WorkModeRemote.Equals(value)
 }
 
 // residenceIntersects reports whether a restricted hiring scope meets residence_regions.

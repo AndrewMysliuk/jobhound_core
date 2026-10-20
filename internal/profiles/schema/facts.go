@@ -3,21 +3,31 @@ package schema
 // Facts is the profile YAML block that turns enrich answers into signals and cuts.
 // A missing block, or a missing field, leaves Scored false. A missing Delta is 0.
 type Facts struct {
-	ResidenceRegions  []string
-	Office            FactsOffice
-	HiringScope       FactField
-	WorkAuthorization FactsWorkAuthorization
-	Timezone          FactsTimezone
-	Compensation      FactsCompensation
-	WorkMode          FactField
-	EmploymentLoad    FactField
-	Engagement        FactField
+	ResidenceRegions   []string
+	ResidenceCountries []string
+	Office             FactsOffice
+	HiringScope        FactsHiringScope
+	WorkAuthorization  FactsWorkAuthorization
+	Timezone           FactsTimezone
+	Compensation       FactsCompensation
+	WorkMode           FactsWorkMode
+	EmploymentLoad     FactField
+	Engagement         FactField
 }
 
 // FactField is scored/delta for a facts answer with no allow-list or gates.
 type FactField struct {
 	Scored bool
 	Delta  int
+}
+
+// FactsHiringScope is hiring_scope scored/delta plus an optional soft penalty when
+// a restricted country list is narrow and omits residence_countries.
+// Delta applies once when scope is worldwide or restricted with EUROPE/EMEA/WORLDWIDE.
+type FactsHiringScope struct {
+	Scored        bool
+	Delta         int
+	NarrowPenalty int
 }
 
 // FactsOffice is the office allow-lists.
@@ -30,6 +40,13 @@ type FactsOffice struct {
 
 // FactsWorkAuthorization is the authorization cut list (for example required).
 type FactsWorkAuthorization struct {
+	Scored bool
+	Delta  int
+	Gates  []string
+}
+
+// FactsWorkMode cuts listed modes (for example hybrid, office) into REVIEW.
+type FactsWorkMode struct {
 	Scored bool
 	Delta  int
 	Gates  []string

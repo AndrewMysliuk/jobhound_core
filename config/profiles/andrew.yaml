@@ -49,150 +49,47 @@ wellfound_roles:
   - backend-engineer
 
 
-gate_role:
-  - "sdr"
-  - "appointment setter"
-  - "operations assistant"
-  - "executive assistant"
-  - "recruiter"
-  - "talent acquisition"
-  - "manager"
-  - "marketing"
-  - "accountant"
-  - "compliance officer"
-  - "video editor"
-  - "visual content creator"
-  - "cold caller"
-  - "customer retention"
-  - "technical writer"
-  - "designer"
-  - "content moderator"
-  - "technical mentor"
-  - "independent contractor mentor"
-  - "business unit head"
-  - "data scientist"
-  - "machine learning scientist"
-  - "ml engineer"
-  - "data engineer"
-  - "data visualization"
-  - "java"
-  - "power bi developer"
-  - "shopify developer"
-  - "intern"
-  - "internship"
-  - "entry level"
-  - "mobile app developer"
-  - "native language specialist"
-  - "conversation specialist"
-  - "language specialist"
-  - "voice talent"
-  - "ai trainer"
-  - "ai trainers"
-  - "subject matter expert"
-  - "benchmark engineer"
-  - "narrator"
-  - "recorder"
-  - "account executive"
-  - "business development"
-  - "presales"
-  - "solution engineer"
-  - "solutions engineer"
-  - "sales"
-  - "gtm"
-  - "seo"
-  - "ppc"
-  - "marketer"
-  - "revenue operations"
-  - "growth pm"
-  - "customer success"
-  - "client success"
-  - "customer service"
-  - "customer support"
-  - "customer engineer"
-  - "technical support"
-  - "support engineer"
-  - "virtual assistant"
-  - "customer evidence"
-  - "advisor"
-  - "accounts payable"
-  - "legal counsel"
-  - "procurement"
-  - "treasury"
-  - "people operations"
-  - "talent lead"
-  - "partnerships"
-  - "patient services"
-  - "scientific liaison"
-  - "compensation"
-  - "operations specialist"
-  - "coordinator"
-  - "content writer"
-  - "course writer"
-  - "creative producer"
-  - "product lead"
-  - "owner"
-  - "qa specialist"
-  - "quality assurance"
-  - "qa engineer"
-  - "test engineer"
-  - "ios engineer"
-  - "swift developer"
-  - "swift engineer"
-  - "mobile engineer"
-  - "ml ops"
-  - "applied scientist"
-  - "researcher"
-  - "cv engineer"
-  - "director"
-  - "head of"
-  - "junior"
-  - "graduate software"
-  - "associate software"
-  - "projektarbeit"
-  - "developer advocate"
-  - "developer relations"
-  - "developer engagement"
-  - "professional services"
-  - "technical specialist"
-  - "consultant"
-  - "strategist"
-  - "technician"
-  - "analyst"
-  - "security engineer"
-  - "security operations"
-  - "compliance engineer"
-  - "privacy engineer"
-  - "trust and safety"
-  - "trust & safety"
-  - "iam engineer"
-  - "devops"
-  - "dev ops"
-  - "devsecops engineer"
-  - "site reliability"
-  - "sre"
-  - "infrastructure engineer"
-  - "cloud engineer"
-  - "release engineer"
-  - "build engineer"
-  - "engineering productivity"
-  - "developer productivity"
-  - "database engineer"
-  - "dba"
-  - "network engineer"
-  - "mlops"
-  - "python developer"
-  - "python engineer"
-  - "desktop engineer"
-  - "video engineer"
-  - "streaming engineer"
-  - "distinguished"
-  - "vp of engineering"
-  - "expert engineer"
-  - "design engineer"
-  - "training engineer"
-  - "llm engineer"
-  - "genai engineer"
-  - "prompt engineer"
+gate_role_allow:
+  - "frontend engineer"
+  - "frontend developer"
+  - "front-end engineer"
+  - "front-end developer"
+  - "front end engineer"
+  - "front end developer"
+  - "full-stack engineer"
+  - "full-stack developer"
+  - "fullstack engineer"
+  - "fullstack developer"
+  - "full stack engineer"
+  - "full stack developer"
+  - "product engineer"
+  - "software engineer"
+  - "software developer"
+  - "vue developer"
+  - "vue.js developer"
+  - "vue engineer"
+  - "golang developer"
+  - "golang engineer"
+  - "go developer"
+  - "go engineer"
+  - "backend engineer"
+  - "backend developer"
+  - "node.js developer"
+  - "nodejs developer"
+  - "typescript developer"
+  - "typescript engineer"
+  # localization / wording gaps found after allow-list calibration
+  - "web developer"
+  - "web-developer"
+  - "webontwikkelaar"
+  - "desarrollador frontend"
+  - "desarrollador"
+  - "entwickler"
+  - "frontend vue"
+  - "fullstack web"
+  - "full stack web"
+  - "ts dev"
+  - "typescript dev"
 
 gate_hard:
   # work_authorization / hiring_scope facts replace visa and "must be based" phrase gates
@@ -215,6 +112,19 @@ gate_hard:
   - "deferred compensation"
   - "no salary until"
   - "compensation will be deferred"
+  # former penalties_soft agency / gambling_crypto — hard reject when phrased in the listing
+  - "contract-to-hire"
+  - "staff augmentation"
+  - "outsourcing"
+  - "bpo"
+  - "casino"
+  - "igaming"
+  - "gambling"
+  - "crypto"
+  - "web3"
+  - "defi"
+  - "blockchain"
+  - "stablecoin"
 
 gate_location:
   # No US/CA: US-only (and NA-only) remote fails intersection; US+EU still passes.
@@ -267,20 +177,23 @@ gate_location:
 signals_plus:
   title:
     vue: 6
+    vuejs: 6
     typescript: 4
-    react: 4
+    react: 1
     golang: 6
     node: 4
+    nodejs: 4
   text:
-    max_total: 4
+    max_total: 8
     terms:
-      vue: 2
-      typescript: 2
-      react: 2
-      golang: 2
-      node: 2
+      vue: 3
+      vuejs: 3
+      typescript: 1
+      golang: 3
+      node: 1
+      nodejs: 1
   salary:
-    min_eur_year: 80000
+    min_eur_year: 72000
     min_usd_year: 120000
     usd_per_eur: 1.1
     bonus_if_above: 4
@@ -288,8 +201,19 @@ signals_plus:
   freshness:
     days_3: 2
     days_7: 1
+    unknown_posted_at: -2
 
 penalties_soft:
+  agency_smell:
+    weight: -7
+    min_occurrences: 1
+    check_negation: false
+    terms:
+      - "for our client"
+      - "our client is"
+      - "software house"
+      - "recruitment agency"
+      - "join our network"
   foreign_stack:
     weight: -4
     min_occurrences: 2
@@ -299,6 +223,7 @@ penalties_soft:
       - "spring framework"
       - "hibernate"
       - "kotlin"
+      - "java"
       - "php"
       - "laravel"
       - "wordpress"
@@ -330,6 +255,16 @@ penalties_soft:
       - "objective-c"
       - "electron"
       - "webrtc"
+  react_primary:
+    weight: -6
+    min_occurrences: 2
+    check_negation: false
+    terms:
+      - "react"
+      - "next.js"
+      - "nextjs"
+      - "redux"
+      - "angular"
   foreign_domain:
     weight: -3
     min_occurrences: 1
@@ -394,15 +329,6 @@ penalties_soft:
       - "week from the office"
       - "week in the office"
       - "days/week in office"
-  agency:
-    weight: -3
-    min_occurrences: 1
-    check_negation: false
-    terms:
-      - "contract-to-hire"
-      - "staff augmentation"
-      - "outsourcing"
-      - "bpo"
   culture_smell:
     weight: -2
     min_occurrences: 1
@@ -416,17 +342,6 @@ penalties_soft:
       - "work hard, play hard"
       - "rockstar"
       - "ninja"
-  gambling_crypto:
-    weight: -4
-    min_occurrences: 1
-    check_negation: false
-    terms:
-      - "casino"
-      - "igaming"
-      - "gambling"
-      - "crypto"
-      - "web3"
-      - "defi"
   part_time:
     weight: -3
     min_occurrences: 1
@@ -478,11 +393,15 @@ penalties_soft:
       - "data science"
 
 buckets:
-  top: 6
+  # 8: title vue/go alone (+6) + weak text no longer clears TOP without real extras
+  top: 8
 
 facts:
   # EUROPE only: US-only / US+CA hiring_scope is a hard cut; worldwide still ok.
+  # residence_countries + hiring_scope.narrow_penalty: soft hit when restricted
+  # to 1–2 countries that omit RO (EUROPE/EMEA/WORLDWIDE regions skip this).
   residence_regions: [EUROPE]
+  residence_countries: [RO]
   office:
     scored: true
     allow_countries:
@@ -520,6 +439,9 @@ facts:
     allow_regions: [EUROPE, EMEA, WORLDWIDE]
   hiring_scope:
     scored: true
+    # +5 once for worldwide / EUROPE / EMEA (keeps Hostaway-class at buckets.top: 8)
+    delta: 5
+    narrow_penalty: -4
   work_authorization:
     scored: true
     gates: [required]
@@ -530,7 +452,9 @@ facts:
     scored: false
     allow_currencies: [EUR, USD, GBP]
   work_mode:
-    scored: false
+    scored: true
+    # hybrid / office → REVIEW (not REJECTED); remote stays unscored cut
+    gates: [hybrid, office]
   employment_load:
     scored: false
   engagement:

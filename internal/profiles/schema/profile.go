@@ -10,6 +10,7 @@ type Profile struct {
 	Children       map[string][]string
 	WellfoundRoles []string
 	GateRole       []string
+	GateRoleAllow  []string
 	GateHard       []string
 	GateLocation   GateLocation
 	SignalsPlus    SignalsPlus
@@ -48,10 +49,12 @@ type SalarySignals struct {
 	PenaltyIfBelow int
 }
 
-// FreshnessSignals is the posted-at bonus.
+// FreshnessSignals is the posted-at bonus. UnknownPostedAt applies when posted_at is zero.
+// Freshness bonuses never fall back to first_seen_at.
 type FreshnessSignals struct {
-	Days3 int
-	Days7 int
+	Days3           int
+	Days7           int
+	UnknownPostedAt int
 }
 
 // PenaltyGroup is one soft penalty, visited in slice order.

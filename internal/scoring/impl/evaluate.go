@@ -85,6 +85,7 @@ func Evaluate(profile profileschema.Profile, job jobdata.Job, verdict *enrichsch
 
 func evaluateAt(profile profileschema.Profile, job jobdata.Job, now time.Time, verdict *enrichschema.Verdict) Outcome {
 	var signals []schema.Signal
+	signals = append(signals, matchGateRoleAllow(profile.GateRoleAllow, job.Title)...)
 	signals = append(signals, matchGateRole(profile.GateRole, job.Title)...)
 	signals = append(signals, matchPhrases(profile.GateHard, true, "gate_hard", schema.SignalGateHard, job.Title, job.Description, job.Location.Raw)...)
 	signals = append(signals, experienceYearsGate(profile, job)...)
@@ -397,11 +398,17 @@ func normalizeSalaryText(text string) string {
 }
 
 func freshnessSignal(fresh profileschema.FreshnessSignals, job jobdata.Job, now time.Time) (schema.Signal, bool) {
-	ts, ok := freshnessClock(job)
-	if !ok {
-		return schema.Signal{}, false
+	if job.PostedAt.IsZero() {
+		if fresh.UnknownPostedAt == 0 {
+			return schema.Signal{}, false
+		}
+		return schema.Signal{
+			Code:  schema.SignalPlus,
+			Rule:  "signals_plus.freshness.unknown_posted_at",
+			Delta: fresh.UnknownPostedAt,
+		}, true
 	}
-	age := now.Sub(ts)
+	age := now.Sub(job.PostedAt)
 	var delta int
 	switch {
 	case age <= 3*24*time.Hour:
@@ -419,16 +426,6 @@ func freshnessSignal(fresh profileschema.FreshnessSignals, job jobdata.Job, now 
 		Rule:  "signals_plus.freshness",
 		Delta: delta,
 	}, true
-}
-
-func freshnessClock(job jobdata.Job) (time.Time, bool) {
-	if !job.PostedAt.IsZero() {
-		return job.PostedAt, true
-	}
-	if !job.FirstSeenAt.IsZero() {
-		return job.FirstSeenAt, true
-	}
-	return time.Time{}, false
 }
 
 func matchPenaltiesSoft(profile profileschema.Profile, job jobdata.Job) []schema.Signal {
@@ -776,20 +773,24 @@ func postedAtStale(posted, now time.Time, rejectDays int) bool {
 }
 
 func chooseBucket(profile profileschema.Profile, score int, signals []schema.Signal) schema.Bucket {
-	// Phrase / role / location / posted_at gates reject. Fact cuts (facts.*) go to
-	// review so model misses stay visible instead of disappearing into rejected.
-	factCut := false
+	// Phrase / role / location / posted_at gates reject.
+	// Fact cuts on hiring_scope and work_authorization also reject.
+	// Other fact cuts (office, timezone, …) go to review so model misses stay visible.
+	factReview := false
 	for _, signal := range signals {
 		if !isGate(signal.Code) {
 			continue
 		}
 		if isFactCut(signal) {
-			factCut = true
+			if isFactHardReject(signal) {
+				return schema.BucketRejected
+			}
+			factReview = true
 			continue
 		}
 		return schema.BucketRejected
 	}
-	if factCut {
+	if factReview {
 		return schema.BucketReview
 	}
 	top := profile.Buckets.Top
@@ -804,6 +805,15 @@ func chooseBucket(profile profileschema.Profile, score int, signals []schema.Sig
 
 func isFactCut(signal schema.Signal) bool {
 	return signal.Code == schema.SignalGateHard && strings.HasPrefix(signal.Rule, "facts.")
+}
+
+func isFactHardReject(signal schema.Signal) bool {
+	switch signal.Rule {
+	case "facts.hiring_scope", "facts.work_authorization":
+		return true
+	default:
+		return false
+	}
 }
 
 func hasTitlePlusSignal(signals []schema.Signal) bool {
@@ -830,6 +840,29 @@ func scoreOf(signals []schema.Signal) int {
 		score += signal.Delta
 	}
 	return score
+}
+
+// matchGateRoleAllow rejects when the title matches none of the allow phrases.
+// An empty list leaves the allow gate off (blacklist-only profiles).
+func matchGateRoleAllow(phrases []string, title string) []schema.Signal {
+	any := false
+	for _, phrase := range phrases {
+		phrase = strings.TrimSpace(phrase)
+		if phrase == "" {
+			continue
+		}
+		any = true
+		if activeHits(title, phrase, false) > 0 {
+			return nil
+		}
+	}
+	if !any {
+		return nil
+	}
+	return []schema.Signal{{
+		Code: schema.SignalGateRole,
+		Rule: "gate_role_allow",
+	}}
 }
 
 func matchGateRole(phrases []string, title string) []schema.Signal {
