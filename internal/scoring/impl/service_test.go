@@ -387,8 +387,8 @@ func TestRescoreJobs(t *testing.T) {
 		FirstSeenAt: started.Add(-24 * time.Hour),
 	}
 	profile := profileschema.Profile{
-		ID:   "andrew",
-		Name: "Andrew",
+		ID:      "andrew",
+		Name:    "Andrew",
 		Buckets: profileschema.Buckets{Top: 1},
 	}
 	verdict := enrichschema.Verdict{

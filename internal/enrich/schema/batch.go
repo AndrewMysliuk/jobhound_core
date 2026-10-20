@@ -25,9 +25,9 @@ type ListMissingResult struct {
 
 // SubmitBatchResult is returned by SubmitBatch after creating an Anthropic Message Batch.
 type SubmitBatchResult struct {
-	BatchID       string
-	CustomToJob   map[string]string
-	SubmittedIDs  []string
+	BatchID      string
+	CustomToJob  map[string]string
+	SubmittedIDs []string
 }
 
 // PollBatchInput is one status check (and, when ended, a results fetch) for a batch.

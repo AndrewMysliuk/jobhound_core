@@ -25,11 +25,11 @@ const (
 
 // VacancyBatchItem is one vacancy to include in a Message Batch request.
 type VacancyBatchItem struct {
-	JobID        string
-	Title        string
-	Description  string
-	LocationRaw  string
-	SalaryRaw    string
+	JobID       string
+	Title       string
+	Description string
+	LocationRaw string
+	SalaryRaw   string
 }
 
 // BatchesClient talks to Anthropic Message Batches. It does not call the network
@@ -285,7 +285,7 @@ type batchWire struct {
 }
 
 type batchResultLine struct {
-	CustomID string            `json:"custom_id"`
+	CustomID string             `json:"custom_id"`
 	Result   batchResultPayload `json:"result"`
 }
 
