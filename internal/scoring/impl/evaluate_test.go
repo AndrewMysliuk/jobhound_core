@@ -215,7 +215,7 @@ func TestEvaluate(t *testing.T) {
 			},
 		},
 		{
-			name: "remote in the US is not a location cut",
+			name: "remote outside allow is a location cut",
 			profile: profileschema.Profile{
 				GateLocation: profileschema.GateLocation{AllowCountries: []string{"RO"}},
 				Buckets:      review,
@@ -223,6 +223,98 @@ func TestEvaluate(t *testing.T) {
 			job: jobdata.Job{Location: jobdata.Location{
 				Type:      jobdata.LocationRemote,
 				Countries: []string{"US"},
+			}},
+			want: Outcome{
+				Bucket: schema.BucketRejected,
+				Signals: []schema.Signal{{
+					Code:   schema.SignalCutLocation,
+					Rule:   "gate_location.allow_countries",
+					Phrase: "US",
+				}},
+			},
+		},
+		{
+			name: "remote multi-country stays when one country is allowed",
+			profile: profileschema.Profile{
+				GateLocation: profileschema.GateLocation{AllowCountries: []string{"US"}},
+				Buckets:      review,
+			},
+			job: jobdata.Job{Location: jobdata.Location{
+				Type:      jobdata.LocationRemote,
+				Countries: []string{"CA", "MX", "US"},
+			}},
+			want: Outcome{Bucket: schema.BucketReview},
+		},
+		{
+			name: "remote only disallowed countries is a cut",
+			profile: profileschema.Profile{
+				GateLocation: profileschema.GateLocation{AllowCountries: []string{"US", "DE"}},
+				Buckets:      review,
+			},
+			job: jobdata.Job{Location: jobdata.Location{
+				Type:      jobdata.LocationRemote,
+				Countries: []string{"BR", "IN"},
+			}},
+			want: Outcome{
+				Bucket: schema.BucketRejected,
+				Signals: []schema.Signal{
+					{Code: schema.SignalCutLocation, Rule: "gate_location.allow_countries", Phrase: "BR"},
+					{Code: schema.SignalCutLocation, Rule: "gate_location.allow_countries", Phrase: "IN"},
+				},
+			},
+		},
+		{
+			name: "remote with empty countries is not a location cut",
+			profile: profileschema.Profile{
+				GateLocation: profileschema.GateLocation{AllowCountries: []string{"US"}},
+				Buckets:      review,
+			},
+			job: jobdata.Job{Location: jobdata.Location{
+				Type: jobdata.LocationRemote,
+			}},
+			want: Outcome{Bucket: schema.BucketReview},
+		},
+		{
+			name: "remote US-only fails when allow is Europe only",
+			profile: profileschema.Profile{
+				GateLocation: profileschema.GateLocation{AllowCountries: []string{"DE", "RO"}},
+				Buckets:      review,
+			},
+			job: jobdata.Job{Location: jobdata.Location{
+				Type:      jobdata.LocationRemote,
+				Countries: []string{"US"},
+			}},
+			want: Outcome{
+				Bucket: schema.BucketRejected,
+				Signals: []schema.Signal{{
+					Code:   schema.SignalCutLocation,
+					Rule:   "gate_location.allow_countries",
+					Phrase: "US",
+				}},
+			},
+		},
+		{
+			name: "pacific utc offset in collector timezone is a cut",
+			profile: profileschema.Profile{Buckets: review},
+			job: jobdata.Job{Location: jobdata.Location{
+				Type:     jobdata.LocationRemote,
+				Timezone: "-10,-9,-8,-7,-6,-5,14",
+			}},
+			want: Outcome{
+				Bucket: schema.BucketRejected,
+				Signals: []schema.Signal{{
+					Code:   schema.SignalCutTimezone,
+					Rule:   "gate_location.pacific_timezone",
+					Phrase: "-8",
+				}},
+			},
+		},
+		{
+			name: "europe utc offset alone is not a pacific cut",
+			profile: profileschema.Profile{Buckets: review},
+			job: jobdata.Job{Location: jobdata.Location{
+				Type:     jobdata.LocationRemote,
+				Timezone: "0,1,2,3",
 			}},
 			want: Outcome{Bucket: schema.BucketReview},
 		},

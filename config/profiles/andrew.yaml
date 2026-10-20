@@ -217,11 +217,10 @@ gate_hard:
   - "compensation will be deferred"
 
 gate_location:
+  # No US/CA: US-only (and NA-only) remote fails intersection; US+EU still passes.
   allow_countries:
-    - "US"
     - "AT"
     - "BE"
-    - "BG"
     - "CY"
     - "CZ"
     - "DE"
@@ -255,8 +254,15 @@ gate_location:
     - "WORLDWIDE"
     - "EUROPE"
     - "EMEA"
-  # timezone fact replaces reject_timezones phrase list
-  reject_timezones: []
+  # Numeric US Pacific offsets (-8/-7) are cut in the scorer; phrases catch text.
+  reject_timezones:
+    - "pacific time"
+    - "pacific standard"
+    - "pacific daylight"
+    - "pst"
+    - "pdt"
+    - "pt timezone"
+    - "us pacific"
 
 signals_plus:
   title:
@@ -475,15 +481,13 @@ buckets:
   top: 6
 
 facts:
-  # EUROPE = scorer Europe set; US = remote US-only scopes stay eligible
-  residence_regions: [EUROPE, US]
+  # EUROPE only: US-only / US+CA hiring_scope is a hard cut; worldwide still ok.
+  residence_regions: [EUROPE]
   office:
     scored: true
     allow_countries:
-      - "US"
       - "AT"
       - "BE"
-      - "BG"
       - "CY"
       - "CZ"
       - "DE"

@@ -571,10 +571,15 @@ func penaltyOccurrences(titleHits, bodyHits, need int) (int, bool) {
 func matchGateLocation(profile profileschema.Profile, job jobdata.Job, now time.Time) []schema.Signal {
 	gate := profile.GateLocation
 	var signals []schema.Signal
-	if !remoteLocation(job.Location) {
+	if remoteLocation(job.Location) {
+		// Remote boards skip europeTier; allow lists still apply with intersection
+		// semantics so US+DE stays when DE is allowed.
+		signals = append(signals, remoteLocationCuts(gate, job.Location)...)
+	} else {
 		signals = append(signals, europeTier(job)...)
 		signals = append(signals, locationCuts(gate, job.Location)...)
 	}
+	signals = append(signals, pacificOffsetCuts(job.Location.Timezone)...)
 	signals = append(signals, matchPhrases(gate.RejectTimezones, true, "gate_location.reject_timezones", schema.SignalCutTimezone, job.Title, job.Description, job.Location.Raw, job.Location.Timezone)...)
 	signals = append(signals, postedAtCut(job.PostedAt, now, PostedAtRejectDaysForProfile(profile))...)
 	return signals
@@ -585,7 +590,7 @@ func remoteLocation(loc jobdata.Location) bool {
 }
 
 // europeTier applies the fixed Europe office rule before the profile allow lists.
-// A remote job never reaches it. An empty location adds nothing.
+// Remote jobs use remoteLocationCuts instead. An empty location adds nothing.
 // A country outside the Europe set is CUT_LOCATION. An office job whose countries
 // are all in that set, and none of them is RO, takes one −2 unless the posting offers relocation.
 func europeTier(job jobdata.Job) []schema.Signal {
@@ -672,8 +677,83 @@ func locationCuts(gate profileschema.GateLocation, loc jobdata.Location) []schem
 	return signals
 }
 
+// remoteLocationCuts rejects a remote job only when none of its location codes
+// intersect the profile allow lists. Empty location adds nothing.
+func remoteLocationCuts(gate profileschema.GateLocation, loc jobdata.Location) []schema.Signal {
+	allowedCountries := compact(gate.AllowCountries)
+	allowedRegions := compact(gate.AllowRegions)
+	if len(allowedCountries) == 0 && len(allowedRegions) == 0 {
+		return nil
+	}
+	countries := compact(loc.Countries)
+	regions := compact(loc.Regions)
+	if len(countries) == 0 && len(regions) == 0 {
+		return nil
+	}
+	for _, code := range countries {
+		if !missesAllowLists(code, allowedCountries, allowedRegions) {
+			return nil
+		}
+	}
+	for _, code := range regions {
+		if !missesAllowLists(code, allowedCountries, allowedRegions) {
+			return nil
+		}
+	}
+	var signals []schema.Signal
+	for _, code := range countries {
+		signals = append(signals, schema.Signal{
+			Code:   schema.SignalCutLocation,
+			Rule:   "gate_location.allow_countries",
+			Phrase: code,
+		})
+	}
+	for _, code := range regions {
+		signals = append(signals, schema.Signal{
+			Code:   schema.SignalCutLocation,
+			Rule:   "gate_location.allow_regions",
+			Phrase: code,
+		})
+	}
+	return signals
+}
+
 func missesAllowLists(code string, countries, regions []string) bool {
 	return !containsFold(countries, code) && !containsFold(regions, code)
+}
+
+// pacificUTCOffsets are US Pacific Standard/Daylight (and near-Pacific) hour offsets
+// as stored on collector location.timezone (comma-separated integers).
+var pacificUTCOffsets = map[int]struct{}{
+	-8: {}, -7: {},
+}
+
+const pacificTimezoneRule = "gate_location.pacific_timezone"
+
+// pacificOffsetCuts rejects jobs whose collector timezone band includes US Pacific.
+func pacificOffsetCuts(timezone string) []schema.Signal {
+	raw := strings.TrimSpace(timezone)
+	if raw == "" {
+		return nil
+	}
+	for _, part := range strings.Split(raw, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		offset, err := strconv.Atoi(part)
+		if err != nil {
+			continue
+		}
+		if _, ok := pacificUTCOffsets[offset]; ok {
+			return []schema.Signal{{
+				Code:   schema.SignalCutTimezone,
+				Rule:   pacificTimezoneRule,
+				Phrase: part,
+			}}
+		}
+	}
+	return nil
 }
 
 func postedAtCut(posted, now time.Time, rejectDays int) []schema.Signal {
