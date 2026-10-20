@@ -161,11 +161,7 @@ func startEnrichBatch(ctx workflow.Context) {
 		WorkflowIDReusePolicy: enumspb.WORKFLOW_ID_REUSE_POLICY_ALLOW_DUPLICATE_FAILED_ONLY,
 		ParentClosePolicy:     enumspb.PARENT_CLOSE_POLICY_ABANDON,
 	})
-	fut := workflow.ExecuteChildWorkflow(childCtx, enrich_workflows.EnrichBatchWorkflow, enrichschema.EnrichBatchInput{
-		JobIDs:        missing.JobIDs,
-		PromptVersion: missing.PromptVersion,
-		Model:         missing.Model,
-	})
+	fut := workflow.ExecuteChildWorkflow(childCtx, enrich_workflows.EnrichBatchWorkflow, enrichschema.EnrichBatchInput(missing))
 	// Wait only for the child to be scheduled; do not wait for it to finish.
 	if err := fut.GetChildWorkflowExecution().Get(ctx, nil); err != nil {
 		logger.Warn("enrich child start skipped", "error", err.Error())

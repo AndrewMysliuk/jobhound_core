@@ -23,7 +23,7 @@ func PromptSystem() string {
 	b.WriteString("Each example is vacancy data followed by the JSON reply. ")
 	b.WriteString("Only the fields named in the example are asserted; every other answer stays unknown.\n")
 	for i, ex := range promptFewShots() {
-		b.WriteString(fmt.Sprintf("\n### Example %d\n\n", i+1))
+		fmt.Fprintf(&b, "\n### Example %d\n\n", i+1)
 		b.WriteString(ex.user)
 		b.WriteString("\n\n")
 		b.WriteString(ex.assistant)

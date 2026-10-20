@@ -230,7 +230,7 @@ func (c *BatchesClient) doRaw(ctx context.Context, method, path string, body io.
 	if err != nil {
 		return nil, fmt.Errorf("batches %s %s: %w", method, path, err)
 	}
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 	raw, err := io.ReadAll(res.Body)
 	if err != nil {
 		return nil, fmt.Errorf("batches %s %s read: %w", method, path, err)

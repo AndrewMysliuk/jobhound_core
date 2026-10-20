@@ -45,7 +45,7 @@ func readEvalJSONL(path string) ([]impl.EvalExample, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	var out []impl.EvalExample
 	sc := bufio.NewScanner(f)
