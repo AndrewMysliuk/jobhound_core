@@ -11,6 +11,7 @@ sources:
   - wellfound
   - vue_jobs
   - golang_cafe
+  - dou_ua
   - builtin
   - consider_andreessen_horowitz
   - consider_lightspeed
@@ -48,6 +49,12 @@ wellfound_roles:
   - full-stack-engineer
   - backend-engineer
 
+
+gate_role:
+  # title-only hard cut — "staff engineer" phrase misses "Staff Backend Engineer"
+  - "staff"
+  - "principal"
+  - "distinguished"
 
 gate_role_allow:
   - "frontend engineer"
@@ -180,7 +187,7 @@ signals_plus:
     vuejs: 6
     typescript: 4
     react: 1
-    golang: 6
+    golang: 3
     node: 4
     nodejs: 4
   text:
@@ -189,7 +196,7 @@ signals_plus:
       vue: 3
       vuejs: 3
       typescript: 1
-      golang: 3
+      golang: 1
       node: 1
       nodejs: 1
   salary:
@@ -298,6 +305,9 @@ penalties_soft:
       - "browser extension"
       - "healthtech"
       - "edtech"
+      - "gaming"
+      - "mobile games"
+      - "web scraping"
   office_pressure:
     weight: -3
     min_occurrences: 1
@@ -393,7 +403,7 @@ penalties_soft:
       - "data science"
 
 buckets:
-  # 8: title vue/go alone (+6) + weak text no longer clears TOP without real extras
+  # 8: title vue (+6) alone needs extras; go title (+3) cannot clear TOP alone
   top: 8
 
 facts:

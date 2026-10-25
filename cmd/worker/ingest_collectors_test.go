@@ -14,6 +14,7 @@ import (
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/competitionline"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/consider"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/dezeen"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/dou"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/ejobs"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/europeremotely"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/getro"
@@ -62,6 +63,7 @@ func TestIngestCollectorMap_keys(t *testing.T) {
 	bn := stubCollector{name: baunetz.SourceName}
 	bd := stubCollector{name: bdla.SourceName}
 	wa := stubCollector{name: worldarchitects.SourceName}
+	du := stubCollector{name: dou.SourceName}
 
 	want := []string{
 		ingest.NormalizeSourceID(europeremotely.SourceName),
@@ -85,10 +87,11 @@ func TestIngestCollectorMap_keys(t *testing.T) {
 		ingest.NormalizeSourceID(baunetz.SourceName),
 		ingest.NormalizeSourceID(bdla.SourceName),
 		ingest.NormalizeSourceID(worldarchitects.SourceName),
+		ingest.NormalizeSourceID(dou.SourceName),
 	}
 	portfolio := portfolioCollectors()
 	want = append(want, portfolio.ids...)
-	m := ingestCollectorMap(er, wn, bi, him, re, wwr, wf, vj, gc, bj, hp, ej, dz, rb, li, ag, an, cl, bn, bd, wa, portfolio.consider, portfolio.getro)
+	m := ingestCollectorMap(er, wn, bi, him, re, wwr, wf, vj, gc, bj, hp, ej, dz, rb, li, ag, an, cl, bn, bd, wa, du, portfolio.consider, portfolio.getro)
 	if len(m) != len(want) {
 		t.Fatalf("worker map len=%d want %d", len(m), len(want))
 	}
@@ -97,20 +100,20 @@ func TestIngestCollectorMap_keys(t *testing.T) {
 			t.Fatalf("worker map missing %q", id)
 		}
 	}
-	for _, dropped := range []string{"djinni", "dou_ua", "linkedin"} {
+	for _, dropped := range []string{"djinni", "linkedin"} {
 		if _, ok := m[dropped]; ok {
 			t.Fatalf("worker map still has dropped source %q", dropped)
 		}
 	}
 
-	absent := ingestCollectorMap(er, wn, bi, him, re, wwr, wf, vj, gc, bj, hp, ej, dz, rb, li, ag, an, cl, bn, bd, wa, nil, nil)
+	absent := ingestCollectorMap(er, wn, bi, him, re, wwr, wf, vj, gc, bj, hp, ej, dz, rb, li, ag, an, cl, bn, bd, wa, du, nil, nil)
 	for _, id := range portfolio.ids {
 		if _, ok := absent[id]; ok {
 			t.Fatalf("worker map has %q when portfolio slices are nil", id)
 		}
 	}
 
-	noHim := ingestCollectorMap(er, wn, bi, nil, re, wwr, wf, vj, gc, bj, hp, ej, dz, rb, li, ag, an, cl, bn, bd, wa, nil, nil)
+	noHim := ingestCollectorMap(er, wn, bi, nil, re, wwr, wf, vj, gc, bj, hp, ej, dz, rb, li, ag, an, cl, bn, bd, wa, du, nil, nil)
 	if _, ok := noHim[ingest.NormalizeSourceID(himalayas.SourceName)]; ok {
 		t.Fatal("himalayas present when collector is nil")
 	}
@@ -118,7 +121,7 @@ func TestIngestCollectorMap_keys(t *testing.T) {
 		t.Fatal("golang_cafe missing when rod fetcher collector is set")
 	}
 
-	noCafe := ingestCollectorMap(er, wn, bi, him, re, wwr, wf, vj, nil, bj, hp, ej, dz, rb, li, ag, an, cl, bn, bd, wa, nil, nil)
+	noCafe := ingestCollectorMap(er, wn, bi, him, re, wwr, wf, vj, nil, bj, hp, ej, dz, rb, li, ag, an, cl, bn, bd, wa, du, nil, nil)
 	if _, ok := noCafe[ingest.NormalizeSourceID(golangcafe.SourceName)]; ok {
 		t.Fatal("golang_cafe present when rod fetcher is nil")
 	}

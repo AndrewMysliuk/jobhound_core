@@ -7,6 +7,7 @@ import (
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/builtin"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/consider"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/dou"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/europeremotely"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/getro"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/golangcafe"
@@ -52,6 +53,9 @@ const PathConsider = "POST /debug/collectors/consider"
 // PathGetro is the registered method+path for the Getro debug fetch.
 const PathGetro = "POST /debug/collectors/getro"
 
+// PathDouUA is the registered method+path for the DOU.ua debug fetch.
+const PathDouUA = "POST /debug/collectors/dou_ua"
+
 // HTTPHandler wires debug routes on a ServeMux (omg-bo style: handler.go + registerRoutes + one file per route).
 type HTTPHandler struct {
 	mux   *http.ServeMux
@@ -67,6 +71,7 @@ type HTTPHandler struct {
 	wellfound              collectors.Collector
 	vueJobs                collectors.Collector
 	golangCafe             collectors.Collector
+	douUA                  collectors.Collector
 	workingNomadsConcrete  *workingnomads.WorkingNomads
 	europeRemotelyConcrete *europeremotely.EuropeRemotely
 	himalayasConcrete      *himalayas.Himalayas
@@ -75,6 +80,7 @@ type HTTPHandler struct {
 	wellfoundConcrete      *wellfound.Wellfound
 	vueJobsConcrete        *vuejobs.VueJobs
 	golangCafeConcrete     *golangcafe.GolangCafe
+	douUAConcrete          *dou.Dou
 	considerBoards         map[string]*consider.Board
 	getroBoards            map[string]*getro.Board
 }
@@ -85,7 +91,7 @@ type HTTPHandler struct {
 // considerBoards and getroBoards may be nil; this constructor does not build boards. log is the binary root logger (e.g. from logging.NewRoot); use zerolog.Nop() in tests.
 func NewHTTPHandler(
 	europeRemotely, workingNomads, himalayasColl, builtinColl collectors.Collector,
-	remotifyEuropeColl, weWorkRemotelyColl, wellfoundColl, vueJobsColl, golangCafeColl collectors.Collector,
+	remotifyEuropeColl, weWorkRemotelyColl, wellfoundColl, vueJobsColl, golangCafeColl, douUAColl collectors.Collector,
 	workingNomadsConcrete *workingnomads.WorkingNomads,
 	europeRemotelyConcrete *europeremotely.EuropeRemotely,
 	himalayasConcrete *himalayas.Himalayas,
@@ -94,6 +100,7 @@ func NewHTTPHandler(
 	wellfoundConcrete *wellfound.Wellfound,
 	vueJobsConcrete *vuejobs.VueJobs,
 	golangCafeConcrete *golangcafe.GolangCafe,
+	douUAConcrete *dou.Dou,
 	log zerolog.Logger,
 	considerBoards map[string]*consider.Board,
 	getroBoards map[string]*getro.Board,
@@ -110,6 +117,7 @@ func NewHTTPHandler(
 		wellfound:              wellfoundColl,
 		vueJobs:                vueJobsColl,
 		golangCafe:             golangCafeColl,
+		douUA:                  douUAColl,
 		workingNomadsConcrete:  workingNomadsConcrete,
 		europeRemotelyConcrete: europeRemotelyConcrete,
 		himalayasConcrete:      himalayasConcrete,
@@ -118,6 +126,7 @@ func NewHTTPHandler(
 		wellfoundConcrete:      wellfoundConcrete,
 		vueJobsConcrete:        vueJobsConcrete,
 		golangCafeConcrete:     golangCafeConcrete,
+		douUAConcrete:          douUAConcrete,
 		considerBoards:         considerBoards,
 		getroBoards:            getroBoards,
 	}
@@ -139,6 +148,7 @@ func (h *HTTPHandler) registerRoutes() {
 	h.mux.HandleFunc(PathGolangCafe, h.postGolangCafe)
 	h.mux.HandleFunc(PathConsider, h.postConsider)
 	h.mux.HandleFunc(PathGetro, h.postGetro)
+	h.mux.HandleFunc(PathDouUA, h.postDouUA)
 }
 
 // ServeHTTP applies request-id middleware then dispatches to registered routes.

@@ -8,5 +8,5 @@ import (
 
 func (h *HTTPHandler) postRemotifyEurope(w http.ResponseWriter, r *http.Request) {
 	logH := logging.EnrichWithContext(r.Context(), h.log.With().Str(logging.FieldHandler, "postRemotifyEurope").Logger())
-	runCollectorDebug(w, r, logH, h.remotifyEurope, nil, nil, nil, nil, h.remotifyEuropeConcrete, nil, nil, nil)
+	runCollectorDebug(w, r, logH, h.remotifyEurope, nil, nil, nil, nil, h.remotifyEuropeConcrete, nil, nil, nil, nil)
 }

@@ -16,6 +16,7 @@ import (
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/bootstrap"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/builtin"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/consider"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/dou"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/europeremotely"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/getro"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/golangcafe"
@@ -52,7 +53,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	er, wn, builtinColl, himColl, reColl, wwrColl, wfColl, vjColl, gcColl, _, _, _, _, _, _, _, _, _, _, _, _, considerColls, getroColls, err := bootstrap.MVPCollectors(ctx, nil, appCfg.DataDir, appCfg.BuiltinCollector, appCfg.HimalayasCollector, appCfg.Browser, appCfg.EuropeRemotely)
+	er, wn, builtinColl, himColl, reColl, wwrColl, wfColl, vjColl, gcColl, _, _, _, _, _, _, _, _, _, _, _, _, douColl, considerColls, getroColls, err := bootstrap.MVPCollectors(ctx, nil, appCfg.DataDir, appCfg.BuiltinCollector, appCfg.HimalayasCollector, appCfg.Browser, appCfg.EuropeRemotely)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
@@ -90,7 +91,11 @@ func main() {
 	if x, ok := gcColl.(*golangcafe.GolangCafe); ok {
 		gcConcrete = x
 	}
-	if err := runDebugHTTPServer(log, addr, er, wn, himColl, builtinColl, reColl, wwrColl, wfColl, vjColl, gcColl, wnConcrete, erConcrete, himConcrete, builtinConcrete, reConcrete, wfConcrete, vjConcrete, gcConcrete, considerBoardsBySourceID(considerColls), getroBoardsBySourceID(getroColls)); err != nil {
+	var douConcrete *dou.Dou
+	if x, ok := douColl.(*dou.Dou); ok {
+		douConcrete = x
+	}
+	if err := runDebugHTTPServer(log, addr, er, wn, himColl, builtinColl, reColl, wwrColl, wfColl, vjColl, gcColl, douColl, wnConcrete, erConcrete, himConcrete, builtinConcrete, reConcrete, wfConcrete, vjConcrete, gcConcrete, douConcrete, considerBoardsBySourceID(considerColls), getroBoardsBySourceID(getroColls)); err != nil {
 		log.Error().Err(err).Msg("debug http")
 		os.Exit(1)
 	}
@@ -123,7 +128,7 @@ func getroBoardsBySourceID(colls []collectors.Collector) map[string]*getro.Board
 func runDebugHTTPServer(
 	log zerolog.Logger, addr string,
 	europeRemotely, workingNomads, himColl, builtinColl collectors.Collector,
-	remotifyEurope, weWorkRemotely, wellfoundColl, vueJobs, golangCafe collectors.Collector,
+	remotifyEurope, weWorkRemotely, wellfoundColl, vueJobs, golangCafe, douUA collectors.Collector,
 	workingNomadsConcrete *workingnomads.WorkingNomads,
 	europeRemotelyConcrete *europeremotely.EuropeRemotely,
 	himalayasConcrete *himalayas.Himalayas,
@@ -132,6 +137,7 @@ func runDebugHTTPServer(
 	wellfoundConcrete *wellfound.Wellfound,
 	vueJobsConcrete *vuejobs.VueJobs,
 	golangCafeConcrete *golangcafe.GolangCafe,
+	douUAConcrete *dou.Dou,
 	considerBoards map[string]*consider.Board,
 	getroBoards map[string]*getro.Board,
 ) error {
@@ -139,9 +145,10 @@ func runDebugHTTPServer(
 		Addr: addr,
 		Handler: debughttp.NewHTTPHandler(
 			europeRemotely, workingNomads, himColl, builtinColl,
-			remotifyEurope, weWorkRemotely, wellfoundColl, vueJobs, golangCafe,
+			remotifyEurope, weWorkRemotely, wellfoundColl, vueJobs, golangCafe, douUA,
 			workingNomadsConcrete, europeRemotelyConcrete, himalayasConcrete, builtinConcrete,
 			remotifyEuropeConcrete, wellfoundConcrete, vueJobsConcrete, golangCafeConcrete,
+			douUAConcrete,
 			log,
 			considerBoards,
 			getroBoards,

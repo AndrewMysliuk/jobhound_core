@@ -8,11 +8,14 @@ ENV_FILE ?= .env
 COMPOSE_ENV := $(shell test -f $(ENV_FILE) && printf '%s' '--env-file $(ENV_FILE)')
 
 .PHONY: build build-retention run run-debug run-worker eval test test-integration fmt vet lint tidy migrate-up migrate-down migrate-version \
-	docker-up docker-down docker-down-volumes docker-ps docker-logs docker-migrate \
+	db-dump db-restore docker-up docker-down docker-down-volumes docker-ps docker-logs docker-migrate \
 	start-ipv6-proxy stop-ipv6-proxy
 
 # Host CONNECT proxy. Keep the port in sync with JOBHOUND_EUROPE_REMOTELY_PROXY in docker-compose.yml.
 IPV6_PROXY_ADDR ?= 127.0.0.1:18080
+
+# Full Postgres dump for local wipe survival (gitignored under data/local/).
+DB_DUMP_PATH ?= data/local/postgres.dump
 
 build:
 	go build -o bin/agent ./cmd/agent
@@ -55,6 +58,21 @@ tidy:
 
 migrate-up migrate-down migrate-version: build
 	bash -c 'if [ -f $(ENV_FILE) ]; then set -a && source $(ENV_FILE) && set +a; fi; exec ./bin/migrate $(subst migrate-,,$@)'
+
+db-dump:
+	bash -c 'if [ -f $(ENV_FILE) ]; then set -a && source $(ENV_FILE) && set +a; fi; \
+		if [ -z "$$JOBHOUND_DATABASE_URL" ]; then echo "JOBHOUND_DATABASE_URL is required" >&2; exit 1; fi; \
+		mkdir -p "$$(dirname "$(DB_DUMP_PATH)")"; \
+		pg_dump --dbname="$$JOBHOUND_DATABASE_URL" --format=custom --file="$(DB_DUMP_PATH)"; \
+		echo "wrote $(DB_DUMP_PATH)"'
+
+db-restore: build
+	bash -c 'if [ -f $(ENV_FILE) ]; then set -a && source $(ENV_FILE) && set +a; fi; \
+		if [ -z "$$JOBHOUND_DATABASE_URL" ]; then echo "JOBHOUND_DATABASE_URL is required" >&2; exit 1; fi; \
+		if [ ! -f "$(DB_DUMP_PATH)" ]; then echo "dump not found: $(DB_DUMP_PATH) (run make db-dump first)" >&2; exit 1; fi; \
+		pg_restore --dbname="$$JOBHOUND_DATABASE_URL" --clean --if-exists --no-owner --no-acl "$(DB_DUMP_PATH)"; \
+		echo "restored $(DB_DUMP_PATH)"; \
+		exec ./bin/migrate up'
 
 bin/ipv6proxy: cmd/ipv6proxy/main.go
 	go build -o bin/ipv6proxy ./cmd/ipv6proxy

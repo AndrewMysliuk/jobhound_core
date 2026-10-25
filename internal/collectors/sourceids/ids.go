@@ -11,6 +11,7 @@ import (
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/competitionline"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/consider"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/dezeen"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/dou"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/ejobs"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/europeremotely"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/getro"
@@ -38,6 +39,7 @@ func KnownSourceIDs() []string {
 		wellfound.SourceName,
 		vuejobs.SourceName,
 		golangcafe.SourceName,
+		dou.SourceName,
 		builtin.SourceName,
 		bestjobs.SourceName,
 		hipo.SourceName,

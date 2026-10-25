@@ -17,6 +17,7 @@ import (
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/builtin"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/competitionline"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/dezeen"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/dou"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/ejobs"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/europeremotely"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/golangcafe"
@@ -131,13 +132,13 @@ func main() {
 			ingestRedis = ingest.NewRedisCoordinatorWithTTL(rdb, appCfg.Ingest.LockTTLSeconds, appCfg.Ingest.CooldownTTLSeconds)
 			ingestWatermarks = ingest.NewGormWatermarkStore(getter)
 			bootCtx, bcancel := context.WithTimeout(context.Background(), 2*time.Minute)
-			er, wn, builtinColl, himColl, reColl, wwrColl, wfColl, vjColl, gcColl, bjColl, hipoColl, ejobsColl, dezeenColl, ribaColl, landscapeColl, archgeeColl, archinectColl, competitionlineColl, baunetzColl, bdlaColl, worldArchitectsColl, considerColls, getroColls, err := bootstrap.MVPCollectors(bootCtx, nil, appCfg.DataDir, appCfg.BuiltinCollector, appCfg.HimalayasCollector, appCfg.Browser, appCfg.EuropeRemotely)
+			er, wn, builtinColl, himColl, reColl, wwrColl, wfColl, vjColl, gcColl, bjColl, hipoColl, ejobsColl, dezeenColl, ribaColl, landscapeColl, archgeeColl, archinectColl, competitionlineColl, baunetzColl, bdlaColl, worldArchitectsColl, douColl, considerColls, getroColls, err := bootstrap.MVPCollectors(bootCtx, nil, appCfg.DataDir, appCfg.BuiltinCollector, appCfg.HimalayasCollector, appCfg.Browser, appCfg.EuropeRemotely)
 			bcancel()
 			if err != nil {
 				log.Error().Err(err).Msg("collectors bootstrap")
 				os.Exit(1)
 			}
-			ingestCollectors = ingestCollectorMap(er, wn, builtinColl, himColl, reColl, wwrColl, wfColl, vjColl, gcColl, bjColl, hipoColl, ejobsColl, dezeenColl, ribaColl, landscapeColl, archgeeColl, archinectColl, competitionlineColl, baunetzColl, bdlaColl, worldArchitectsColl, considerColls, getroColls)
+			ingestCollectors = ingestCollectorMap(er, wn, builtinColl, himColl, reColl, wwrColl, wfColl, vjColl, gcColl, bjColl, hipoColl, ejobsColl, dezeenColl, ribaColl, landscapeColl, archgeeColl, archinectColl, competitionlineColl, baunetzColl, bdlaColl, worldArchitectsColl, douColl, considerColls, getroColls)
 			ingestExplicitRefresh = appCfg.Ingest.ExplicitRefresh
 		}
 	}
@@ -196,7 +197,7 @@ func main() {
 // considerColls and getroColls are keyed by Name(); a nil collector in either slice is skipped.
 func ingestCollectorMap(
 	er, wn, builtinColl, himColl,
-	reColl, wwrColl, wfColl, vjColl, gcColl, bjColl, hipoColl, ejobsColl, dezeenColl, ribaColl, landscapeColl, archgeeColl, archinectColl, competitionlineColl, baunetzColl, bdlaColl, worldArchitectsColl collectors.Collector,
+	reColl, wwrColl, wfColl, vjColl, gcColl, bjColl, hipoColl, ejobsColl, dezeenColl, ribaColl, landscapeColl, archgeeColl, archinectColl, competitionlineColl, baunetzColl, bdlaColl, worldArchitectsColl, douColl collectors.Collector,
 	considerColls, getroColls []collectors.Collector,
 ) map[string]collectors.Collector {
 	m := map[string]collectors.Collector{
@@ -219,6 +220,7 @@ func ingestCollectorMap(
 		ingest.NormalizeSourceID(baunetz.SourceName):            baunetzColl,
 		ingest.NormalizeSourceID(bdla.SourceName):               bdlaColl,
 		ingest.NormalizeSourceID(worldarchitects.SourceName):    worldArchitectsColl,
+		ingest.NormalizeSourceID(dou.SourceName):                douColl,
 	}
 	if himColl != nil {
 		m[ingest.NormalizeSourceID(himalayas.SourceName)] = himColl

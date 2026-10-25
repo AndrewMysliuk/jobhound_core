@@ -10,6 +10,7 @@ import (
 
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/builtin"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/dou"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/europeremotely"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/golangcafe"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/himalayas"
@@ -35,6 +36,7 @@ func runCollectorDebug(
 	wellfoundConcrete *wellfound.Wellfound,
 	vueJobsConcrete *vuejobs.VueJobs,
 	golangCafeConcrete *golangcafe.GolangCafe,
+	douUAConcrete *dou.Dou,
 ) {
 	if coll == nil {
 		logH.Error().Msg("collector not configured")
@@ -80,6 +82,7 @@ func runCollectorDebug(
 	isWellfound := coll.Name() == wellfound.SourceName && wellfoundConcrete != nil
 	isVueJobs := coll.Name() == vuejobs.SourceName && vueJobsConcrete != nil
 	isGolangCafe := coll.Name() == golangcafe.SourceName && golangCafeConcrete != nil
+	isDouUA := coll.Name() == dou.SourceName && douUAConcrete != nil
 	switch {
 	case isWN:
 		c := *wnConcrete
@@ -168,6 +171,21 @@ func runCollectorDebug(
 		}
 		jobs, fetchErr = c.Fetch(ctx)
 		upstreamFetched = len(jobs)
+	case isDouUA:
+		c := *douUAConcrete
+		if limit > 0 {
+			c.MaxJobs = limit
+		}
+		slotQ := ""
+		if req.Q != nil {
+			slotQ = strings.TrimSpace(*req.Q)
+		}
+		if slotQ == "" {
+			jobs, fetchErr = c.Fetch(ctx)
+		} else {
+			jobs, fetchErr = c.FetchWithQuery(ctx, slotQ)
+		}
+		upstreamFetched = len(jobs)
 	default:
 		jobs, fetchErr = coll.Fetch(ctx)
 		upstreamFetched = len(jobs)
@@ -192,7 +210,7 @@ func runCollectorDebug(
 		Collector: coll.Name(),
 		Count:     len(jobs),
 	}
-	if !isWN && !isER && !isHim && !isBuiltin && !isRemotify && !isWellfound && !isVueJobs && !isGolangCafe && upstreamFetched > len(jobs) {
+	if !isWN && !isER && !isHim && !isBuiltin && !isRemotify && !isWellfound && !isVueJobs && !isGolangCafe && !isDouUA && upstreamFetched > len(jobs) {
 		resp.UpstreamFetched = upstreamFetched
 	}
 

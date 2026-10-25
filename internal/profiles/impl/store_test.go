@@ -22,6 +22,7 @@ var contractSourceIDs = []string{
 	"wellfound",
 	"vue_jobs",
 	"golang_cafe",
+	"dou_ua",
 	"builtin",
 	"consider_andreessen_horowitz",
 	"consider_lightspeed",
@@ -85,7 +86,7 @@ func TestFileStoreLoadsAndrew(t *testing.T) {
 	require.Contains(t, got.GateLocation.RejectTimezones, "pacific time")
 	require.Contains(t, got.GateLocation.RejectTimezones, "pst")
 
-	require.Empty(t, got.GateRole)
+	require.Equal(t, []string{"staff", "principal", "distinguished"}, got.GateRole)
 	require.Contains(t, got.GateRoleAllow, "software engineer")
 	require.Contains(t, got.GateRoleAllow, "vue developer")
 	require.Contains(t, got.GateRoleAllow, "frontend engineer")
@@ -117,11 +118,11 @@ func TestFileStoreLoadsAndrew(t *testing.T) {
 	}
 
 	require.Equal(t, map[string]int{
-		"vue": 6, "vuejs": 6, "typescript": 4, "react": 1, "golang": 6, "node": 4, "nodejs": 4,
+		"vue": 6, "vuejs": 6, "typescript": 4, "react": 1, "golang": 3, "node": 4, "nodejs": 4,
 	}, got.SignalsPlus.Title)
 	require.Equal(t, 8, got.SignalsPlus.Text.MaxTotal)
 	require.Equal(t, map[string]int{
-		"vue": 3, "vuejs": 3, "typescript": 1, "golang": 3, "node": 1, "nodejs": 1,
+		"vue": 3, "vuejs": 3, "typescript": 1, "golang": 1, "node": 1, "nodejs": 1,
 	}, got.SignalsPlus.Text.Terms)
 	require.NotContains(t, got.SignalsPlus.Text.Terms, "react")
 	require.NotContains(t, got.SignalsPlus.Text.Terms, "max_total")
@@ -482,6 +483,23 @@ wellfound_roles: []
 	got, err := NewFileStore(dir, sourceids.KnownSourceIDs()).Get(context.Background(), "sample")
 	require.NoError(t, err)
 	require.Equal(t, []string{"europe_remotely"}, got.Sources)
+}
+
+func TestFileStoreAcceptsDouUA(t *testing.T) {
+	t.Parallel()
+	require.Contains(t, sourceids.KnownSourceIDs(), "dou_ua")
+	dir := t.TempDir()
+	writeProfile(t, dir, "sample", `
+id: sample
+name: Sample
+domain: software
+sources: [dou_ua]
+queries: [golang]
+wellfound_roles: []
+`)
+	got, err := NewFileStore(dir, sourceids.KnownSourceIDs()).Get(context.Background(), "sample")
+	require.NoError(t, err)
+	require.Equal(t, []string{"dou_ua"}, got.Sources)
 }
 
 func TestFileStoreGetReadsFileAgain(t *testing.T) {

@@ -40,7 +40,7 @@ func (s stubCollector) Fetch(context.Context) ([]schema.Job, error) {
 }
 
 func newTestHandler(er, wn, him, bi collectors.Collector, erConcrete *europeremotely.EuropeRemotely) *HTTPHandler {
-	return NewHTTPHandler(er, wn, him, bi, nil, nil, nil, nil, nil, nil, erConcrete, nil, nil, nil, nil, nil, nil, zerolog.Nop(), nil, nil)
+	return NewHTTPHandler(er, wn, him, bi, nil, nil, nil, nil, nil, nil, nil, erConcrete, nil, nil, nil, nil, nil, nil, nil, zerolog.Nop(), nil, nil)
 }
 
 func TestHealth(t *testing.T) {
@@ -188,7 +188,7 @@ func TestDroppedCollectorRoutes_notFound(t *testing.T) {
 	wn := stubCollector{name: "working_nomads"}
 	srv := httptest.NewServer(newTestHandler(er, wn, stubCollector{name: "himalayas"}, stubCollector{name: "builtin"}, nil))
 	t.Cleanup(srv.Close)
-	for _, path := range []string{"/debug/collectors/djinni", "/debug/collectors/dou_ua"} {
+	for _, path := range []string{"/debug/collectors/djinni"} {
 		res, err := http.Post(srv.URL+path, "application/json", strings.NewReader(`{"limit":0}`))
 		if err != nil {
 			t.Fatal(err)
@@ -197,6 +197,41 @@ func TestDroppedCollectorRoutes_notFound(t *testing.T) {
 		if res.StatusCode != http.StatusNotFound {
 			t.Fatalf("%s: status %d", path, res.StatusCode)
 		}
+	}
+}
+
+func TestDouUA_ok(t *testing.T) {
+	t.Parallel()
+	douStub := stubCollector{
+		name: "dou_ua",
+		jobs: []schema.Job{
+			{ID: "d1", Title: "Dou T", Source: "dou_ua"},
+		},
+	}
+	srv := httptest.NewServer(NewHTTPHandler(
+		stubCollector{name: "europe_remotely"},
+		stubCollector{name: "working_nomads"},
+		stubCollector{name: "himalayas"},
+		stubCollector{name: "builtin"},
+		nil, nil, nil, nil, nil, douStub,
+		nil, nil, nil, nil, nil, nil, nil, nil, nil,
+		zerolog.Nop(), nil, nil,
+	))
+	t.Cleanup(srv.Close)
+	res, err := http.Post(srv.URL+"/debug/collectors/dou_ua", "application/json", strings.NewReader(`{"limit":0}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = res.Body.Close() }()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("status %d", res.StatusCode)
+	}
+	var out runCollectorResponse
+	if err := json.NewDecoder(res.Body).Decode(&out); err != nil {
+		t.Fatal(err)
+	}
+	if !out.OK || out.Collector != "dou_ua" || out.Count != 1 || len(out.Jobs) != 1 {
+		t.Fatalf("%+v", out)
 	}
 }
 

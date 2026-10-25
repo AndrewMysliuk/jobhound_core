@@ -10,7 +10,7 @@ MVP is **single-tenant** (no auth). The unit of search is a **profile** loaded f
 
 A profile file (`config/profiles/<id>.yaml`) is the only copy of:
 
-1. **`sources`** — which collectors to poll. The allow-list is the nine software aggregators, the twelve architecture boards, and the Consider and Getro source ids in section 2.4. A file lists only the ids it polls.
+1. **`sources`** — which collectors to poll. The allow-list is the ten software aggregators, the twelve architecture boards, and the Consider and Getro source ids in section 2.4. A file lists only the ids it polls.
 2. **`queries`** — stage-1 search strings only. They do not add score. `frontend` and `full-stack` are not query strings.
 3. **`children`** — optional map of source id → slugs. A listed source gets one ingest child per slug and does not copy `queries`. The slug `catalog` is an empty query. A key that is not in `sources` makes the file invalid. Not returned by `GET /api/v1/profiles`.
 4. **`wellfound_roles`** — Wellfound `/role/r/{slug}` segments. They address that one site. They are not search words for other boards and they do not affect the score. `lada.yaml` leaves this list empty.
@@ -102,6 +102,7 @@ Every source implements `collectors.Collector` (`Name` + `Fetch`). Optional: `Qu
 | `wellfound` | wellfound.com | T2: HTML `/role/r/{slug}` + JobPosting JSON-LD; site mutex + 1s delay | one child per `wellfound_roles` slug |
 | `vue_jobs` | vuejobs.com | T2: SSR `__NUXT_DATA__` remote catalog; skip PRO; `Job.URL` = `/jobs/{slug}` | catalog |
 | `golang_cafe` | golang.cafe | **T3 rod** JSON API via shared `browserfetch` (plain HTTP = Vercel 429) | catalog |
+| `dou_ua` | jobs.dou.ua | T2: RSS list (`/vacancies/feeds/?search={query}&remote`) + HTML detail; plain `net/http` | one child per `queries` phrase (empty query → no fetch) |
 | `bestjobs` | bestjobs.eu | T2: HTML keyword lists + `/api/proxy/v2/jobs` | one child per `queries` phrase (`-in-romania` and `-in-remote`) |
 | `hipo` | hipo.ro | T2: HTML category pages | one child per `children.hipo` slug; the collector ignores the query and always loads `Arhitectura-Design-Proiectare` |
 | `ejobs` | ejobs.ro | **T3 rod** (plain HTTP = Cloudflare 403) | one child per `queries` phrase (`/locuri-de-munca/{words}` and `/remote/{words}`) |
@@ -119,16 +120,16 @@ Every source implements `collectors.Collector` (`Name` + `Fetch`). Optional: `Qu
 
 `andrew.yaml` queries: `vue` · `typescript` · `react` · `golang` · `node`. Wellfound slugs: `frontend-engineer` · `full-stack-engineer` · `backend-engineer`. `europe_remotely` is commented out of that file; the collector is still built. `lada.yaml` queries: `arhitect proiectant` · `peisagist` · `urbanist`. Its `children` slugs are the category lists in the file (`hipo`, `dezeen_jobs`, `riba_jobs`, `archgee`, and `catalog` for `landscape_institute`, `competitionline`, `baunetz`, `bdla`, `world_architects`, plus `archinect: remote`). `bestjobs` and `ejobs` are keyword sources on that file, so they fan `queries`.
 
-Known source ids are the nine software aggregators, the twelve architecture boards above, plus these Consider and Getro ids. Consider: `consider_andreessen_horowitz` · `consider_lightspeed` · `consider_sequoia_capital` · `consider_gv` · `consider_bessemer_ventures` · `consider_balderton_capital` · `consider_notion_capital` · `consider_atlantic_labs` · `consider_battery_ventures` · `consider_panoramic_ventures` · `consider_ivp` · `consider_kleiner_perkins` · `consider_nea` · `consider_sequoia_capital_india` · `consider_union_square_ventures`. Getro: `getro_accel` · `getro_general_catalyst` · `getro_atomico` · `getro_hv_capital` · `getro_point_nine` · `getro_earlybird` · `getro_firstminute` · `getro_craft_ventures`. `djinni` and `dou_ua` are dropped. LinkedIn is **cancelled** (never shipped; no package, no session cookies, no `SessionProvider`). If `JOBHOUND_COLLECTOR_HIMALAYAS_DISABLED`, the worker omits `himalayas`. `golang_cafe` is omitted when the rod fetcher is nil. `ejobs`, `dezeen_jobs`, and `world_architects` stay in the map with a nil fetcher in that case; fetch then errors. A listed source with no collector in the worker map increments `sources_skipped`; the run still succeeds.
+Known source ids are the ten software aggregators, the twelve architecture boards above, plus these Consider and Getro ids. Consider: `consider_andreessen_horowitz` · `consider_lightspeed` · `consider_sequoia_capital` · `consider_gv` · `consider_bessemer_ventures` · `consider_balderton_capital` · `consider_notion_capital` · `consider_atlantic_labs` · `consider_battery_ventures` · `consider_panoramic_ventures` · `consider_ivp` · `consider_kleiner_perkins` · `consider_nea` · `consider_sequoia_capital_india` · `consider_union_square_ventures`. Getro: `getro_accel` · `getro_general_catalyst` · `getro_atomico` · `getro_hv_capital` · `getro_point_nine` · `getro_earlybird` · `getro_firstminute` · `getro_craft_ventures`. `djinni` is dropped. LinkedIn is **cancelled** (never shipped; no package, no session cookies, no `SessionProvider`). If `JOBHOUND_COLLECTOR_HIMALAYAS_DISABLED`, the worker omits `himalayas`. `golang_cafe` is omitted when the rod fetcher is nil. `ejobs`, `dezeen_jobs`, and `world_architects` stay in the map with a nil fetcher in that case; fetch then errors. A listed source with no collector in the worker map increments `sources_skipped`; the run still succeeds.
 
-Debug HTTP (`cmd/agent`): `GET /health`, `POST /debug/collectors/{europe_remotely,working_nomads,himalayas,builtin,remotify_europe,we_work_remotely,wellfound,vue_jobs,golang_cafe}`, `POST /debug/collectors/consider`, `POST /debug/collectors/getro`. Architecture boards have no debug route.
+Debug HTTP (`cmd/agent`): `GET /health`, `POST /debug/collectors/{europe_remotely,working_nomads,himalayas,builtin,remotify_europe,we_work_remotely,wellfound,vue_jobs,golang_cafe,dou_ua}`, `POST /debug/collectors/consider`, `POST /debug/collectors/getro`. Architecture boards have no debug route.
 
 ### 2.5 What is *not* on the product path
 
 - Stage 3 as a separate Anthropic vacancy-summary stage, the removed `internal/llm` package, the global `user_profile` text, slots, the three-slot cap, and `ManualSlotRunWorkflow`. Vacancy enrich via Message Batches (`internal/enrich`) is on the product path when `JOBHOUND_ANTHROPIC_API_KEY` is set; it is not a per-request LLM call from the browser or `cmd/api`.
 - Client keyword defaults (`defaultStage2Exclude.ts`, `EUROPE_HIRING_OK`, a stage-2 rule builder). Phrases are not posted by the browser.
 - A file named `architecture.yaml`. The architecture profile is `config/profiles/lada.yaml`, and its collectors are on the product path.
-- Feature docs `docs/01-enrich/` (removed after ship). Companies and ATS polling, a company-tag signal, `min_score`.
+- Feature docs `docs/01-enrich/` and `docs/01-dou-ua/` (removed after ship). Companies and ATS polling, a company-tag signal, `min_score`.
 - Telegram / push, auth, users, payments, scheduled vacancy auto-refresh, GCP deploy.
 - Collectors debug HTTP, `cmd/eval`, and `cmd/ipv6proxy` stay; they are not the product HTTP path.
 
@@ -139,7 +140,7 @@ Nuxt 4 under `app/`. Dev server listens on **:3002** (`NUXT_PUBLIC_API_BASE_URL`
 | Route | Behavior |
 |-------|----------|
 | `/` | `getProfiles`. Each row shows `name` and links to `/profiles/{id}`. No create, no delete, no slot cap. The header’s only nav target is `/`. |
-| `/profiles/{id}` | Latest run plus the job list (`PaginatedDataTable`, page size 50). Columns: row number, title, company, score, sources, location, first seen (local, minutes), posted (local, or a dash), hide or unhide. The run button calls `postProfileRun` with a new UUID and an empty body. While status is `RUNNING`, the page polls `getLatestProfileRun` and `getProfileJobs` every 2.5s. It shows status, `jobs_scored` (“Parsed N vacancies”), and `sources_skipped` when those fields are present. The default tab sends `bucket=TOP` and omits `user_status`, so it is `TOP` and `NEW`. Controls request `bucket=REVIEW` and `bucket=REJECTED`. One control requests `user_status=HIDDEN` and omits `bucket`, so the server default `TOP` still applies; it can patch a row back to `NEW`. Hide calls `patchProfileJob` with `HIDDEN`. Location prefers `openings` as links (country label, or `Link`); a Recruitee apply URL falls back to the listing or the careers index. With no opening link, countries and regions render as text. Empty countries, regions, and links render a dash. Source labels exist for the nine software aggregators; every other id, including Consider, Getro, and the architecture boards, renders the raw id. Failures render `error.message`, including an already-open run. `PROFILES.NO_RUN` on the latest-run call renders “No run yet”. Types accept `facts_status` (`off` \| `pending` \| `ready`) and signal codes including `LLM` / `CONFLICT`. Profile phrase blocks, `facts_status`, and per-job signals are not rendered in the table UI yet. |
+| `/profiles/{id}` | Latest run plus the job list (`PaginatedDataTable`, page size 50). Columns: row number, title, company, score, sources, location, first seen (local, minutes), posted (local, or a dash), hide or unhide. The run button calls `postProfileRun` with a new UUID and an empty body. While status is `RUNNING`, the page polls `getLatestProfileRun` and `getProfileJobs` every 2.5s. It shows status, `jobs_scored` (“Parsed N vacancies”), and `sources_skipped` when those fields are present. The default tab sends `bucket=TOP` and omits `user_status`, so it is `TOP` and `NEW`. Controls request `bucket=REVIEW` and `bucket=REJECTED`. One control requests `user_status=HIDDEN` and omits `bucket`, so the server default `TOP` still applies; it can patch a row back to `NEW`. Hide calls `patchProfileJob` with `HIDDEN`. Location prefers `openings` as links (country label, or `Link`); a Recruitee apply URL falls back to the listing or the careers index. With no opening link, countries and regions render as text. Empty countries, regions, and links render a dash. Source labels exist for nine software aggregators (not `dou_ua`); every other id, including `dou_ua`, Consider, Getro, and the architecture boards, renders the raw id. Failures render `error.message`, including an already-open run. `PROFILES.NO_RUN` on the latest-run call renders “No run yet”. Types accept `facts_status` (`off` \| `pending` \| `ready`) and signal codes including `LLM` / `CONFLICT`. Profile phrase blocks, `facts_status`, and per-job signals are not rendered in the table UI yet. |
 
 Client functions: `getProfiles`, `postProfileRun`, `getLatestProfileRun`, `getProfileJobs`, `patchProfileJob`. `postProfileRun` sends `Idempotency-Key` and no body. `getProfileJobs` sends `bucket`, `user_status`, `page`, and `limit` only when the caller set them.
 
@@ -207,7 +208,7 @@ jobhound_core/
 │   ├── eval/                # offline enrich gold vs predictions
 │   └── ipv6proxy/           # host CONNECT proxy (IPv6-first); started by make docker-up, not Compose
 ├── config/profiles/         # andrew.yaml (software), lada.yaml (architecture); both include facts:
-├── data/                    # countries.json (ISO lookup for collectors)
+├── data/                    # countries.json (ISO lookup); data/local/ holds gitignored Postgres dumps (+ .gitkeep)
 ├── docker/temporal/         # Temporal dynamic config for Compose
 ├── docs/                    # REPO_SNAPSHOT.md + feature slices (02-companies-and-ats)
 ├── internal/
@@ -243,12 +244,12 @@ Modules under `internal/`: `collectors`, `config`, `domain`, `enrich`, `ingest`,
 | File | What is configured |
 |------|----------------|
 | `go.mod` | module path, Go 1.24.0, direct deps, `replace` pins |
-| `Makefile` | `build` five app binaries to `bin/` (agent, worker, api, migrate, retention); `bin/ipv6proxy` is a separate target used by `start-ipv6-proxy`; `eval` runs `go run ./cmd/eval`; `run` / `run-debug` / `run-worker`; `test` / `test-integration`; `fmt` / `vet` / `lint` (`golangci-lint run`) / `tidy`; migrate; `docker-up` starts the host proxy, then Compose `build --no-cache` + `up -d --force-recreate --pull always`; `docker-down` stops the proxy |
+| `Makefile` | `build` five app binaries to `bin/` (agent, worker, api, migrate, retention); `bin/ipv6proxy` is a separate target used by `start-ipv6-proxy`; `eval` runs `go run ./cmd/eval`; `run` / `run-debug` / `run-worker`; `test` / `test-integration`; `fmt` / `vet` / `lint` (`golangci-lint run`) / `tidy`; migrate; `db-dump` / `db-restore` (full Postgres dump under gitignored `data/local/`, restore then migrate); `docker-up` starts the host proxy, then Compose `build --no-cache` + `up -d --force-recreate --pull always`; `docker-down` stops the proxy |
 | `docker-compose.yml` | postgres 16, migrate one-shot, redis 7, temporal + UI + temporal-ready, agent :3001, worker, api :3000. Worker and agent get `JOBHOUND_EUROPE_REMOTELY_PROXY=http://host.docker.internal:18080`. `api` and `worker` get `JOBHOUND_PROFILES_DIR=/app/config/profiles` and optional `JOBHOUND_ANTHROPIC_API_KEY` / `JOBHOUND_ENRICH_MODEL`. The proxy process itself is not a Compose service |
 | `Dockerfile` | multi-stage; CGO_ENABLED=0; debian-slim + chromium + `data/` + `config/profiles` |
 | `Dockerfile.migrate` | migrate binary + `migrations/` |
 | `.dockerignore` | `.git`, `bin/`, `.cursor`, `*.md`, `.env*` |
-| `.gitignore` | `.env`, `.env.*`, `/bin/`, `vendor/`, sqlite, `cookies.txt` |
+| `.gitignore` | `.env`, `.env.*`, `/bin/`, `vendor/`, sqlite, `cookies.txt`, dump path under `data/local/` |
 | `.cursor/rules/specify-rules.mdc` | always-applied stack + module layout, Canonical Enum, schema-first HTTP, Temporal separation |
 | `.cursor/templates/` | concept / schemas-contracts / tasks for new `docs/<feature_slug>/` slices |
 | `.cursor/skills/audit-feature-tasks/` | audit `*-tasks.md` against code |
@@ -329,12 +330,14 @@ No Stripe/Paddle/billing modules.
 | `test-integration` | `go test -tags=integration ./...` |
 | `fmt` / `vet` / `lint` / `tidy` | `go fmt`, `go vet`, `golangci-lint run`, mod tidy |
 | `migrate-up` / `down` / `version` | `bin/migrate` |
+| `db-dump` | Full `pg_dump` via `JOBHOUND_DATABASE_URL` into gitignored `data/local/` |
+| `db-restore` | Restore that dump, then run migrations |
 | `start-ipv6-proxy` / `stop-ipv6-proxy` | Build `bin/ipv6proxy` if needed; listen on `127.0.0.1:18080` (`-detach`, pid in `bin/ipv6proxy.pid`, log `bin/ipv6proxy.log`). Health check is `GET /health` |
 | `docker-up` / `docker-down` / `docker-ps` / `docker-logs` / `docker-migrate` | Compose. `docker-up` depends on `start-ipv6-proxy`; `docker-down` runs `stop-ipv6-proxy` first |
 
 ### Tests
 
-- **Runner:** `go test`. **61** `*_test.go` files.
+- **Runner:** `go test`. **62** `*_test.go` files.
 - **Unit (default):** handlers (`httptest`) for the five profile routes, `profiles/impl` YAML load (including `lada.yaml`, `children`, and `facts`), `scoring/impl` phrase + fact tables, `scoring/storage` / `jobs/storage` / `enrich/storage` (often sqlite), enrich batches/coerce/decode/eval, collector parse fixtures (software and architecture boards), ingest coordinator (miniredis).
 - **Integration (`//go:build integration`):** `internal/platform/pgsql/migrations_integration_test.go`; `internal/ingest/coordinator_integration_test.go`; `internal/collectors/browserfetch/rod_integration_test.go`. Need env / Compose (`JOBHOUND_DATABASE_URL`, Chromium as applicable).
 - **`tests/`:** empty directory (constitution allows optional `tests/integration/`). Offline enrich fixtures live under `testdata/enrich/`.
@@ -404,7 +407,7 @@ From `internal/config` (single source). Values not listed.
 | `.cursor/templates/` | yes | `concept.md`, `schemas-contracts.md`, `tasks.md`, README |
 | `.cursor/skills/audit-feature-tasks/` | yes | audit `*-tasks.md` vs code |
 | `.cursor/skills/calibrate-profile/` | yes | calibrate profile YAML/scorer from pasted TOP vacancies |
-| `docs/` | `REPO_SNAPSHOT.md`, `02-companies-and-ats/` | `01-enrich/` removed after ship |
+| `docs/` | `REPO_SNAPSHOT.md`, `02-companies-and-ats/` | `01-enrich/` and `01-dou-ua/` removed after ship |
 
 ## 13. Documentation
 
@@ -430,7 +433,7 @@ From `internal/config` (single source). Values not listed.
 
 ### Project-specific (remove when turning into a template)
 
-- Job-board collectors (the nine software aggregators, the twelve architecture boards, Consider `consider_*`, Getro `getro_*`), `browserfetch` / Chromium, and host `cmd/ipv6proxy` for Europe Remotely from Docker
+- Job-board collectors (the ten software aggregators, the twelve architecture boards, Consider `consider_*`, Getro `getro_*`), `browserfetch` / Chromium, and host `cmd/ipv6proxy` for Europe Remotely from Docker
 - Profile YAML (`config/profiles/andrew.yaml`, `config/profiles/lada.yaml`, including `children` and `facts`) and gated phrase + fact scoring (`gate_role` / `gate_hard` / `gate_location` / `signals_plus` / `penalties_soft` / `facts.*`, buckets `TOP` | `REVIEW` | `REJECTED`)
 - Vacancy enrich (`internal/enrich`, Anthropic Message Batches, `job_verdicts`, `EnrichBatchWorkflow`, `cmd/eval` + `testdata/enrich`)
 - Architecture-board cooldown of 12 hours and the 90-day `posted_at` cutoff for `domain: architecture` and for architecture source ids

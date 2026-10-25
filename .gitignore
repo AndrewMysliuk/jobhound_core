@@ -6,6 +6,9 @@
 # Local CV material for search calibration
 /config/cv/
 
+# Local company lists (applied + target Excels) — not indexed
+/config/companies/
+
 # Go
 /bin/
 /dist/
@@ -20,6 +23,10 @@ vendor/
 *.sqlite
 *.sqlite3
 .data/
+
+# Local Postgres dumps (make db-dump) — keep dir, ignore contents
+/data/local/*
+!/data/local/.gitkeep
 
 # Session material (paths may be overridden in .env)
 cookies.txt
