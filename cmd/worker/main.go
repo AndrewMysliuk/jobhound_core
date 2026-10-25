@@ -110,6 +110,7 @@ func main() {
 				jobsRepo,
 				&enrichimpl.BatchesClient{APIKey: appCfg.Enrich.APIKey, Model: appCfg.Enrich.Model},
 				appCfg.Enrich.Model,
+				appCfg.Enrich.MinDescriptionChars,
 			)
 			enrichRescore = scoringimpl.New(
 				profilesimpl.NewFileStore(appCfg.ProfilesDir, sourceids.KnownSourceIDs()),

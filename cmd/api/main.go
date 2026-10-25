@@ -82,7 +82,7 @@ func main() {
 	}
 	var scoringSvc *scoringimpl.Service
 	if appCfg.Enrich.Enabled {
-		enrichSvc := enrichimpl.New(enrichstorage.NewRepository(getter), jobsRepo, nil, appCfg.Enrich.Model)
+		enrichSvc := enrichimpl.New(enrichstorage.NewRepository(getter), jobsRepo, nil, appCfg.Enrich.Model, appCfg.Enrich.MinDescriptionChars)
 		scoringSvc = scoringimpl.New(profileStore, runsRepo, jobsRepo, starter, nil, enrichSvc)
 	} else {
 		scoringSvc = scoringimpl.New(profileStore, runsRepo, jobsRepo, starter, nil, nil)

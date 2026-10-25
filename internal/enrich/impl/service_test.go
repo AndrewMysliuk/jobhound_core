@@ -112,7 +112,134 @@ func testStoreService(t *testing.T, jobs memJobs) *Service {
 		}
 	}
 	repo := storage.NewRepository(pgsql.NewGetter(db))
-	return New(repo, jobs, nil, "claude-test")
+	return New(repo, jobs, nil, "claude-test", 0)
+}
+
+func testServiceWithMinChars(t *testing.T, jobs memJobs, minChars int) *Service {
+	t.Helper()
+	svc := testStoreService(t, jobs)
+	svc.minDescriptionChars = minChars
+	return svc
+}
+
+func longDescription(n int) string {
+	b := make([]byte, n)
+	for i := range b {
+		b[i] = 'a'
+	}
+	return string(b)
+}
+
+func TestMissingIDs_filtersShortDescription(t *testing.T) {
+	t.Parallel()
+
+	const (
+		shortID = "job-short"
+		longID  = "job-long"
+		model   = "claude-test"
+	)
+	jobs := memJobs{
+		shortID: {
+			ID:          shortID,
+			Title:       "Engineer",
+			Description: "Go Python React",
+			Location:    jobdata.Location{Raw: "Remote"},
+		},
+		longID: {
+			ID:          longID,
+			Title:       "Engineer",
+			Description: longDescription(schema.MinDescriptionChars),
+			Location:    jobdata.Location{Raw: "Remote"},
+		},
+	}
+	svc := testServiceWithMinChars(t, jobs, schema.MinDescriptionChars)
+	ctx := context.Background()
+
+	got, err := svc.MissingIDs(ctx, model, schema.PromptVersion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0] != longID {
+		t.Fatalf("MissingIDs = %v, want only %q", got, longID)
+	}
+}
+
+func TestMissingIDs_zeroMinDisablesFilter(t *testing.T) {
+	t.Parallel()
+
+	const shortID = "job-short"
+	jobs := memJobs{
+		shortID: {
+			ID:          shortID,
+			Title:       "Engineer",
+			Description: "short",
+			Location:    jobdata.Location{Raw: "Remote"},
+		},
+	}
+	svc := testServiceWithMinChars(t, jobs, 0)
+	got, err := svc.MissingIDs(context.Background(), "claude-test", schema.PromptVersion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0] != shortID {
+		t.Fatalf("MissingIDs = %v, want %q when min=0", got, shortID)
+	}
+}
+
+func TestStatuses_shortDescriptionOff(t *testing.T) {
+	t.Parallel()
+
+	const (
+		shortID = "job-short"
+		longID  = "job-long"
+	)
+	jobs := memJobs{
+		shortID: {
+			ID:          shortID,
+			Title:       "Engineer",
+			Description: "labels only",
+			Location:    jobdata.Location{Raw: "Remote"},
+		},
+		longID: {
+			ID:          longID,
+			Title:       "Engineer",
+			Description: longDescription(schema.MinDescriptionChars),
+			Location:    jobdata.Location{Raw: "Remote"},
+		},
+	}
+	svc := testServiceWithMinChars(t, jobs, schema.MinDescriptionChars)
+	got, err := svc.Statuses(context.Background(), []string{shortID, longID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got[shortID] != schema.FactsStatusOff {
+		t.Fatalf("short status = %q, want off", got[shortID])
+	}
+	if got[longID] != schema.FactsStatusPending {
+		t.Fatalf("long status = %q, want pending", got[longID])
+	}
+}
+
+func TestStatuses_zeroMinDisablesFilter(t *testing.T) {
+	t.Parallel()
+
+	const shortID = "job-short"
+	jobs := memJobs{
+		shortID: {
+			ID:          shortID,
+			Title:       "Engineer",
+			Description: "short",
+			Location:    jobdata.Location{Raw: "Remote"},
+		},
+	}
+	svc := testServiceWithMinChars(t, jobs, 0)
+	got, err := svc.Statuses(context.Background(), []string{shortID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got[shortID] != schema.FactsStatusPending {
+		t.Fatalf("status = %q, want pending when min=0", got[shortID])
+	}
 }
 
 func TestStoreVerdictsSchemaInvalidRetriesThenUnknown(t *testing.T) {

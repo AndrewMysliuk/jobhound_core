@@ -37,7 +37,7 @@ are JD+YAML only and miss score/signals/facts — say so and ask the user to
 3. Scoring behavior lives in `internal/scoring/impl/` (`evaluate.go`,
    `fact_signals.go`). Remote location = allow-list **intersection**; collector
    timezone UTC `-8`/`-7` → Pacific cut; LLM facts only when verdict is ready.
-4. Product snapshot (only if needed): `docs/REPO_SNAPSHOT.md` Stage 2 / gates.
+4. Product snapshot (only if needed): `docs/SYSTEM.md` Stage 2 / gates.
 
 Do **not** re-ingest or dump hundreds of full JDs into the model.
 

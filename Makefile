@@ -9,7 +9,7 @@ COMPOSE_ENV := $(shell test -f $(ENV_FILE) && printf '%s' '--env-file $(ENV_FILE
 
 .PHONY: build build-retention run run-debug run-worker eval test test-integration fmt vet lint tidy migrate-up migrate-down migrate-version \
 	db-dump db-restore docker-up docker-down docker-down-volumes docker-ps docker-logs docker-migrate \
-	start-ipv6-proxy stop-ipv6-proxy
+	start-ipv6-proxy stop-ipv6-proxy docs-stack
 
 # Host CONNECT proxy. Keep the port in sync with JOBHOUND_EUROPE_REMOTELY_PROXY in docker-compose.yml.
 IPV6_PROXY_ADDR ?= 127.0.0.1:18080
@@ -119,3 +119,6 @@ docker-logs:
 
 docker-migrate:
 	$(COMPOSE) $(COMPOSE_ENV) run --rm migrate
+
+docs-stack:
+	go run ./scripts/gen_stack_docs.go

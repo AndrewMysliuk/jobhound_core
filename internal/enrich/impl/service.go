@@ -15,11 +15,12 @@ import (
 
 // Service is the enrich use-case surface. It does not import Temporal.
 type Service struct {
-	repo   *storage.Repository
-	jobs   jobWindow
-	client *BatchesClient
-	model  string
-	now    func() time.Time
+	repo                *storage.Repository
+	jobs                jobWindow
+	client              *BatchesClient
+	model               string
+	minDescriptionChars int
+	now                 func() time.Time
 }
 
 type jobWindow interface {
@@ -29,13 +30,16 @@ type jobWindow interface {
 
 // New wires enrich storage, the jobs window, and the Message Batches client.
 // model is the string stored on each verdict row.
-func New(repo *storage.Repository, jobsRepo jobWindow, client *BatchesClient, model string) *Service {
+// minDescriptionChars skips shorter descriptions in MissingIDs and Statuses;
+// 0 disables the length filter (tests / explicit opt-out).
+func New(repo *storage.Repository, jobsRepo jobWindow, client *BatchesClient, model string, minDescriptionChars int) *Service {
 	return &Service{
-		repo:   repo,
-		jobs:   jobsRepo,
-		client: client,
-		model:  model,
-		now:    func() time.Time { return time.Now().UTC() },
+		repo:                repo,
+		jobs:                jobsRepo,
+		client:              client,
+		model:               model,
+		minDescriptionChars: minDescriptionChars,
+		now:                 func() time.Time { return time.Now().UTC() },
 	}
 }
 
@@ -53,7 +57,8 @@ var (
 )
 
 // MissingIDs returns every job id with no row for this prompt version and model
-// whose current text hash is also missing.
+// whose current text hash is also missing. Descriptions shorter than
+// minDescriptionChars are omitted (they will never get a verdict).
 func (s *Service) MissingIDs(ctx context.Context, model string, promptVersion int) ([]string, error) {
 	if s == nil || s.repo == nil || s.jobs == nil {
 		return nil, errors.New("enrich: repository and jobs are required")
@@ -65,7 +70,8 @@ func (s *Service) MissingIDs(ctx context.Context, model string, promptVersion in
 	if err != nil {
 		return nil, err
 	}
-	hashes, err := currentHashes(all)
+	eligible := filterByMinDescription(all, s.minDescriptionChars)
+	hashes, err := currentHashes(eligible)
 	if err != nil {
 		return nil, err
 	}
@@ -115,7 +121,10 @@ func (s *Service) Verdict(ctx context.Context, jobID, model string, promptVersio
 	return v, nil
 }
 
-// Statuses returns pending or ready for each job id. Ready means a row exists for the current hash.
+// Statuses returns pending, ready, or off for each job id.
+// Ready means a row exists for the current hash. Off means the description is
+// below minDescriptionChars (same signal as when enrich is disabled), so a
+// skipped vacancy never sticks as pending.
 func (s *Service) Statuses(ctx context.Context, jobIDs []string) (map[string]schema.FactsStatus, error) {
 	if s == nil || s.repo == nil || s.jobs == nil {
 		return nil, errors.New("enrich: repository and jobs are required")
@@ -123,6 +132,7 @@ func (s *Service) Statuses(ctx context.Context, jobIDs []string) (map[string]sch
 	if s.model == "" {
 		return nil, fmt.Errorf("enrich: model is required")
 	}
+	out := make(map[string]schema.FactsStatus, len(jobIDs))
 	hashes := make(map[string]string, len(jobIDs))
 	for _, id := range jobIDs {
 		if id == "" {
@@ -132,9 +142,23 @@ func (s *Service) Statuses(ctx context.Context, jobIDs []string) (map[string]sch
 		if err != nil {
 			return nil, err
 		}
+		if !descriptionEligible(job.Description, s.minDescriptionChars) {
+			out[id] = schema.FactsStatusOff
+			continue
+		}
 		hashes[id] = InputHash(job.Title, job.Description, job.Location.Raw, job.SalaryRaw)
 	}
-	return s.repo.Statuses(ctx, s.model, schema.PromptVersion, hashes)
+	if len(hashes) == 0 {
+		return out, nil
+	}
+	got, err := s.repo.Statuses(ctx, s.model, schema.PromptVersion, hashes)
+	if err != nil {
+		return nil, err
+	}
+	for id, st := range got {
+		out[id] = st
+	}
+	return out, nil
 }
 
 // ReadyByJobs returns ready verdicts keyed by job id. Omitted ids are pending.
@@ -312,4 +336,26 @@ func currentHashes(jobs []jobdata.Job) (map[string]string, error) {
 		out[job.ID] = InputHash(job.Title, job.Description, job.Location.Raw, job.SalaryRaw)
 	}
 	return out, nil
+}
+
+// descriptionEligible is true when minChars <= 0 (filter off) or the description
+// meets the minimum length.
+func descriptionEligible(description string, minChars int) bool {
+	if minChars <= 0 {
+		return true
+	}
+	return len(description) >= minChars
+}
+
+func filterByMinDescription(jobs []jobdata.Job, minChars int) []jobdata.Job {
+	if minChars <= 0 {
+		return jobs
+	}
+	out := make([]jobdata.Job, 0, len(jobs))
+	for _, job := range jobs {
+		if descriptionEligible(job.Description, minChars) {
+			out = append(out, job)
+		}
+	}
+	return out
 }

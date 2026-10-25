@@ -17,7 +17,7 @@ Task files follow `.cursor/templates/tasks.md`. Live under `docs/<feature_slug>/
 
 1. Use the path the user named. Else search `docs/**/*-tasks.md` in this repo.
 2. If several files match, pick the one they mentioned; if still ambiguous, ask.
-3. Also read, when present in the same folder: `*-concept.md`, `*-schemas-contracts.md`. Product snapshot: `docs/REPO_SNAPSHOT.md` if linked.
+3. Also read, when present in the same folder: `*-concept.md`, `*-schemas-contracts.md`. Product snapshot: `docs/SYSTEM.md` if linked.
 4. Follow `.cursor/rules/specify-rules.mdc`. If the slice includes UI, also search `jobhound_frontend/docs/**/*-tasks.md`.
 
 ## Parse the tasks file

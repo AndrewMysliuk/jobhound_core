@@ -36,6 +36,7 @@ type Config struct {
 // A non-positive JOBHOUND_JOB_RETENTION_DAYS is an error. Callers pass JobRetentionDays into the retention cutoff.
 // An empty JOBHOUND_ANTHROPIC_API_KEY disables enrich and ignores JOBHOUND_ENRICH_MODEL.
 // A set key with an empty model is an error.
+// JOBHOUND_ENRICH_MIN_DESCRIPTION_CHARS empty or 0 uses enrich/schema.MinDescriptionChars; negative is an error.
 func Load() (Config, error) {
 	days, err := loadJobRetentionDaysFromEnv()
 	if err != nil {
