@@ -127,4 +127,3 @@ func catalogSource(id string) bool {
 		return false
 	}
 }
-
