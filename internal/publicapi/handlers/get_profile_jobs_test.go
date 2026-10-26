@@ -25,13 +25,14 @@ func TestGetProfileJobs(t *testing.T) {
 
 	t.Run("bad query", func(t *testing.T) {
 		for _, rawURL := range []string{
-			"/api/v1/profiles/andrew/jobs?bucket=PASSED",
-			"/api/v1/profiles/andrew/jobs?bucket=BOTH",
-			"/api/v1/profiles/andrew/jobs?user_status=ALL",
-			"/api/v1/profiles/andrew/jobs?user_status=NEW&user_status=HIDDEN",
-			"/api/v1/profiles/andrew/jobs?page=0",
-			"/api/v1/profiles/andrew/jobs?limit=101",
-			"/api/v1/profiles/andrew/jobs?page=no",
+			"/api/v1/profiles/software/jobs?bucket=PASSED",
+			"/api/v1/profiles/software/jobs?bucket=BOTH",
+			"/api/v1/profiles/software/jobs?user_status=ALL",
+			"/api/v1/profiles/software/jobs?user_status=NEW&user_status=HIDDEN",
+			"/api/v1/profiles/software/jobs?closed=yes",
+			"/api/v1/profiles/software/jobs?page=0",
+			"/api/v1/profiles/software/jobs?limit=101",
+			"/api/v1/profiles/software/jobs?page=no",
 		} {
 			t.Run(rawURL, func(t *testing.T) {
 				api := &profileJobsScoring{}
@@ -91,17 +92,18 @@ func TestGetProfileJobs(t *testing.T) {
 			Profiles: profileJobsStore{},
 			Scoring:  api,
 		})
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/profiles/andrew/jobs?min_score=9", nil)
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/profiles/software/jobs?min_score=9", nil)
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, req)
 		if rec.Code != http.StatusOK {
 			t.Fatalf("status %d %s", rec.Code, rec.Body.String())
 		}
-		if api.listParams.ProfileID != "andrew" ||
+		if api.listParams.ProfileID != "software" ||
 			api.listParams.Bucket != scoringschema.BucketTop ||
 			api.listParams.UserStatus != scoringschema.UserStatusNew ||
 			api.listParams.Page != 1 ||
-			api.listParams.Limit != schema.DefaultJobListLimit {
+			api.listParams.Limit != schema.DefaultJobListLimit ||
+			api.listParams.IncludeClosed {
 			t.Fatalf("params %#v", api.listParams)
 		}
 		if strings.Contains(rec.Body.String(), "min_score") {
@@ -169,7 +171,7 @@ func TestGetProfileJobs(t *testing.T) {
 			Profiles: profileJobsStore{},
 			Scoring:  api,
 		})
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/profiles/andrew/jobs", nil)
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/profiles/software/jobs", nil)
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, req)
 		if rec.Code != http.StatusOK {
@@ -206,7 +208,7 @@ func TestGetProfileJobs(t *testing.T) {
 			Profiles: profileJobsStore{},
 			Scoring:  api,
 		})
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/profiles/andrew/jobs?bucket=REVIEW", nil)
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/profiles/software/jobs?bucket=REVIEW", nil)
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, req)
 		if rec.Code != http.StatusOK {
@@ -248,7 +250,7 @@ func TestGetProfileJobs(t *testing.T) {
 			Profiles: profileJobsStore{},
 			Scoring:  api,
 		})
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/profiles/andrew/jobs?bucket=REJECTED&page=2&limit=25", nil)
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/profiles/software/jobs?bucket=REJECTED&page=2&limit=25", nil)
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, req)
 		if rec.Code != http.StatusOK {
@@ -311,7 +313,7 @@ func TestGetProfileJobs(t *testing.T) {
 			Profiles: profileJobsStore{},
 			Scoring:  api,
 		})
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/profiles/andrew/jobs?bucket=REJECTED", nil)
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/profiles/software/jobs?bucket=REJECTED", nil)
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, req)
 		if rec.Code != http.StatusOK {
@@ -360,6 +362,70 @@ func TestGetProfileJobs(t *testing.T) {
 			t.Fatal("ListJobs called")
 		}
 	})
+
+	t.Run("closed excluded by default", func(t *testing.T) {
+		api := &profileJobsScoring{page: scoringschema.JobPage{
+			Page:  1,
+			Limit: schema.DefaultJobListLimit,
+		}}
+		h := NewHTTPHandler(nil, Deps{
+			Logger:   zerolog.Nop(),
+			Profiles: profileJobsStore{},
+			Scoring:  api,
+		})
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/profiles/software/jobs", nil)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status %d %s", rec.Code, rec.Body.String())
+		}
+		if api.listParams.IncludeClosed {
+			t.Fatalf("IncludeClosed want false, got %#v", api.listParams)
+		}
+	})
+
+	t.Run("closed=true includes closed and returns closed_at", func(t *testing.T) {
+		closedAt := time.Date(2026, 10, 20, 8, 0, 0, 0, time.UTC)
+		api := &profileJobsScoring{page: scoringschema.JobPage{
+			Page:  1,
+			Limit: schema.DefaultJobListLimit,
+			Total: 1,
+			Jobs: []scoringschema.ListedJob{{
+				JobID:       "job-closed",
+				Title:       "Backend",
+				Company:     "Acme",
+				URL:         "https://example.com/closed",
+				ApplyURL:    "https://example.com/closed/apply",
+				Location:    jobdata.Location{Type: jobdata.LocationRemote, Raw: "Remote"},
+				FirstSeenAt: seen,
+				LastSeenAt:  seen,
+				ClosedAt:    &closedAt,
+				Bucket:      scoringschema.BucketTop,
+				UserStatus:  scoringschema.UserStatusNew,
+			}},
+		}}
+		h := NewHTTPHandler(nil, Deps{
+			Logger:   zerolog.Nop(),
+			Profiles: profileJobsStore{},
+			Scoring:  api,
+		})
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/profiles/software/jobs?closed=true", nil)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status %d %s", rec.Code, rec.Body.String())
+		}
+		if !api.listParams.IncludeClosed {
+			t.Fatalf("IncludeClosed want true, got %#v", api.listParams)
+		}
+		var got schema.ProfileJobPage
+		if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+			t.Fatal(err)
+		}
+		if len(got.Jobs) != 1 || got.Jobs[0].ClosedAt == nil || !got.Jobs[0].ClosedAt.Equal(closedAt) {
+			t.Fatalf("jobs %#v", got.Jobs)
+		}
+	})
 }
 
 type profileJobsStore struct {
@@ -374,7 +440,7 @@ func (s profileJobsStore) Get(context.Context, string) (profileschema.Profile, e
 	if s.err != nil {
 		return profileschema.Profile{}, s.err
 	}
-	return profileschema.Profile{ID: "andrew"}, nil
+	return profileschema.Profile{ID: "software"}, nil
 }
 
 type profileJobsScoring struct {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -235,5 +236,123 @@ func TestRepository_Statuses_pendingAndReady(t *testing.T) {
 	}
 	if got["job-pending"] != schema.FactsStatusPending {
 		t.Fatalf("job-pending = %s, want pending", got["job-pending"])
+	}
+}
+
+func TestRepository_VerdictsByHashes(t *testing.T) {
+	ctx := context.Background()
+	db := testEnrichDB(t)
+	repo := NewRepository(pgsql.NewGetter(db))
+
+	insertJob(t, db, "job-a")
+	insertJob(t, db, "job-b")
+	insertJob(t, db, "job-stale")
+	insertJob(t, db, "job-dual")
+	insertJob(t, db, "job-other-model")
+	insertJob(t, db, "job-other-pv")
+
+	factsA := sampleFacts()
+	factsA.Office.Countries = []string{"IN"}
+	factsB := sampleFacts()
+	factsB.Office.Countries = []string{"US"}
+	factsCurrent := sampleFacts()
+	factsCurrent.Office.Countries = []string{"DE"}
+
+	for _, v := range []schema.Verdict{
+		{JobID: "job-a", PromptVersion: schema.PromptVersion, Model: "haiku", InputHash: "hash-a", Facts: factsA},
+		{JobID: "job-b", PromptVersion: schema.PromptVersion, Model: "haiku", InputHash: "hash-b", Facts: factsB},
+		{JobID: "job-stale", PromptVersion: schema.PromptVersion, Model: "haiku", InputHash: "hash-old", Facts: sampleFacts()},
+		{JobID: "job-dual", PromptVersion: schema.PromptVersion, Model: "haiku", InputHash: "hash-old", Facts: sampleFacts()},
+		{JobID: "job-dual", PromptVersion: schema.PromptVersion, Model: "haiku", InputHash: "hash-current", Facts: factsCurrent},
+		{JobID: "job-other-model", PromptVersion: schema.PromptVersion, Model: "other", InputHash: "hash-om", Facts: sampleFacts()},
+		{JobID: "job-other-pv", PromptVersion: schema.PromptVersion + 1, Model: "haiku", InputHash: "hash-opv", Facts: sampleFacts()},
+	} {
+		if err := repo.Insert(ctx, v); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	got, err := repo.VerdictsByHashes(ctx, "haiku", schema.PromptVersion, map[string]string{
+		"job-a":           "hash-a",
+		"job-b":           "hash-b",
+		"job-stale":       "hash-new",
+		"job-dual":        "hash-current",
+		"job-other-model": "hash-om",
+		"job-other-pv":    "hash-opv",
+		"job-missing":     "hash-missing",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 3 {
+		t.Fatalf("len(got) = %d, want 3 (a, b, dual)", len(got))
+	}
+	if got["job-a"].Facts.Office.Countries[0] != "IN" {
+		t.Fatalf("job-a facts = %#v", got["job-a"].Facts.Office)
+	}
+	if got["job-b"].Facts.Office.Countries[0] != "US" {
+		t.Fatalf("job-b facts = %#v", got["job-b"].Facts.Office)
+	}
+	if got["job-dual"].InputHash != "hash-current" || got["job-dual"].Facts.Office.Countries[0] != "DE" {
+		t.Fatalf("job-dual = %#v, want current hash", got["job-dual"])
+	}
+	for _, id := range []string{"job-stale", "job-other-model", "job-other-pv", "job-missing"} {
+		if _, ok := got[id]; ok {
+			t.Fatalf("%s must be omitted (pending)", id)
+		}
+	}
+}
+
+func TestRepository_VerdictsByHashes_empty(t *testing.T) {
+	ctx := context.Background()
+	db := testEnrichDB(t)
+	repo := NewRepository(pgsql.NewGetter(db))
+
+	got, err := repo.VerdictsByHashes(ctx, "haiku", schema.PromptVersion, map[string]string{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 0 {
+		t.Fatalf("got = %#v, want empty map", got)
+	}
+
+	got, err = repo.VerdictsByHashes(ctx, "haiku", schema.PromptVersion, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 0 {
+		t.Fatalf("nil hashes: got = %#v, want empty map", got)
+	}
+}
+
+func TestRepository_VerdictsByHashes_chunks(t *testing.T) {
+	ctx := context.Background()
+	db := testEnrichDB(t)
+	repo := NewRepository(pgsql.NewGetter(db))
+
+	const n = 1200
+	hashes := make(map[string]string, n)
+	for i := 0; i < n; i++ {
+		id := "job-" + strconv.Itoa(i)
+		hash := "hash-" + strconv.Itoa(i)
+		insertJob(t, db, id)
+		hashes[id] = hash
+		if err := repo.Insert(ctx, schema.Verdict{
+			JobID:         id,
+			PromptVersion: schema.PromptVersion,
+			Model:         "haiku",
+			InputHash:     hash,
+			Facts:         sampleFacts(),
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	got, err := repo.VerdictsByHashes(ctx, "haiku", schema.PromptVersion, hashes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != n {
+		t.Fatalf("len(got) = %d, want %d (chunking must return all matches)", len(got), n)
 	}
 }

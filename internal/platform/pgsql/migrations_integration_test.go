@@ -223,18 +223,18 @@ func TestMigrationsProfileRunsAndMatches_integration(t *testing.T) {
 	var runID int64
 	if err := tx.QueryRowContext(ctx, `
 		INSERT INTO profile_runs (profile_id, status, started_at, idempotency_key)
-		VALUES ('andrew', 'RUNNING', NOW(), '11111111-1111-1111-1111-111111111111')
+		VALUES ('software', 'RUNNING', NOW(), '11111111-1111-1111-1111-111111111111')
 		RETURNING id`).Scan(&runID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := tx.ExecContext(ctx, `
 		INSERT INTO profile_matches (profile_id, job_id, bucket, score, signals, run_id, updated_at)
-		VALUES ('andrew', 'm1-job', 'REVIEW', 0, '[]'::jsonb, $1, NOW())`, runID); err != nil {
+		VALUES ('software', 'm1-job', 'REVIEW', 0, '[]'::jsonb, $1, NOW())`, runID); err != nil {
 		t.Fatal(err)
 	}
 	var status string
 	if err := tx.QueryRowContext(ctx, `
-		SELECT user_status FROM profile_matches WHERE profile_id = 'andrew' AND job_id = 'm1-job'`,
+		SELECT user_status FROM profile_matches WHERE profile_id = 'software' AND job_id = 'm1-job'`,
 	).Scan(&status); err != nil {
 		t.Fatal(err)
 	}

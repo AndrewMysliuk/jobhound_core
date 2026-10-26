@@ -28,6 +28,8 @@ const (
 	MarkRunFinishedActivityName = "MarkRunFinished"
 	// SetRunCountersActivityName updates the running row without closing it.
 	SetRunCountersActivityName = "SetRunCounters"
+	// AddATSCountersActivityName increments companies/ATS counters on the run.
+	AddATSCountersActivityName = "AddATSCounters"
 )
 
 // VerdictLookup returns ready enrich verdicts for Score. Nil means phrase-only (every job pending).
@@ -77,6 +79,14 @@ func (a *Activities) SetRunCounters(ctx context.Context, in schema.RunCountersIn
 		return fmt.Errorf("score activity: runs repository is required")
 	}
 	return a.Runs.SetRunCounters(ctx, in.RunID, in.JobsScored, in.SourcesSkipped)
+}
+
+// AddATSCounters increments companies/ATS counters as discover / resolve / poll finish.
+func (a *Activities) AddATSCounters(ctx context.Context, in schema.AddATSCountersInput) error {
+	if a == nil || a.Runs == nil {
+		return fmt.Errorf("score activity: runs repository is required")
+	}
+	return a.Runs.AddATSCounters(ctx, in.RunID, in.Delta)
 }
 
 // MarkRunFinished writes SUCCEEDED or FAILED and the counters from this run.

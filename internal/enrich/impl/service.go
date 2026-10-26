@@ -20,25 +20,29 @@ type Service struct {
 	client              *BatchesClient
 	model               string
 	minDescriptionChars int
+	windowDays          int
 	now                 func() time.Time
 }
 
 type jobWindow interface {
 	GetByID(ctx context.Context, id string) (jobdata.Job, error)
-	ListFirstSeenSince(ctx context.Context, since time.Time) ([]jobdata.Job, error)
+	ListEnrichCandidates(ctx context.Context, since, postedAfter time.Time) ([]jobdata.Job, error)
 }
 
 // New wires enrich storage, the jobs window, and the Message Batches client.
 // model is the string stored on each verdict row.
 // minDescriptionChars skips shorter descriptions in MissingIDs and Statuses;
 // 0 disables the length filter (tests / explicit opt-out).
-func New(repo *storage.Repository, jobsRepo jobWindow, client *BatchesClient, model string, minDescriptionChars int) *Service {
+// windowDays is the first_seen_at lookback; empty/0 at config load uses schema.WindowDays,
+// and a non-positive value here also falls back to that default.
+func New(repo *storage.Repository, jobsRepo jobWindow, client *BatchesClient, model string, minDescriptionChars, windowDays int) *Service {
 	return &Service{
 		repo:                repo,
 		jobs:                jobsRepo,
 		client:              client,
 		model:               model,
 		minDescriptionChars: minDescriptionChars,
+		windowDays:          windowDays,
 		now:                 func() time.Time { return time.Now().UTC() },
 	}
 }
@@ -56,9 +60,9 @@ var (
 	_ jobWindow  = jobs.JobRepository(nil)
 )
 
-// MissingIDs returns every job id with no row for this prompt version and model
-// whose current text hash is also missing. Descriptions shorter than
-// minDescriptionChars are omitted (they will never get a verdict).
+// MissingIDs returns open jobs in the enrich window with no row for this prompt
+// version and model whose current text hash is also missing. Descriptions
+// shorter than minDescriptionChars are omitted (they will never get a verdict).
 func (s *Service) MissingIDs(ctx context.Context, model string, promptVersion int) ([]string, error) {
 	if s == nil || s.repo == nil || s.jobs == nil {
 		return nil, errors.New("enrich: repository and jobs are required")
@@ -66,7 +70,7 @@ func (s *Service) MissingIDs(ctx context.Context, model string, promptVersion in
 	if model == "" {
 		return nil, fmt.Errorf("enrich: model is required")
 	}
-	all, err := s.jobs.ListFirstSeenSince(ctx, time.Time{})
+	all, err := s.jobs.ListEnrichCandidates(ctx, s.enrichSince(), s.postedAfter())
 	if err != nil {
 		return nil, err
 	}
@@ -78,32 +82,41 @@ func (s *Service) MissingIDs(ctx context.Context, model string, promptVersion in
 	return s.repo.MissingIDs(ctx, model, promptVersion, hashes)
 }
 
-// SubmitMissing builds a batch for the given ids, waits until it ends, and stores succeeded replies.
+// SubmitMissing builds batches for the given ids (pages of schema.MaxJobsPerSubmit),
+// waits until each ends, and stores succeeded replies.
 // Ids that already have a row for the current hash are skipped. Transport errors return without a row.
 func (s *Service) SubmitMissing(ctx context.Context, jobIDs []string) error {
 	if s == nil || s.client == nil {
 		return errors.New("enrich: batches client is required")
 	}
-	submitted, err := s.SubmitBatch(ctx, jobIDs, s.model, schema.PromptVersion)
-	if err != nil {
-		return err
+	for offset := 0; offset < len(jobIDs); offset += schema.MaxJobsPerSubmit {
+		end := offset + schema.MaxJobsPerSubmit
+		if end > len(jobIDs) {
+			end = len(jobIDs)
+		}
+		submitted, err := s.SubmitBatch(ctx, jobIDs[offset:end], s.model, schema.PromptVersion)
+		if err != nil {
+			return err
+		}
+		if submitted.BatchID == "" {
+			continue
+		}
+		if err := s.client.WaitEnded(ctx, submitted.BatchID, time.Second); err != nil {
+			return err
+		}
+		texts, err := s.client.Results(ctx, submitted.BatchID, submitted.CustomToJob)
+		if err != nil {
+			return err
+		}
+		if _, err := s.StoreVerdicts(ctx, schema.StoreVerdictsInput{
+			Texts:         texts,
+			PromptVersion: schema.PromptVersion,
+			Model:         s.model,
+		}); err != nil {
+			return err
+		}
 	}
-	if submitted.BatchID == "" {
-		return nil
-	}
-	if err := s.client.WaitEnded(ctx, submitted.BatchID, time.Second); err != nil {
-		return err
-	}
-	texts, err := s.client.Results(ctx, submitted.BatchID, submitted.CustomToJob)
-	if err != nil {
-		return err
-	}
-	_, err = s.StoreVerdicts(ctx, schema.StoreVerdictsInput{
-		Texts:         texts,
-		PromptVersion: schema.PromptVersion,
-		Model:         s.model,
-	})
-	return err
+	return nil
 }
 
 // Verdict loads the row for the exact key, or enrich.ErrNotFound.
@@ -122,9 +135,11 @@ func (s *Service) Verdict(ctx context.Context, jobID, model string, promptVersio
 }
 
 // Statuses returns pending, ready, or off for each job id.
-// Ready means a row exists for the current hash. Off means the description is
-// below minDescriptionChars (same signal as when enrich is disabled), so a
-// skipped vacancy never sticks as pending.
+// Ready means a row exists for the current hash (even if the job is closed or
+// outside the enrich window). Off means the description is below
+// minDescriptionChars, or the job is closed / outside the window / stale
+// posted_at with no ready verdict — same signal as when enrich skips that
+// vacancy in MissingIDs.
 func (s *Service) Statuses(ctx context.Context, jobIDs []string) (map[string]schema.FactsStatus, error) {
 	if s == nil || s.repo == nil || s.jobs == nil {
 		return nil, errors.New("enrich: repository and jobs are required")
@@ -134,6 +149,7 @@ func (s *Service) Statuses(ctx context.Context, jobIDs []string) (map[string]sch
 	}
 	out := make(map[string]schema.FactsStatus, len(jobIDs))
 	hashes := make(map[string]string, len(jobIDs))
+	jobsByID := make(map[string]jobdata.Job, len(jobIDs))
 	for _, id := range jobIDs {
 		if id == "" {
 			continue
@@ -146,6 +162,7 @@ func (s *Service) Statuses(ctx context.Context, jobIDs []string) (map[string]sch
 			out[id] = schema.FactsStatusOff
 			continue
 		}
+		jobsByID[id] = job
 		hashes[id] = InputHash(job.Title, job.Description, job.Location.Raw, job.SalaryRaw)
 	}
 	if len(hashes) == 0 {
@@ -155,7 +172,17 @@ func (s *Service) Statuses(ctx context.Context, jobIDs []string) (map[string]sch
 	if err != nil {
 		return nil, err
 	}
+	since := s.enrichSince()
+	postedAfter := s.postedAfter()
 	for id, st := range got {
+		if st == schema.FactsStatusReady {
+			out[id] = schema.FactsStatusReady
+			continue
+		}
+		if !windowEligible(jobsByID[id], since, postedAfter) {
+			out[id] = schema.FactsStatusOff
+			continue
+		}
 		out[id] = st
 	}
 	return out, nil
@@ -169,25 +196,15 @@ func (s *Service) ReadyByJobs(ctx context.Context, jobs []jobdata.Job) (map[stri
 	if s.model == "" {
 		return nil, fmt.Errorf("enrich: model is required")
 	}
-	out := make(map[string]schema.Verdict)
-	for _, job := range jobs {
-		if job.ID == "" {
-			continue
-		}
-		hash := InputHash(job.Title, job.Description, job.Location.Raw, job.SalaryRaw)
-		v, err := s.repo.Verdict(ctx, job.ID, s.model, schema.PromptVersion, hash)
-		if err != nil {
-			if errors.Is(err, storage.ErrNotFound) {
-				continue
-			}
-			return nil, err
-		}
-		out[job.ID] = v
+	hashes, err := currentHashes(jobs)
+	if err != nil {
+		return nil, err
 	}
-	return out, nil
+	return s.repo.VerdictsByHashes(ctx, s.model, schema.PromptVersion, hashes)
 }
 
-// SubmitBatch creates a Message Batch for ids that still lack a current-hash row.
+// SubmitBatch creates one Message Batch for ids that still lack a current-hash row.
+// Callers should pass at most schema.MaxJobsPerSubmit ids (Temporal payload budget).
 // An empty SubmittedIDs / BatchID means nothing was sent.
 func (s *Service) SubmitBatch(ctx context.Context, jobIDs []string, model string, promptVersion int) (schema.SubmitBatchResult, error) {
 	if s == nil || s.repo == nil || s.jobs == nil || s.client == nil {
@@ -196,16 +213,30 @@ func (s *Service) SubmitBatch(ctx context.Context, jobIDs []string, model string
 	if model == "" {
 		return schema.SubmitBatchResult{}, fmt.Errorf("enrich: model is required")
 	}
-	items, submitted, err := s.buildBatchItems(ctx, jobIDs, model, promptVersion)
+	if len(jobIDs) > schema.MaxJobsPerSubmit {
+		jobIDs = jobIDs[:schema.MaxJobsPerSubmit]
+	}
+	items, _, err := s.buildBatchItems(ctx, jobIDs, model, promptVersion)
 	if err != nil {
 		return schema.SubmitBatchResult{}, err
 	}
 	if len(items) == 0 {
 		return schema.SubmitBatchResult{}, nil
 	}
-	batchID, customToJob, err := s.client.Create(ctx, items)
+	first, rest, err := firstBatchChunk(items, s.client.model(), s.client.maxTokens(), maxBatchBodyBytes, schema.MaxJobsPerSubmit)
 	if err != nil {
 		return schema.SubmitBatchResult{}, err
+	}
+	if len(rest) > 0 {
+		return schema.SubmitBatchResult{}, fmt.Errorf("enrich: %d jobs still exceed Message Batches size after capping to %d; shrink descriptions or MaxJobsPerSubmit", len(rest), schema.MaxJobsPerSubmit)
+	}
+	batchID, customToJob, err := s.client.Create(ctx, first)
+	if err != nil {
+		return schema.SubmitBatchResult{}, err
+	}
+	submitted := make([]string, len(first))
+	for i, item := range first {
+		submitted[i] = item.JobID
 	}
 	return schema.SubmitBatchResult{
 		BatchID:      batchID,
@@ -327,6 +358,18 @@ func (s *Service) buildBatchItems(ctx context.Context, jobIDs []string, model st
 	return items, submitted, nil
 }
 
+func (s *Service) enrichSince() time.Time {
+	days := s.windowDays
+	if days <= 0 {
+		days = schema.WindowDays
+	}
+	return s.now().Add(-time.Duration(days) * 24 * time.Hour)
+}
+
+func (s *Service) postedAfter() time.Time {
+	return s.now().Add(-time.Duration(schema.PostedAtMaxAgeDays) * 24 * time.Hour)
+}
+
 func currentHashes(jobs []jobdata.Job) (map[string]string, error) {
 	out := make(map[string]string, len(jobs))
 	for _, job := range jobs {
@@ -345,6 +388,21 @@ func descriptionEligible(description string, minChars int) bool {
 		return true
 	}
 	return len(description) >= minChars
+}
+
+// windowEligible is true for open jobs first seen at or after since whose
+// known posted_at is at or after postedAfter (unknown posted_at stays eligible).
+func windowEligible(job jobdata.Job, since, postedAfter time.Time) bool {
+	if job.ClosedAt != nil {
+		return false
+	}
+	if job.FirstSeenAt.UTC().Before(since) {
+		return false
+	}
+	if !job.PostedAt.IsZero() && job.PostedAt.UTC().Before(postedAfter) {
+		return false
+	}
+	return true
 }
 
 func filterByMinDescription(jobs []jobdata.Job, minChars int) []jobdata.Job {

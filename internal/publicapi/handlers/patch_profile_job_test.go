@@ -54,11 +54,11 @@ func TestPatchProfileJob(t *testing.T) {
 	t.Run("200", func(t *testing.T) {
 		api := &patchScoring{job: stored}
 		h := patchHandler(api, nil)
-		rec := patchRequest(t, h, "/api/v1/profiles/andrew/jobs/job-1", `{"user_status":"HIDDEN"}`)
+		rec := patchRequest(t, h, "/api/v1/profiles/software/jobs/job-1", `{"user_status":"HIDDEN"}`)
 		if rec.Code != http.StatusOK {
 			t.Fatalf("status %d %s", rec.Code, rec.Body.String())
 		}
-		if api.profileID != "andrew" || api.jobID != "job-1" || api.status != scoringschema.UserStatusHidden {
+		if api.profileID != "software" || api.jobID != "job-1" || api.status != scoringschema.UserStatusHidden {
 			t.Fatalf("set status call profile=%q job=%q status=%q", api.profileID, api.jobID, api.status)
 		}
 		var got schema.ProfileJob
@@ -108,7 +108,7 @@ func TestPatchProfileJob(t *testing.T) {
 		}}
 		api := &patchScoring{job: job}
 		h := patchHandler(api, nil)
-		rec := patchRequest(t, h, "/api/v1/profiles/andrew/jobs/job-1", `{"user_status":"HIDDEN"}`)
+		rec := patchRequest(t, h, "/api/v1/profiles/software/jobs/job-1", `{"user_status":"HIDDEN"}`)
 		if rec.Code != http.StatusOK {
 			t.Fatalf("status %d %s", rec.Code, rec.Body.String())
 		}
@@ -137,7 +137,7 @@ func TestPatchProfileJob(t *testing.T) {
 		}
 		api := &patchScoring{job: job}
 		h := patchHandler(api, nil)
-		rec := patchRequest(t, h, "/api/v1/profiles/andrew/jobs/job-1", `{"user_status":"HIDDEN"}`)
+		rec := patchRequest(t, h, "/api/v1/profiles/software/jobs/job-1", `{"user_status":"HIDDEN"}`)
 		if rec.Code != http.StatusOK {
 			t.Fatalf("status %d %s", rec.Code, rec.Body.String())
 		}
@@ -178,7 +178,7 @@ func TestPatchProfileJob(t *testing.T) {
 	t.Run("404 job not in scope", func(t *testing.T) {
 		api := &patchScoring{err: scoring.ErrJobNotInScope}
 		h := patchHandler(api, nil)
-		rec := patchRequest(t, h, "/api/v1/profiles/andrew/jobs/job-1", `{"user_status":"NEW"}`)
+		rec := patchRequest(t, h, "/api/v1/profiles/software/jobs/job-1", `{"user_status":"NEW"}`)
 		if rec.Code != http.StatusNotFound {
 			t.Fatalf("status %d %s", rec.Code, rec.Body.String())
 		}
@@ -195,7 +195,7 @@ func TestPatchProfileJob(t *testing.T) {
 	t.Run("400 invalid status", func(t *testing.T) {
 		api := &patchScoring{job: stored}
 		h := patchHandler(api, nil)
-		rec := patchRequest(t, h, "/api/v1/profiles/andrew/jobs/job-1", `{"user_status":"SAVED"}`)
+		rec := patchRequest(t, h, "/api/v1/profiles/software/jobs/job-1", `{"user_status":"SAVED"}`)
 		if rec.Code != http.StatusBadRequest {
 			t.Fatalf("status %d %s", rec.Code, rec.Body.String())
 		}
@@ -238,7 +238,7 @@ func (s patchProfileStore) Get(context.Context, string) (profileschema.Profile, 
 	if s.err != nil {
 		return profileschema.Profile{}, s.err
 	}
-	return profileschema.Profile{ID: "andrew"}, nil
+	return profileschema.Profile{ID: "software"}, nil
 }
 
 type patchScoring struct {

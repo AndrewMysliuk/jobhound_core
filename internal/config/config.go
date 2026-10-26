@@ -29,6 +29,8 @@ type Config struct {
 	EuropeRemotely EuropeRemotelyConfig
 	// Enrich configures the Anthropic batch client. Enabled is false when the API key is empty.
 	Enrich Enrich
+	// Companies configures the company registry and ATS poll settings.
+	Companies Companies
 }
 
 // Load reads supported environment variables into Config.
@@ -37,12 +39,18 @@ type Config struct {
 // An empty JOBHOUND_ANTHROPIC_API_KEY disables enrich and ignores JOBHOUND_ENRICH_MODEL.
 // A set key with an empty model is an error.
 // JOBHOUND_ENRICH_MIN_DESCRIPTION_CHARS empty or 0 uses enrich/schema.MinDescriptionChars; negative is an error.
+// JOBHOUND_ENRICH_WINDOW_DAYS empty or 0 uses enrich/schema.WindowDays; negative is an error.
+// Non-positive company poll / concurrency / resolve-retry integers are an error.
 func Load() (Config, error) {
 	days, err := loadJobRetentionDaysFromEnv()
 	if err != nil {
 		return Config{}, err
 	}
 	enrich, err := loadEnrichFromEnv()
+	if err != nil {
+		return Config{}, err
+	}
+	companies, err := loadCompaniesFromEnv()
 	if err != nil {
 		return Config{}, err
 	}
@@ -60,5 +68,6 @@ func Load() (Config, error) {
 		Browser:            LoadBrowserFromEnv(),
 		EuropeRemotely:     LoadEuropeRemotelyFromEnv(),
 		Enrich:             enrich,
+		Companies:          companies,
 	}, nil
 }

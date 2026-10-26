@@ -107,7 +107,7 @@ func (a *IngestActivities) RunIngestSource(ctx context.Context, in ingestschema.
 	out := &ingestschema.IngestSourceOutput{}
 	now := time.Now().UTC()
 	for _, j := range list {
-		if ingest.SkipIngestByPostedAt(id, j.PostedAt, now) {
+		if ingest.SkipIngestByPostedAt(j.PostedAt, now) {
 			out.JobsSkipped++
 			continue
 		}

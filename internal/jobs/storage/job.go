@@ -15,6 +15,7 @@ type Job struct {
 	Title          string     `gorm:"column:title;type:text;not null;default:''"`
 	Company        string     `gorm:"column:company;type:text;not null;default:''"`
 	CompanyKey     string     `gorm:"column:company_key;type:text;not null;default:''"`
+	CompanyKeyRef  *string    `gorm:"column:company_key_ref;type:text"`
 	CompanyWebsite string     `gorm:"column:company_website;type:text;not null;default:''"`
 	URL            string     `gorm:"column:url;type:text;not null;default:''"`
 	ApplyURL       *string    `gorm:"column:apply_url;type:text"`
@@ -25,6 +26,9 @@ type Job struct {
 	SalaryRaw      string     `gorm:"column:salary_raw;type:text;not null;default:''"`
 	Tags           []byte     `gorm:"column:tags;type:jsonb;not null"`
 	Position       *string    `gorm:"column:position;type:text"`
+	ClosedAt       *time.Time `gorm:"column:closed_at"`
+	ClosedBy       string     `gorm:"column:closed_by;type:text;not null;default:''"`
+	BoardSeenAt    *time.Time `gorm:"column:board_seen_at"`
 	FirstSeenAt    time.Time  `gorm:"column:first_seen_at;not null"`
 	LastSeenAt     time.Time  `gorm:"column:last_seen_at;not null"`
 	CreatedAt      time.Time  `gorm:"column:created_at;not null"`
@@ -235,6 +239,7 @@ func (m *Job) ToDomain() schema.Job {
 		SalaryRaw:      m.SalaryRaw,
 		Tags:           decodeJobTags(m.Tags),
 		Position:       m.Position,
+		ClosedAt:       m.ClosedAt,
 		FirstSeenAt:    m.FirstSeenAt,
 		LastSeenAt:     m.LastSeenAt,
 	}

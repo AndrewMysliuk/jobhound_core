@@ -1,0 +1,44 @@
+{
+  "jobs": [
+    {
+      "absolute_url": "https://www.storyblok.com/job?gh_jid=4995084101",
+      "internal_job_id": 4530667101,
+      "location": {
+        "name": "Remote"
+      },
+      "id": 4995084101,
+      "updated_at": "2026-10-20T10:19:32-04:00",
+      "title": "Account Executive - North Eastern USA ",
+      "company_name": "Storyblok",
+      "first_published": "2026-10-07T05:40:48-04:00",
+      "content": "<p>Remote backend role. Python and Go.</p>",
+      "departments": [
+        {
+          "id": 1,
+          "name": "Revenue",
+          "child_ids": [],
+          "parent_id": null
+        }
+      ],
+      "offices": [
+        {
+          "id": 4009681101,
+          "name": "Remote",
+          "location": null,
+          "child_ids": [],
+          "parent_id": null
+        },
+        {
+          "id": 4009962101,
+          "name": "United States of America",
+          "location": null,
+          "child_ids": [],
+          "parent_id": null
+        }
+      ]
+    }
+  ],
+  "meta": {
+    "total": 1
+  }
+}

@@ -70,17 +70,17 @@ func TestRepository_DeleteJobsLastSeenBeforeUTC(t *testing.T) {
 	}
 	if err := db.Exec(`
 		INSERT INTO profile_runs (id, profile_id, status, started_at, idempotency_key)
-		VALUES (1, 'andrew', 'SUCCEEDED', ?, '11111111-1111-1111-1111-111111111111')`, now).Error; err != nil {
+		VALUES (1, 'software', 'SUCCEEDED', ?, '11111111-1111-1111-1111-111111111111')`, now).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Exec(`
 		INSERT INTO profile_matches (profile_id, job_id, bucket, score, signals, run_id, updated_at)
-		VALUES ('andrew', 'stale', 'REVIEW', 1, '[]', 1, ?)`, now).Error; err != nil {
+		VALUES ('software', 'stale', 'REVIEW', 1, '[]', 1, ?)`, now).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Exec(`
 		INSERT INTO profile_matches (profile_id, job_id, bucket, score, signals, run_id, updated_at)
-		VALUES ('andrew', 'fresh', 'REVIEW', 1, '[]', 1, ?)`, now).Error; err != nil {
+		VALUES ('software', 'fresh', 'REVIEW', 1, '[]', 1, ?)`, now).Error; err != nil {
 		t.Fatal(err)
 	}
 

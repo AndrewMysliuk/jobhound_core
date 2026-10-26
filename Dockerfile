@@ -21,3 +21,4 @@ COPY --from=build /out/worker /usr/local/bin/worker
 COPY --from=build /out/api /usr/local/bin/api
 COPY data ./data
 COPY config/profiles ./config/profiles
+COPY config/companies ./config/companies

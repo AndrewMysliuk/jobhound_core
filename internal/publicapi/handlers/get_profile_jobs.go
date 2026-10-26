@@ -37,11 +37,12 @@ func (h *HTTPHandler) getProfileJobs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	page, err := h.deps.Scoring.ListJobs(r.Context(), scoringschema.ListJobsParams{
-		ProfileID:  profileID,
-		Bucket:     q.bucket,
-		UserStatus: q.userStatus,
-		Page:       q.page,
-		Limit:      q.limit,
+		ProfileID:     profileID,
+		Bucket:        q.bucket,
+		UserStatus:    q.userStatus,
+		Page:          q.page,
+		Limit:         q.limit,
+		IncludeClosed: q.includeClosed,
 	})
 	if err != nil {
 		apputils.WriteError(w, err)
@@ -51,10 +52,11 @@ func (h *HTTPHandler) getProfileJobs(w http.ResponseWriter, r *http.Request) {
 }
 
 type profileJobsQuery struct {
-	bucket     scoringschema.Bucket
-	userStatus scoringschema.UserStatus
-	page       int
-	limit      int
+	bucket        scoringschema.Bucket
+	userStatus    scoringschema.UserStatus
+	page          int
+	limit         int
+	includeClosed bool
 }
 
 func (h *HTTPHandler) parseProfileJobsQuery(r *http.Request) (profileJobsQuery, bool) {
@@ -86,6 +88,17 @@ func (h *HTTPHandler) parseProfileJobsQuery(r *http.Request) (profileJobsQuery, 
 			return profileJobsQuery{}, false
 		}
 		out.userStatus = parsed
+	}
+	closed, ok := h.optionalQuery(values["closed"])
+	if !ok {
+		return profileJobsQuery{}, false
+	}
+	if closed != "" {
+		v, err := strconv.ParseBool(closed)
+		if err != nil {
+			return profileJobsQuery{}, false
+		}
+		out.includeClosed = v
 	}
 	page, ok := h.boundedQuery(values["page"], 1, 0)
 	if !ok {
@@ -182,6 +195,7 @@ func (h *HTTPHandler) profileJobPage(page scoringschema.JobPage) schema.ProfileJ
 			PostedAt:    postedAt,
 			FirstSeenAt: job.FirstSeenAt,
 			LastSeenAt:  job.LastSeenAt,
+			ClosedAt:    job.ClosedAt,
 			Bucket:      job.Bucket.String(),
 			Score:       job.Score,
 			FactsStatus: job.FactsStatus,

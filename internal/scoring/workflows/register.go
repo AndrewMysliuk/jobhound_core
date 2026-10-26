@@ -49,6 +49,9 @@ func New(w Registrar, deps Deps) {
 	w.RegisterActivityWithOptions(acts.SetRunCounters, activity.RegisterOptions{
 		Name: scoring_activities.SetRunCountersActivityName,
 	})
+	w.RegisterActivityWithOptions(acts.AddATSCounters, activity.RegisterOptions{
+		Name: scoring_activities.AddATSCountersActivityName,
+	})
 	w.RegisterActivityWithOptions(acts.MarkRunFinished, activity.RegisterOptions{
 		Name: scoring_activities.MarkRunFinishedActivityName,
 	})

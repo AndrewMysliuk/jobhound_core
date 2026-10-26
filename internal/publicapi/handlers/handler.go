@@ -4,6 +4,7 @@ package handlers
 import (
 	"net/http"
 
+	"github.com/andrewmysliuk/jobhound_core/internal/companies"
 	"github.com/andrewmysliuk/jobhound_core/internal/platform/logging"
 	"github.com/andrewmysliuk/jobhound_core/internal/profiles"
 	"github.com/andrewmysliuk/jobhound_core/internal/publicapi/schema"
@@ -14,9 +15,10 @@ import (
 
 // Deps are shared dependencies for route handlers (wired from cmd/api).
 type Deps struct {
-	Logger   zerolog.Logger
-	Profiles profiles.Store
-	Scoring  scoring.API
+	Logger    zerolog.Logger
+	Profiles  profiles.Store
+	Scoring   scoring.API
+	Companies companies.API
 }
 
 // HTTPHandler serves /api/v1 routes behind CORS middleware.
@@ -48,6 +50,7 @@ func (h *HTTPHandler) registerRoutes() {
 	h.mux.HandleFunc("GET /api/v1/profiles/{profile_id}/runs/latest", h.getProfileRunLatest)
 	h.mux.HandleFunc("GET /api/v1/profiles/{profile_id}/jobs", h.getProfileJobs)
 	h.mux.HandleFunc("POST /api/v1/profiles/{profile_id}/runs", h.postProfileRun)
+	h.mux.HandleFunc("GET /api/v1/companies", h.getCompanies)
 }
 
 // ServeHTTP applies request-id and CORS then dispatches to registered routes.

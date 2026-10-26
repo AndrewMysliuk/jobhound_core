@@ -26,7 +26,7 @@ func factSignals(profile profileschema.Profile, job jobdata.Job, verdict enrichs
 	signals = append(signals, conflictIf(enrichschema.FieldNameHiringScope, hiringScopeOnAllowSide(verdict.Facts.HiringScope, facts.ResidenceRegions), job, quoteOf(verdict.Facts.HiringScope.Quote), hiringScopePrimaryValue(verdict.Facts.HiringScope))...)
 
 	signals = append(signals, workAuthFactSignals(facts.WorkAuthorization, verdict.Facts.WorkAuthorization)...)
-	signals = append(signals, workAuthCutSignals(facts.WorkAuthorization, verdict.Facts.WorkAuthorization)...)
+	signals = append(signals, workAuthCutSignals(facts.WorkAuthorization, verdict.Facts.WorkAuthorization, facts.ResidenceCountries, facts.ResidenceRegions)...)
 	signals = append(signals, conflictIf(enrichschema.FieldNameWorkAuthorization, workAuthOnAllowSide(verdict.Facts.WorkAuthorization, facts.WorkAuthorization), job, quoteOf(verdict.Facts.WorkAuthorization.Quote), strings.TrimSpace(verdict.Facts.WorkAuthorization.Value))...)
 
 	signals = append(signals, timezoneFactSignals(facts.Timezone, verdict.Facts.Timezone)...)
@@ -162,17 +162,39 @@ func hiringScopeBroadRegion(regions []string) bool {
 	return false
 }
 
-func workAuthCutSignals(cfg profileschema.FactsWorkAuthorization, auth enrichschema.WorkAuthorization) []schema.Signal {
+func workAuthCutSignals(
+	cfg profileschema.FactsWorkAuthorization,
+	auth enrichschema.WorkAuthorization,
+	residenceCountries, residenceRegions []string,
+) []schema.Signal {
 	if !cfg.Scored || isUnknownValue(auth.Value) {
 		return nil
 	}
 	value := strings.TrimSpace(auth.Value)
+	gated := false
 	for _, gate := range cfg.Gates {
 		if strings.EqualFold(strings.TrimSpace(gate), value) {
-			return []schema.Signal{factGate(enrichschema.FieldNameWorkAuthorization, quoteOf(auth.Quote), value)}
+			gated = true
+			break
 		}
 	}
-	return nil
+	if !gated {
+		return nil
+	}
+	countries := compact(auth.Countries)
+	if len(countries) == 0 {
+		// Owner decision: a gate that cannot name a country does not reject;
+		// the vacancy still competes on score and may become TOP.
+		return nil
+	}
+	allowC := compact(residenceCountries)
+	allowR := compact(residenceRegions)
+	for _, code := range countries {
+		if !missesAllowLists(code, allowC, allowR) {
+			return nil
+		}
+	}
+	return []schema.Signal{factGate(enrichschema.FieldNameWorkAuthorization, quoteOf(auth.Quote), value)}
 }
 
 func timezoneCutSignals(cfg profileschema.FactsTimezone, tz enrichschema.TimezoneConstraint) []schema.Signal {

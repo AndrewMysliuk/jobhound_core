@@ -2,9 +2,12 @@ package schema
 
 // Profile is one search definition loaded from YAML.
 type Profile struct {
-	ID             string
-	Name           string
-	Domain         Domain
+	ID     string
+	Name   string
+	Domain Domain
+	// ATSPolling enables the companies/ATS stage in ProfileRunWorkflow.
+	// When false, the profile runs aggregators only.
+	ATSPolling     bool
 	Sources        []string
 	Queries        []string
 	Children       map[string][]string

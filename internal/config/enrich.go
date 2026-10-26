@@ -16,6 +16,8 @@ const (
 	EnvEnrichModel = "JOBHOUND_ENRICH_MODEL"
 	// EnvEnrichMinDescriptionChars skips vacancies with shorter descriptions. Empty or 0 uses schema.MinDescriptionChars.
 	EnvEnrichMinDescriptionChars = "JOBHOUND_ENRICH_MIN_DESCRIPTION_CHARS"
+	// EnvEnrichWindowDays is the first_seen_at window for enrich candidates. Empty or 0 uses schema.WindowDays.
+	EnvEnrichWindowDays = "JOBHOUND_ENRICH_WINDOW_DAYS"
 )
 
 // Enrich is the Anthropic batch client. Enabled is false when the key is empty; Model is then ignored.
@@ -24,6 +26,7 @@ type Enrich struct {
 	APIKey              string
 	Model               string
 	MinDescriptionChars int
+	WindowDays          int
 }
 
 func loadEnrichFromEnv() (Enrich, error) {
@@ -31,9 +34,13 @@ func loadEnrichFromEnv() (Enrich, error) {
 	if err != nil {
 		return Enrich{}, err
 	}
+	windowDays, err := loadEnrichWindowDaysFromEnv()
+	if err != nil {
+		return Enrich{}, err
+	}
 	key := strings.TrimSpace(os.Getenv(EnvAnthropicAPIKey))
 	if key == "" {
-		return Enrich{MinDescriptionChars: minChars}, nil
+		return Enrich{MinDescriptionChars: minChars, WindowDays: windowDays}, nil
 	}
 	model := strings.TrimSpace(os.Getenv(EnvEnrichModel))
 	if model == "" {
@@ -44,6 +51,7 @@ func loadEnrichFromEnv() (Enrich, error) {
 		APIKey:              key,
 		Model:               model,
 		MinDescriptionChars: minChars,
+		WindowDays:          windowDays,
 	}, nil
 }
 
@@ -61,6 +69,24 @@ func loadEnrichMinDescriptionCharsFromEnv() (int, error) {
 	}
 	if n == 0 {
 		return enrichschema.MinDescriptionChars, nil
+	}
+	return n, nil
+}
+
+func loadEnrichWindowDaysFromEnv() (int, error) {
+	raw := strings.TrimSpace(os.Getenv(EnvEnrichWindowDays))
+	if raw == "" {
+		return enrichschema.WindowDays, nil
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil {
+		return 0, fmt.Errorf("%s must be a non-negative integer", EnvEnrichWindowDays)
+	}
+	if n < 0 {
+		return 0, fmt.Errorf("%s must be a non-negative integer", EnvEnrichWindowDays)
+	}
+	if n == 0 {
+		return enrichschema.WindowDays, nil
 	}
 	return n, nil
 }

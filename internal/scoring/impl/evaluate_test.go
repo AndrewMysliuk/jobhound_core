@@ -1194,20 +1194,20 @@ func TestEvaluate(t *testing.T) {
 			},
 		},
 		{
-			name: "architecture stale posted_at uses ninety day cutoff",
+			name: "architecture stale posted_at uses thirty day cutoff",
 			profile: profileschema.Profile{
 				Domain:  profileschema.DomainArchitecture,
 				Buckets: review,
 			},
 			job: jobdata.Job{
-				PostedAt: now.Add(-time.Duration(schema.PostedAtRejectDaysArchitecture) * 24 * time.Hour).Add(-time.Second),
+				PostedAt: now.Add(-60 * 24 * time.Hour),
 			},
 			want: Outcome{
 				Bucket: schema.BucketRejected,
 				Signals: []schema.Signal{{
 					Code:   schema.SignalCutPostedAt,
 					Rule:   "posted_at",
-					Phrase: now.Add(-time.Duration(schema.PostedAtRejectDaysArchitecture) * 24 * time.Hour).Add(-time.Second).Format(time.RFC3339),
+					Phrase: now.Add(-60 * 24 * time.Hour).Format(time.RFC3339),
 				}},
 			},
 		},
@@ -2250,10 +2250,11 @@ func TestFactCuts(t *testing.T) {
 			wantRejected: true,
 		},
 		{
-			name: "scored work_authorization required rejects",
+			name: "scored work_authorization required US rejects",
 			profile: profileschema.Profile{
 				Facts: func() profileschema.Facts {
 					f := baseFacts
+					f.ResidenceCountries = []string{"RO"}
 					f.WorkAuthorization.Scored = true
 					return f
 				}(),
@@ -2263,8 +2264,9 @@ func TestFactCuts(t *testing.T) {
 			verdict: &enrichschema.Verdict{Facts: func() enrichschema.ModelReply {
 				f := unknownRest
 				f.WorkAuthorization = enrichschema.WorkAuthorization{
-					Value: "required",
-					Quote: quote("Authorized to work in the US"),
+					Value:     "required",
+					Countries: []string{"US"},
+					Quote:     quote("Authorized to work in the US"),
 				}
 				return f
 			}()},
@@ -2280,6 +2282,133 @@ func TestFactCuts(t *testing.T) {
 					Code:   schema.SignalGateHard,
 					Rule:   "facts.work_authorization",
 					Phrase: "Authorized to work in the US",
+					Value:  "required",
+					Delta:  0,
+				},
+			},
+			wantRejected: true,
+		},
+		{
+			name: "scored work_authorization required RO does not cut",
+			profile: profileschema.Profile{
+				Facts: func() profileschema.Facts {
+					f := baseFacts
+					f.ResidenceCountries = []string{"RO"}
+					f.WorkAuthorization.Scored = true
+					return f
+				}(),
+				Buckets: review,
+			},
+			job: jobdata.Job{Description: "Right to work in Romania"},
+			verdict: &enrichschema.Verdict{Facts: func() enrichschema.ModelReply {
+				f := unknownRest
+				f.WorkAuthorization = enrichschema.WorkAuthorization{
+					Value:     "required",
+					Countries: []string{"RO"},
+					Quote:     quote("Right to work in Romania"),
+				}
+				return f
+			}()},
+			want: []schema.Signal{{
+				Code:   schema.SignalLLM,
+				Rule:   "work_authorization",
+				Phrase: "Right to work in Romania",
+				Value:  "required",
+				Delta:  0,
+			}},
+		},
+		{
+			name: "scored work_authorization required US+RO does not cut",
+			profile: profileschema.Profile{
+				Facts: func() profileschema.Facts {
+					f := baseFacts
+					f.ResidenceCountries = []string{"RO"}
+					f.WorkAuthorization.Scored = true
+					return f
+				}(),
+				Buckets: review,
+			},
+			job: jobdata.Job{Description: "Right to work in the US or Romania"},
+			verdict: &enrichschema.Verdict{Facts: func() enrichschema.ModelReply {
+				f := unknownRest
+				f.WorkAuthorization = enrichschema.WorkAuthorization{
+					Value:     "required",
+					Countries: []string{"US", "RO"},
+					Quote:     quote("Right to work in the US or Romania"),
+				}
+				return f
+			}()},
+			want: []schema.Signal{{
+				Code:   schema.SignalLLM,
+				Rule:   "work_authorization",
+				Phrase: "Right to work in the US or Romania",
+				Value:  "required",
+				Delta:  0,
+			}},
+		},
+		{
+			name: "scored work_authorization required empty countries does not cut",
+			profile: profileschema.Profile{
+				Facts: func() profileschema.Facts {
+					f := baseFacts
+					f.ResidenceCountries = []string{"RO"}
+					f.WorkAuthorization.Scored = true
+					return f
+				}(),
+				Buckets: review,
+			},
+			job: jobdata.Job{Description: "Existing right to work required"},
+			verdict: &enrichschema.Verdict{Facts: func() enrichschema.ModelReply {
+				f := unknownRest
+				f.WorkAuthorization = enrichschema.WorkAuthorization{
+					Value: "required",
+					Quote: quote("Existing right to work required"),
+				}
+				return f
+			}()},
+			want: []schema.Signal{{
+				Code:   schema.SignalLLM,
+				Rule:   "work_authorization",
+				Phrase: "Existing right to work required",
+				Value:  "required",
+				Delta:  0,
+			}},
+		},
+		{
+			// missesAllowLists is exact containsFold only: DE is not "RO" and not
+			// "EUROPE", so EUROPE residence_regions does not cover DE here.
+			name: "scored work_authorization required DE rejects under EUROPE region",
+			profile: profileschema.Profile{
+				Facts: func() profileschema.Facts {
+					f := baseFacts
+					f.ResidenceCountries = []string{"RO"}
+					f.WorkAuthorization.Scored = true
+					return f
+				}(),
+				Buckets: review,
+			},
+			job: jobdata.Job{Description: "Right to work in Germany"},
+			verdict: &enrichschema.Verdict{Facts: func() enrichschema.ModelReply {
+				f := unknownRest
+				f.WorkAuthorization = enrichschema.WorkAuthorization{
+					Value:     "required",
+					Countries: []string{"DE"},
+					Quote:     quote("Right to work in Germany"),
+				}
+				return f
+			}()},
+			want: []schema.Signal{
+				{
+					Code:   schema.SignalLLM,
+					Rule:   "work_authorization",
+					Phrase: "Right to work in Germany",
+					Value:  "required",
+					Delta:  0,
+				},
+				{
+					Code:   schema.SignalGateHard,
+					Rule:   "facts.work_authorization",
+					Phrase: "Right to work in Germany",
 					Value:  "required",
 					Delta:  0,
 				},
@@ -2371,5 +2500,50 @@ func TestFactCuts(t *testing.T) {
 				t.Fatalf("unexpected REJECTED for %s", tt.name)
 			}
 		})
+	}
+}
+
+// n8n-style: high phrase score, work_authorization required with empty countries —
+// gate must not reject; vacancy stays TOP.
+func TestWorkAuthEmptyCountriesAllowsTop(t *testing.T) {
+	t.Parallel()
+
+	quote := "We can sponsor visas to Germany; for any other country, you need to have existing right to work"
+	got := evaluateAt(
+		profileschema.Profile{
+			SignalsPlus: profileschema.SignalsPlus{Title: map[string]int{"Engineer": 10}},
+			Buckets:     profileschema.Buckets{Top: 8},
+			Facts: profileschema.Facts{
+				ResidenceCountries: []string{"RO"},
+				ResidenceRegions:   []string{"EUROPE"},
+				WorkAuthorization:  profileschema.FactsWorkAuthorization{Scored: true, Gates: []string{"required"}},
+			},
+		},
+		jobdata.Job{
+			Title:       "Senior Product Engineer (TS/NodeJS/Vue)",
+			Description: quote,
+		},
+		time.Now().UTC(),
+		&enrichschema.Verdict{Facts: enrichschema.ModelReply{
+			Office:            enrichschema.Office{Unknown: true},
+			HiringScope:       enrichschema.HiringScope{Value: "unknown"},
+			WorkAuthorization: enrichschema.WorkAuthorization{Value: "required", Quote: &quote},
+			Timezone:          enrichschema.TimezoneConstraint{Value: "unknown"},
+			Compensation:      enrichschema.Compensation{Unknown: true},
+			WorkMode:          enrichschema.QuotedValue{Value: "unknown"},
+			EmploymentLoad:    enrichschema.QuotedValue{Value: "unknown"},
+			Engagement:        enrichschema.QuotedValue{Value: "unknown"},
+		}},
+	)
+	if got.Bucket != schema.BucketTop {
+		t.Fatalf("bucket=%s score=%d want TOP", got.Bucket, got.Score)
+	}
+	if got.Score < 8 {
+		t.Fatalf("score=%d want >= 8", got.Score)
+	}
+	for _, s := range got.Signals {
+		if s.Rule == "facts.work_authorization" {
+			t.Fatalf("unexpected facts.work_authorization cut: %+v", s)
+		}
 	}
 }

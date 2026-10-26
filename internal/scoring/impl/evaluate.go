@@ -103,14 +103,6 @@ func evaluateAt(profile profileschema.Profile, job jobdata.Job, now time.Time, v
 	}
 }
 
-// PostedAtRejectDaysForProfile returns the stale posted_at cutoff for scoring this profile.
-func PostedAtRejectDaysForProfile(profile profileschema.Profile) int {
-	if profile.Domain == profileschema.DomainArchitecture {
-		return schema.PostedAtRejectDaysArchitecture
-	}
-	return schema.PostedAtRejectDays
-}
-
 func matchSignalsPlus(profile profileschema.Profile, job jobdata.Job, now time.Time) []schema.Signal {
 	plus := profile.SignalsPlus
 	var signals []schema.Signal
@@ -578,7 +570,7 @@ func matchGateLocation(profile profileschema.Profile, job jobdata.Job, now time.
 	}
 	signals = append(signals, pacificOffsetCuts(job.Location.Timezone)...)
 	signals = append(signals, matchPhrases(gate.RejectTimezones, true, "gate_location.reject_timezones", schema.SignalCutTimezone, job.Title, job.Description, job.Location.Raw, job.Location.Timezone)...)
-	signals = append(signals, postedAtCut(job.PostedAt, now, PostedAtRejectDaysForProfile(profile))...)
+	signals = append(signals, postedAtCut(job.PostedAt, now, schema.PostedAtRejectDays)...)
 	return signals
 }
 

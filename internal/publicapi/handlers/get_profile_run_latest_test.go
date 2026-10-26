@@ -36,7 +36,7 @@ func TestGetProfileRunLatest(t *testing.T) {
 			name: "ok",
 			run: scoringschema.Run{
 				ID:             7,
-				ProfileID:      "andrew",
+				ProfileID:      "software",
 				Status:         scoringschema.RunStatusSucceeded,
 				StartedAt:      started,
 				FinishedAt:     &finished,
@@ -69,7 +69,7 @@ func TestGetProfileRunLatest(t *testing.T) {
 				Profiles: latestProfileStore{err: tt.profileErr},
 				Scoring:  api,
 			})
-			req := httptest.NewRequest(http.MethodGet, "/api/v1/profiles/andrew/runs/latest", nil)
+			req := httptest.NewRequest(http.MethodGet, "/api/v1/profiles/software/runs/latest", nil)
 			rec := httptest.NewRecorder()
 			h.ServeHTTP(rec, req)
 			if rec.Code != tt.wantStatus {
@@ -81,7 +81,7 @@ func TestGetProfileRunLatest(t *testing.T) {
 			if api.called != tt.wantCalled {
 				t.Fatalf("LatestRun called %v", api.called)
 			}
-			if tt.wantCalled && api.gotID != "andrew" {
+			if tt.wantCalled && api.gotID != "software" {
 				t.Fatalf("profile id %q", api.gotID)
 			}
 			if tt.wantCode != "" {
@@ -96,7 +96,7 @@ func TestGetProfileRunLatest(t *testing.T) {
 			if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
 				t.Fatal(err)
 			}
-			if got.RunID != 7 || got.ProfileID != "andrew" || got.Status != "SUCCEEDED" || got.JobsScored != 4 || got.SourcesSkipped != 1 {
+			if got.RunID != 7 || got.ProfileID != "software" || got.Status != "SUCCEEDED" || got.JobsScored != 4 || got.SourcesSkipped != 1 {
 				t.Fatalf("body %#v", got)
 			}
 			if !got.StartedAt.Equal(started) || got.FinishedAt == nil || !got.FinishedAt.Equal(finished) {
@@ -118,7 +118,7 @@ func (s latestProfileStore) Get(context.Context, string) (profileschema.Profile,
 	if s.err != nil {
 		return profileschema.Profile{}, s.err
 	}
-	return profileschema.Profile{ID: "andrew"}, nil
+	return profileschema.Profile{ID: "software"}, nil
 }
 
 type fakeScoringAPI struct {

@@ -69,6 +69,7 @@ type ProfileJob struct {
 	PostedAt    *time.Time          `json:"posted_at"`
 	FirstSeenAt time.Time           `json:"first_seen_at"`
 	LastSeenAt  time.Time           `json:"last_seen_at"`
+	ClosedAt    *time.Time          `json:"closed_at"`
 	Bucket      string              `json:"bucket"`
 	Score       int                 `json:"score"`
 	FactsStatus string              `json:"facts_status"`

@@ -1,0 +1,87 @@
+{
+  "jobs": [
+    {
+      "id": "49e569f0-503e-4e42-a1ba-7e63684e90d3",
+      "title": "Sr Security Engineer | Remote | Europe",
+      "department": "Engineering",
+      "team": "Security",
+      "employmentType": "FullTime",
+      "location": "Berlin Office",
+      "secondaryLocations": [
+        {
+          "location": "Bosnia",
+          "address": {
+            "postalAddress": {
+              "addressCountry": "Bosnia"
+            }
+          }
+        },
+        {
+          "location": "Norway",
+          "address": {
+            "postalAddress": {
+              "addressCountry": "Norway"
+            }
+          }
+        }
+      ],
+      "publishedAt": "2026-10-13T13:48:21.468+00:00",
+      "isListed": true,
+      "isRemote": true,
+      "workplaceType": "Remote",
+      "address": {
+        "postalAddress": {
+          "addressRegion": "Berlin-Brandenburg",
+          "addressCountry": "Germany",
+          "addressLocality": "Berlin"
+        }
+      },
+      "jobUrl": "https://jobs.ashbyhq.com/n8n/49e569f0-503e-4e42-a1ba-7e63684e90d3",
+      "applyUrl": "https://jobs.ashbyhq.com/n8n/49e569f0-503e-4e42-a1ba-7e63684e90d3/application",
+      "descriptionHtml": "<p>Remote role.</p>",
+      "descriptionPlain": "Remote role. TypeScript and Node."
+    },
+    {
+      "id": "second-job-id",
+      "title": "Second Role",
+      "department": "Engineering",
+      "team": "Security",
+      "employmentType": "FullTime",
+      "location": "Berlin Office",
+      "secondaryLocations": [
+        {
+          "location": "Bosnia",
+          "address": {
+            "postalAddress": {
+              "addressCountry": "Bosnia"
+            }
+          }
+        },
+        {
+          "location": "Norway",
+          "address": {
+            "postalAddress": {
+              "addressCountry": "Norway"
+            }
+          }
+        }
+      ],
+      "publishedAt": "2026-10-13T13:48:21.468+00:00",
+      "isListed": true,
+      "isRemote": true,
+      "workplaceType": "Remote",
+      "address": {
+        "postalAddress": {
+          "addressRegion": "Berlin-Brandenburg",
+          "addressCountry": "Germany",
+          "addressLocality": "Berlin"
+        }
+      },
+      "jobUrl": "https://jobs.ashbyhq.com/n8n/49e569f0-503e-4e42-a1ba-7e63684e90d3",
+      "applyUrl": "https://jobs.ashbyhq.com/n8n/49e569f0-503e-4e42-a1ba-7e63684e90d3/application",
+      "descriptionHtml": "<p>Remote role.</p>",
+      "descriptionPlain": "Remote role. TypeScript and Node."
+    }
+  ],
+  "apiVersion": "1"
+}

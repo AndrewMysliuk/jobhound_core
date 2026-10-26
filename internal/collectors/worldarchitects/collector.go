@@ -49,7 +49,7 @@ func (c *WorldArchitects) FetchWithQuery(ctx context.Context, _ string) ([]schem
 	seen := make(map[string]struct{})
 	var prev map[string]struct{}
 	var out []schema.Job
-	rejectDays := scoringschema.PostedAtRejectDaysArchitecture
+	rejectDays := scoringschema.PostedAtRejectDays
 	now := time.Now().UTC()
 	for page := 1; page <= maxListPages; page++ {
 		body, err := c.get(ctx, listURL(page))

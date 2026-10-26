@@ -15,6 +15,7 @@ import (
 )
 
 var contractSourceIDs = []string{
+	"europe_remotely",
 	"working_nomads",
 	"himalayas",
 	"remotify_europe",
@@ -49,27 +50,22 @@ var contractSourceIDs = []string{
 	"getro_craft_ventures",
 }
 
-func TestFileStoreLoadsAndrew(t *testing.T) {
+func TestFileStoreLoadsShippedProfiles(t *testing.T) {
 	t.Parallel()
 	dir := profilesDir(t)
-	_, err := os.Stat(filepath.Join(dir, "architecture.yaml"))
-	if !os.IsNotExist(err) {
-		t.Fatalf("architecture.yaml present: %v", err)
-	}
-
 	store := NewFileStore(dir, sourceids.KnownSourceIDs())
-	got, err := store.Get(context.Background(), "andrew")
+	got, err := store.Get(context.Background(), "software")
 	require.NoError(t, err)
-	require.Equal(t, "andrew", got.ID)
+	require.Equal(t, "software", got.ID)
 	require.Equal(t, "Andrew", got.Name)
 	require.Equal(t, schema.DomainSoftware, got.Domain)
+	require.True(t, got.ATSPolling)
 	require.Equal(t, contractSourceIDs, got.Sources)
 	known := sourceids.KnownSourceIDs()
 	for _, id := range contractSourceIDs {
 		require.Contains(t, known, id)
 	}
-	require.Contains(t, known, "europe_remotely")
-	require.Equal(t, []string{"vue", "typescript", "react", "golang", "node"}, got.Queries)
+	require.Equal(t, []string{"vue", "typescript", "golang"}, got.Queries)
 	require.Equal(t, []string{
 		"frontend-engineer",
 		"full-stack-engineer",
@@ -219,16 +215,12 @@ func TestFileStoreLoadsAndrew(t *testing.T) {
 		require.NotContains(t, got.GateLocation.RejectTimezones, phrase)
 	}
 
-	listed, err := store.List(context.Background())
+	arch, err := store.Get(context.Background(), "architecture")
 	require.NoError(t, err)
-	require.Len(t, listed, 2)
-	require.Equal(t, got, listed[0])
-
-	lada, err := store.Get(context.Background(), "lada")
-	require.NoError(t, err)
-	require.Equal(t, listed[1], lada)
-	require.Equal(t, "Lada", lada.Name)
-	require.Equal(t, schema.DomainArchitecture, lada.Domain)
+	require.Equal(t, "architecture", arch.ID)
+	require.Equal(t, "Lada", arch.Name)
+	require.Equal(t, schema.DomainArchitecture, arch.Domain)
+	require.False(t, arch.ATSPolling)
 	require.Equal(t, []string{
 		"bestjobs",
 		"hipo",
@@ -242,8 +234,8 @@ func TestFileStoreLoadsAndrew(t *testing.T) {
 		"baunetz",
 		"bdla",
 		"world_architects",
-	}, lada.Sources)
-	for _, id := range lada.Sources {
+	}, arch.Sources)
+	for _, id := range arch.Sources {
 		require.Contains(t, known, id)
 	}
 	require.Equal(t, []string{
@@ -252,7 +244,7 @@ func TestFileStoreLoadsAndrew(t *testing.T) {
 		"peisagist",
 		"peisagist brasov",
 		"urbanist",
-	}, lada.Queries)
+	}, arch.Queries)
 	require.Equal(t, map[string][]string{
 		"hipo":                {"Arhitectura-Design-Proiectare"},
 		"dezeen_jobs":         {"architectural-designer", "architectural-assistants", "landscape-architect", "part-1", "part-2"},
@@ -264,9 +256,9 @@ func TestFileStoreLoadsAndrew(t *testing.T) {
 		"baunetz":             {"catalog"},
 		"bdla":                {"catalog"},
 		"world_architects":    {"catalog"},
-	}, lada.Children)
-	require.NotContains(t, lada.Children, "bestjobs")
-	require.NotContains(t, lada.Children, "ejobs")
+	}, arch.Children)
+	require.NotContains(t, arch.Children, "bestjobs")
+	require.NotContains(t, arch.Children, "ejobs")
 	require.Equal(t, map[string]int{
 		"architectural designer":     6,
 		"architectural assistant":    6,
@@ -281,47 +273,53 @@ func TestFileStoreLoadsAndrew(t *testing.T) {
 		"arhitect":                   4,
 		"urbanist":                   3,
 		"desenator tehnic":           3,
-	}, lada.SignalsPlus.Title)
-	require.Equal(t, 4, lada.SignalsPlus.Text.MaxTotal)
-	require.Equal(t, 6, lada.Buckets.Top)
-	require.NotContains(t, lada.GateLocation.AllowCountries, "US")
-	require.Equal(t, []string{"EUROPE"}, lada.Facts.ResidenceRegions)
-	require.True(t, lada.Facts.Office.Scored)
-	require.Equal(t, lada.GateLocation.AllowCountries, lada.Facts.Office.AllowCountries)
-	require.NotContains(t, lada.Facts.Office.AllowCountries, "US")
-	require.Equal(t, []string{"EUROPE", "EMEA", "WORLDWIDE"}, lada.Facts.Office.AllowRegions)
-	require.True(t, lada.Facts.HiringScope.Scored)
-	require.True(t, lada.Facts.WorkAuthorization.Scored)
-	require.Equal(t, []string{"required"}, lada.Facts.WorkAuthorization.Gates)
-	require.True(t, lada.Facts.Timezone.Scored)
-	require.False(t, lada.Facts.Compensation.Scored)
-	require.False(t, lada.Facts.WorkMode.Scored)
-	require.False(t, lada.Facts.EmploymentLoad.Scored)
-	require.False(t, lada.Facts.Engagement.Scored)
-	require.Empty(t, lada.WellfoundRoles)
-	require.Empty(t, lada.GateLocation.RejectTimezones)
-	require.NotContains(t, lada.GateRole, "intern")
-	require.NotContains(t, lada.GateRole, "internship")
-	require.Contains(t, lada.GateRole, "interior designer")
-	require.Contains(t, lada.GateRole, "solution architect")
-	require.NotContains(t, lada.GateRole, "technical architect")
-	require.NotContains(t, lada.GateHard, "right to work in the uk")
-	require.Contains(t, lada.GateHard, "drept de semnatura obligatoriu")
-	require.Contains(t, lada.GateHard, "deutschkenntnisse")
-	require.Contains(t, lada.GateHard, "verhandlungssicheres deutsch")
-	require.Contains(t, lada.GateHard, "fließende deutschkenntnisse")
-	require.NotContains(t, lada.GateHard, "drept de semnatura")
-	require.NotContains(t, lada.GateHard, "work permit required")
-	require.NotContains(t, lada.GateHard, "itar")
-	require.NotContains(t, lada.GateHard, "govcloud")
-	ladaPenalties := make([]string, 0, len(lada.PenaltiesSoft))
-	for _, group := range lada.PenaltiesSoft {
-		ladaPenalties = append(ladaPenalties, group.Name)
+	}, arch.SignalsPlus.Title)
+	require.Equal(t, 4, arch.SignalsPlus.Text.MaxTotal)
+	require.Equal(t, 6, arch.Buckets.Top)
+	require.NotContains(t, arch.GateLocation.AllowCountries, "US")
+	require.Equal(t, []string{"EUROPE"}, arch.Facts.ResidenceRegions)
+	require.True(t, arch.Facts.Office.Scored)
+	require.Equal(t, arch.GateLocation.AllowCountries, arch.Facts.Office.AllowCountries)
+	require.NotContains(t, arch.Facts.Office.AllowCountries, "US")
+	require.Equal(t, []string{"EUROPE", "EMEA", "WORLDWIDE"}, arch.Facts.Office.AllowRegions)
+	require.True(t, arch.Facts.HiringScope.Scored)
+	require.True(t, arch.Facts.WorkAuthorization.Scored)
+	require.Equal(t, []string{"required"}, arch.Facts.WorkAuthorization.Gates)
+	require.True(t, arch.Facts.Timezone.Scored)
+	require.False(t, arch.Facts.Compensation.Scored)
+	require.False(t, arch.Facts.WorkMode.Scored)
+	require.False(t, arch.Facts.EmploymentLoad.Scored)
+	require.False(t, arch.Facts.Engagement.Scored)
+	require.Empty(t, arch.WellfoundRoles)
+	require.Empty(t, arch.GateLocation.RejectTimezones)
+	require.NotContains(t, arch.GateRole, "intern")
+	require.NotContains(t, arch.GateRole, "internship")
+	require.Contains(t, arch.GateRole, "interior designer")
+	require.Contains(t, arch.GateRole, "solution architect")
+	require.NotContains(t, arch.GateRole, "technical architect")
+	require.NotContains(t, arch.GateHard, "right to work in the uk")
+	require.Contains(t, arch.GateHard, "drept de semnatura obligatoriu")
+	require.Contains(t, arch.GateHard, "deutschkenntnisse")
+	require.Contains(t, arch.GateHard, "verhandlungssicheres deutsch")
+	require.Contains(t, arch.GateHard, "fließende deutschkenntnisse")
+	require.NotContains(t, arch.GateHard, "drept de semnatura")
+	require.NotContains(t, arch.GateHard, "work permit required")
+	require.NotContains(t, arch.GateHard, "itar")
+	require.NotContains(t, arch.GateHard, "govcloud")
+	archPenalties := make([]string, 0, len(arch.PenaltiesSoft))
+	for _, group := range arch.PenaltiesSoft {
+		archPenalties = append(archPenalties, group.Name)
 	}
-	require.Equal(t, []string{"agency", "culture_smell", "mid_level", "not_active", "part_time", "wrong_domain"}, ladaPenalties)
+	require.Equal(t, []string{"agency", "culture_smell", "mid_level", "not_active", "part_time", "wrong_domain"}, archPenalties)
 	for _, phrase := range []string{"designer", "architect", "assistant", "landscape", "junior"} {
-		require.NotContains(t, lada.GateRole, phrase)
+		require.NotContains(t, arch.GateRole, phrase)
 	}
+
+	listed, err := store.List(context.Background())
+	require.NoError(t, err)
+	require.Len(t, listed, 2)
+	require.Equal(t, arch, listed[0])
+	require.Equal(t, got, listed[1])
 }
 
 func TestFileStoreDecodesFiveBlocks(t *testing.T) {
@@ -414,6 +412,22 @@ exclude_title: []
 `)
 	_, err := NewFileStore(dir, sourceids.KnownSourceIDs()).Get(context.Background(), "sample")
 	require.ErrorIs(t, err, profiles.ErrProfileInvalid)
+}
+
+func TestFileStoreMissingATSPollingDefaultsFalse(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	writeProfile(t, dir, "sample", `
+id: sample
+name: Sample
+domain: software
+sources: [vue_jobs]
+queries: []
+wellfound_roles: []
+`)
+	got, err := NewFileStore(dir, sourceids.KnownSourceIDs()).Get(context.Background(), "sample")
+	require.NoError(t, err)
+	require.False(t, got.ATSPolling)
 }
 
 func TestFileStoreRoundTripsChildren(t *testing.T) {

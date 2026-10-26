@@ -28,7 +28,7 @@ func (s *Service) Score(ctx context.Context, profileID string, runID int64) (int
 	}
 	started := run.StartedAt.UTC()
 	since := started.Add(-time.Duration(schema.ScoreWindowDays) * 24 * time.Hour)
-	postedBefore := started.Add(-time.Duration(PostedAtRejectDaysForProfile(profile)) * 24 * time.Hour)
+	postedBefore := started.Add(-time.Duration(schema.PostedAtRejectDays) * 24 * time.Hour)
 	listed, err := s.jobs.ListFirstSeenSince(ctx, since)
 	if err != nil {
 		return 0, err
@@ -37,7 +37,7 @@ func (s *Service) Score(ctx context.Context, profileID string, runID int64) (int
 	if err != nil {
 		return 0, err
 	}
-	rejectDays := PostedAtRejectDaysForProfile(profile)
+	rejectDays := schema.PostedAtRejectDays
 	toScore := make([]jobdata.Job, 0, len(listed)+len(stale))
 	for _, job := range scoreJobs(listed, stale) {
 		if job.FirstSeenAt.UTC().Before(since) && !postedAtStale(job.PostedAt, started, rejectDays) {

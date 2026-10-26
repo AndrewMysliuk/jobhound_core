@@ -1,9 +1,11 @@
-id: andrew
+id: software
 name: Andrew
 domain: software
+# Missing ats_polling defaults to false (aggregators only); set true to enable companies/ATS.
+ats_polling: true
 
 sources:
-  # - europe_remotely
+  - europe_remotely
   - working_nomads
   - himalayas
   - remotify_europe
@@ -40,9 +42,7 @@ sources:
 queries:
   - vue
   - typescript
-  - react
   - golang
-  - node
 
 wellfound_roles:
   - frontend-engineer

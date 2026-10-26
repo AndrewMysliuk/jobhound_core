@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/sourceids"
+	companiesimpl "github.com/andrewmysliuk/jobhound_core/internal/companies/impl"
+	companiesstorage "github.com/andrewmysliuk/jobhound_core/internal/companies/storage"
 	"github.com/andrewmysliuk/jobhound_core/internal/config"
 	enrichimpl "github.com/andrewmysliuk/jobhound_core/internal/enrich/impl"
 	enrichstorage "github.com/andrewmysliuk/jobhound_core/internal/enrich/storage"
@@ -75,6 +77,13 @@ func main() {
 	getter := pgsql.NewGetter(gdb)
 	jobsRepo := jobsstorage.NewRepository(getter)
 	runsRepo := scoringstorage.NewRepository(getter)
+	companiesSvc := companiesimpl.New(
+		companiesstorage.NewRepository(getter),
+		nil,
+		nil,
+		nil,
+		appCfg.Companies,
+	)
 	profileStore := profilesimpl.NewFileStore(appCfg.ProfilesDir, sourceids.KnownSourceIDs())
 	starter := &scoringworkflows.Starter{
 		Client:    temporalClient,
@@ -82,16 +91,17 @@ func main() {
 	}
 	var scoringSvc *scoringimpl.Service
 	if appCfg.Enrich.Enabled {
-		enrichSvc := enrichimpl.New(enrichstorage.NewRepository(getter), jobsRepo, nil, appCfg.Enrich.Model, appCfg.Enrich.MinDescriptionChars)
+		enrichSvc := enrichimpl.New(enrichstorage.NewRepository(getter), jobsRepo, nil, appCfg.Enrich.Model, appCfg.Enrich.MinDescriptionChars, appCfg.Enrich.WindowDays)
 		scoringSvc = scoringimpl.New(profileStore, runsRepo, jobsRepo, starter, nil, enrichSvc)
 	} else {
 		scoringSvc = scoringimpl.New(profileStore, runsRepo, jobsRepo, starter, nil, nil)
 	}
 
 	handler := publicapihandlers.NewHTTPHandler(appCfg.API.CORSAllowedOrigins, publicapihandlers.Deps{
-		Logger:   log,
-		Profiles: profileStore,
-		Scoring:  scoringSvc,
+		Logger:    log,
+		Profiles:  profileStore,
+		Scoring:   scoringSvc,
+		Companies: companiesSvc,
 	})
 
 	srv := &http.Server{

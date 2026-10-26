@@ -3,7 +3,7 @@ name: calibrate-profile
 description: >-
   Calibrates a JobHound search profile from pasted TOP vacancies and match
   signals: tags false positives, proposes YAML/scorer fixes. Use when the user
-  calibrates a profile, reviews TOP jobs, tunes andrew.yaml / lada.yaml, or
+  calibrates a profile, reviews TOP jobs, tunes software.yaml / architecture.yaml, or
   pastes vacancy text for profile scoring feedback.
 ---
 
@@ -14,7 +14,7 @@ scorer code unless the user explicitly asks to apply changes after the review.
 
 ## Inputs (required)
 
-1. **Profile id** — e.g. `andrew`, `lada`. Path: `config/profiles/<id>.yaml`.
+1. **Profile id** — e.g. `software`, `architecture`. Path: `config/profiles/<id>.yaml`.
 2. **Vacancies** — pasted JD text and/or titles from TOP (batch of ~5–15, not the
    full pool). Optional: job id, company, UI row.
 

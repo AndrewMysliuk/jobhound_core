@@ -188,6 +188,80 @@ func TestBatchesClientCreateStatusResults(t *testing.T) {
 	}
 }
 
+func TestFirstBatchChunkSplitsByBytes(t *testing.T) {
+	t.Parallel()
+
+	items := make([]VacancyBatchItem, 0, 3)
+	for i := 0; i < 3; i++ {
+		items = append(items, VacancyBatchItem{
+			JobID:       "job-" + strings.Repeat("x", i+1),
+			Title:       "T",
+			Description: strings.Repeat("d", 200),
+			LocationRaw: "L",
+			SalaryRaw:   "S",
+		})
+	}
+	system := PromptSystem()
+	one, err := json.Marshal(wireRequest(items[0], system, "m", maxTokensModelReply))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Fit the first request only: envelope + one request, but not two (comma + second).
+	maxBytes := batchCreateEnvelope + len(one) + 1
+	first, rest, err := firstBatchChunk(items, "m", maxTokensModelReply, maxBytes, maxBatchRequests)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(first) != 1 {
+		t.Fatalf("first len = %d, want 1", len(first))
+	}
+	if len(rest) != 2 {
+		t.Fatalf("rest len = %d, want 2", len(rest))
+	}
+	if first[0].JobID != items[0].JobID {
+		t.Fatalf("first job = %q", first[0].JobID)
+	}
+}
+
+func TestFirstBatchChunkSplitsByRequestCount(t *testing.T) {
+	t.Parallel()
+
+	items := []VacancyBatchItem{
+		{JobID: "a", Title: "A", Description: "1"},
+		{JobID: "b", Title: "B", Description: "2"},
+		{JobID: "c", Title: "C", Description: "3"},
+	}
+	first, rest, err := firstBatchChunk(items, "m", maxTokensModelReply, maxBatchBodyBytes, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(first) != 2 || len(rest) != 1 {
+		t.Fatalf("first=%d rest=%d", len(first), len(rest))
+	}
+	if rest[0].JobID != "c" {
+		t.Fatalf("rest job = %q", rest[0].JobID)
+	}
+}
+
+func TestFirstBatchChunkKeepsOversizedSingleItem(t *testing.T) {
+	t.Parallel()
+
+	item := VacancyBatchItem{JobID: "big", Title: "T", Description: strings.Repeat("x", 500)}
+	system := PromptSystem()
+	raw, err := json.Marshal(wireRequest(item, system, "m", maxTokensModelReply))
+	if err != nil {
+		t.Fatal(err)
+	}
+	maxBytes := batchCreateEnvelope + len(raw) - 10 // smaller than the only item
+	first, rest, err := firstBatchChunk([]VacancyBatchItem{item}, "m", maxTokensModelReply, maxBytes, maxBatchRequests)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(first) != 1 || len(rest) != 0 {
+		t.Fatalf("first=%d rest=%d, want single oversized item alone", len(first), len(rest))
+	}
+}
+
 func TestBatchesClientResultsSkipsNonSucceeded(t *testing.T) {
 	t.Parallel()
 

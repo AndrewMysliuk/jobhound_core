@@ -24,6 +24,7 @@ Sources: `go.mod` / `go.sum`, `Dockerfile`, `Dockerfile.migrate`, `docker-compos
 | Profiles | `gopkg.in/yaml.v3` **v3.0.1**. Directory from `JOBHOUND_PROFILES_DIR` (empty → `config/profiles`). |
 | Scoring | In-process rules in `internal/scoring/impl` (phrase gates + fact signals from ready verdicts). |
 | Enrich | `internal/enrich`: Anthropic Message Batches over stdlib `net/http` (no Anthropic SDK). Model reply JSON Schema embedded under `enrich/schema/json_schema/`. |
+| Companies / ATS | `internal/companies` + `internal/collectors/ats/{greenhouse,lever,ashby}`; seed xlsx via `excelize` **v2.9.0** (`cmd/companies-import`). |
 | Text / currency | `golang.org/x/text` **v0.34.0** (NFC for enrich hashes; currency/language helpers in coerce). |
 | Logging | `github.com/rs/zerolog` **v1.34.0** |
 | JSON Schema | `github.com/santhosh-tekuri/jsonschema/v6` **v6.0.2** (product API bodies + enrich model reply) |
@@ -46,6 +47,7 @@ Sources: `go.mod` / `go.sum`, `Dockerfile`, `Dockerfile.migrate`, `docker-compos
 | `github.com/rs/zerolog` | v1.34.0 |
 | `github.com/santhosh-tekuri/jsonschema/v6` | v6.0.2 |
 | `github.com/stretchr/testify` | v1.11.1 |
+| `github.com/xuri/excelize/v2` | v2.9.0 |
 | `go.temporal.io/api` | v1.62.2 |
 | `go.temporal.io/sdk` | v1.41.1 |
 | `golang.org/x/text` | v0.34.0 |
@@ -61,9 +63,9 @@ Sources: `go.mod` / `go.sum`, `Dockerfile`, `Dockerfile.migrate`, `docker-compos
 | File | What is configured |
 |------|----------------|
 | `go.mod` | module path, Go version, direct deps, `replace` pins |
-| `Makefile` | `build` five app binaries to `bin/` (agent, worker, api, migrate, retention); `bin/ipv6proxy` is a separate target used by `start-ipv6-proxy`; `eval` runs `go run ./cmd/eval`; `run` / `run-debug` / `run-worker`; `test` / `test-integration`; `fmt` / `vet` / `lint` (`golangci-lint run`) / `tidy`; migrate; `db-dump` / `db-restore` (full Postgres dump under gitignored `data/local/`, restore then migrate); `docker-up` starts the host proxy, then Compose `build --no-cache` + `up -d --force-recreate --pull always`; `docker-down` stops the proxy; `docs-stack` regenerates `docs/STACK.md` |
-| `docker-compose.yml` | postgres 16, migrate one-shot, redis 7, temporal + UI + temporal-ready, agent :3001, worker, api :3000. Worker and agent get `JOBHOUND_EUROPE_REMOTELY_PROXY=http://host.docker.internal:18080`. `api` and `worker` get `JOBHOUND_PROFILES_DIR=/app/config/profiles` and optional `JOBHOUND_ANTHROPIC_API_KEY` / `JOBHOUND_ENRICH_MODEL`. The proxy process itself is not a Compose service |
-| `Dockerfile` | multi-stage; CGO_ENABLED=0; debian-slim + chromium + `data/` + `config/profiles` |
+| `Makefile` | `build` six app binaries to `bin/` (agent, worker, api, migrate, retention, companies-import); `bin/ipv6proxy` is a separate target used by `start-ipv6-proxy`; `companies-import` runs the seed CLI; `eval` runs `go run ./cmd/eval`; `run` / `run-debug` / `run-worker`; `test` / `test-integration`; `fmt` / `vet` / `lint` (`golangci-lint run`) / `tidy`; migrate; `db-dump` / `db-restore` (full Postgres dump under gitignored `data/local/`, restore then migrate); `docker-up` starts the host proxy, then Compose `build --no-cache` + `up -d --force-recreate --pull always`; `docker-down` stops the proxy; `docs-stack` regenerates `docs/STACK.md` |
+| `docker-compose.yml` | postgres 16, migrate one-shot, redis 7, temporal + UI + temporal-ready, agent :3001, worker, api :3000. Worker and agent get `JOBHOUND_EUROPE_REMOTELY_PROXY=http://host.docker.internal:18080`. `api` and `worker` get `JOBHOUND_PROFILES_DIR=/app/config/profiles`, `JOBHOUND_COMPANIES_DIR=/app/config/companies`, and optional `JOBHOUND_ANTHROPIC_API_KEY` / `JOBHOUND_ENRICH_MODEL`. The proxy process itself is not a Compose service |
+| `Dockerfile` | multi-stage; CGO_ENABLED=0; debian-slim + chromium + `data/` + `config/profiles` + `config/companies` |
 | `Dockerfile.migrate` | migrate binary + `migrations/` |
 | `.dockerignore` | `.git`, `bin/`, `.cursor`, `*.md`, `.env*` |
 | `.gitignore` | `.env`, `.env.*`, `/bin/`, `vendor/`, sqlite, `cookies.txt`, dump path under `data/local/` |
@@ -85,11 +87,12 @@ Non-standard: env names live only in `internal/config`. Feature packages must no
 
 | Target | Purpose |
 |--------|---------|
-| `build` | `bin/agent`, `bin/worker`, `bin/api`, `bin/migrate`, `bin/retention` (`bin/ipv6proxy` and `cmd/eval` are not part of `build`) |
+| `build` | `bin/agent`, `bin/worker`, `bin/api`, `bin/migrate`, `bin/retention`, `bin/companies-import` (`bin/ipv6proxy` and `cmd/eval` are not part of `build`) |
 | `run` | build + run agent (loads `.env` if present) |
 | `run-debug` | agent with `JOBHOUND_DEBUG_HTTP_ADDR=127.0.0.1:3001` |
 | `run-worker` | Temporal worker |
 | `eval` | `go run ./cmd/eval` (default `testdata/enrich/gold.jsonl` + `predictions.jsonl`) |
+| `companies-import` | build + run `bin/companies-import` (seed `companies` from xlsx under `JOBHOUND_COMPANIES_DIR`) |
 | `test` | `go test ./...` (excludes `integration` tag) |
 | `test-integration` | `go test -tags=integration ./...` |
 | `fmt` | `go fmt ./...` |
@@ -114,8 +117,8 @@ Non-standard: env names live only in `internal/config`. Feature packages must no
 
 ### Tests
 
-- **Runner:** `go test`. **62** `*_test.go` files.
-- **Unit (default):** handlers (`httptest`) for the five profile routes, `profiles/impl` YAML load (including `lada.yaml`, `children`, and `facts`), `scoring/impl` phrase + fact tables, `scoring/storage` / `jobs/storage` / `enrich/storage` (often sqlite), enrich batches/coerce/decode/eval, collector parse fixtures (software and architecture boards), ingest coordinator (miniredis).
+- **Runner:** `go test`. **73** `*_test.go` files.
+- **Unit (default):** handlers (`httptest`) for the five profile routes plus `GET /companies`, `profiles/impl` YAML load (including `architecture.yaml`, `children`, `facts`, `ats_polling`), `scoring/impl` phrase + fact tables, `scoring/storage` / `jobs/storage` / `enrich/storage` / `companies/storage` (often sqlite), companies impl + ATS fetcher fixtures (Greenhouse / Lever / Ashby), enrich batches/coerce/decode/eval, collector parse fixtures (software and architecture boards), ingest coordinator (miniredis).
 - **Integration (`//go:build integration`):** `internal/platform/pgsql/migrations_integration_test.go`; `internal/ingest/coordinator_integration_test.go`; `internal/collectors/browserfetch/rod_integration_test.go`. Need env / Compose (`JOBHOUND_DATABASE_URL`, Chromium as applicable).
 - **`tests/`:** empty directory (constitution allows optional `tests/integration/`). Offline enrich fixtures live under `testdata/enrich/`.
 - **Frontend unit tests:** live in `jobhound_frontend` (`pnpm test:unit`), not in this repo.
@@ -128,7 +131,7 @@ Non-standard: env names live only in `internal/config`. Feature packages must no
 
 - **Production target (constitution):** GCP runtime + secrets. **No** Cloud Run workflow, Dockerfile deploy target, or Artifact Registry config is in this repo yet.
 - **Local / current runtime:** Docker Compose on a laptop (`make docker-up`). Published ports: **5432** Postgres, **6379** Redis, **7233** Temporal gRPC, **8088** Temporal UI, **3000** API, **3001** agent debug HTTP. Host proxy **127.0.0.1:18080** is not a Compose port.
-- **Images:** `jobhound-core:local` (agent/worker/api); migrate uses `Dockerfile.migrate`. Chromium in the app image for Built In, Golang Cafe, and the architecture rod boards `ejobs`, `dezeen_jobs`, and `world_architects` (`JOBHOUND_BROWSER_NO_SANDBOX=1` as root). `config/profiles` is in the app image.
+- **Images:** `jobhound-core:local` (agent/worker/api); migrate uses `Dockerfile.migrate`. Chromium in the app image for Built In, Golang Cafe, and the architecture rod boards `ejobs`, `dezeen_jobs`, and `world_architects` (`JOBHOUND_BROWSER_NO_SANDBOX=1` as root). `config/profiles` and `config/companies` are in the app image.
 - **CORS defaults:** `http://localhost:5173`, `http://localhost:3002` (frontend dev servers — not the API listen address).
 
 ### Environment variable names
@@ -171,5 +174,12 @@ From `internal/config` (single source). Values not listed. Rows below are taken 
 | `JOBHOUND_JOB_RETENTION_DAYS` | Retention window, days. Default: 30. Must be a positive integer. |
 | `JOBHOUND_ANTHROPIC_API_KEY` | Anthropic Message Batches key. Empty disables vacancy enrich and ignores JOBHOUND_ENRICH_MODEL. |
 | `JOBHOUND_ENRICH_MODEL` | Model id stored on the verdict row. Required when the key is set. |
+| `JOBHOUND_ENRICH_MIN_DESCRIPTION_CHARS` | Skip enrich for vacancies with shorter descriptions. Empty or 0 → 800. Negative is rejected. |
+| `JOBHOUND_ENRICH_WINDOW_DAYS` | first_seen_at window for enrich candidates (open jobs only). Empty or 0 → 30. Negative is rejected. |
+| `JOBHOUND_COMPANIES_DIR` | Company registry dir (blocklist.yaml + seed). Empty → config/companies. |
+| `JOBHOUND_COMPANIES_POLL_MAX_PER_RUN` | Cap on board requests per run (duration / politeness), not memory; memory is bounded by ATSConcurrency. Default: 300. Must be a positive integer. |
+| `JOBHOUND_COMPANIES_POLL_INTERVAL_HOURS` | Per-company due interval, hours. Default: 6. Must be a positive integer. |
+| `JOBHOUND_COMPANIES_ATS_CONCURRENCY` | Parallel polls per ATS. Default: 5. Must be a positive integer. |
+| `JOBHOUND_COMPANIES_RESOLVE_RETRY_DAYS` | UNRESOLVED → next_resolve_at offset, days. Default: 14. Must be a positive integer. |
 
 `.env.example`: present. Lists every key in the table above; secrets empty; default in a comment. `README.md` links that file and does not paste a second list. Compose interpolates `JOBHOUND_API_CORS_ORIGINS`, `JOBHOUND_ANTHROPIC_API_KEY`, and `JOBHOUND_ENRICH_MODEL` from host env.

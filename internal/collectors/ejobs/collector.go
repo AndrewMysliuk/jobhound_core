@@ -86,7 +86,7 @@ func pageURL(base string, page int) string {
 
 func (c *Ejobs) fetchBase(ctx context.Context, base string, seen map[string]struct{}, calls *int) ([]schema.Job, error) {
 	var out []schema.Job
-	rejectDays := scoringschema.PostedAtRejectDaysArchitecture
+	rejectDays := scoringschema.PostedAtRejectDays
 	now := time.Now().UTC()
 	for page := 1; page <= maxListPage; page++ {
 		rawURL := pageURL(base, page)

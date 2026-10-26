@@ -26,7 +26,7 @@ func TestStartRun(t *testing.T) {
 		store := &fakeRuns{}
 		starter := &fakeStarter{}
 		svc := newTestService(store, starter, now)
-		got, err := svc.StartRun(context.Background(), "andrew", key)
+		got, err := svc.StartRun(context.Background(), "software", key)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -42,10 +42,10 @@ func TestStartRun(t *testing.T) {
 		store := &fakeRuns{}
 		starter := &fakeStarter{}
 		svc := newTestService(store, starter, now)
-		if _, err := svc.StartRun(context.Background(), "andrew", key); err != nil {
+		if _, err := svc.StartRun(context.Background(), "software", key); err != nil {
 			t.Fatal(err)
 		}
-		_, err := svc.StartRun(context.Background(), "andrew", other)
+		_, err := svc.StartRun(context.Background(), "software", other)
 		if !errors.Is(err, scoring.ErrRunAlreadyRunning) {
 			t.Fatalf("err = %v", err)
 		}
@@ -58,11 +58,11 @@ func TestStartRun(t *testing.T) {
 		store := &fakeRuns{}
 		starter := &fakeStarter{}
 		svc := newTestService(store, starter, now)
-		first, err := svc.StartRun(context.Background(), "andrew", key)
+		first, err := svc.StartRun(context.Background(), "software", key)
 		if err != nil {
 			t.Fatal(err)
 		}
-		again, err := svc.StartRun(context.Background(), "andrew", key)
+		again, err := svc.StartRun(context.Background(), "software", key)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -78,7 +78,7 @@ func TestStartRun(t *testing.T) {
 		store := &fakeRuns{}
 		starter := &fakeStarter{}
 		svc := newTestService(store, starter, now)
-		if _, err := svc.StartRun(context.Background(), "andrew", key); err != nil {
+		if _, err := svc.StartRun(context.Background(), "software", key); err != nil {
 			t.Fatal(err)
 		}
 		store.runs[0].Status = schema.RunStatusSucceeded
@@ -91,7 +91,7 @@ func TestStartRun(t *testing.T) {
 
 func TestLatestRun_none(t *testing.T) {
 	svc := newTestService(&fakeRuns{}, &fakeStarter{}, time.Now().UTC())
-	_, err := svc.LatestRun(context.Background(), "andrew")
+	_, err := svc.LatestRun(context.Background(), "software")
 	if !errors.Is(err, scoring.ErrNoRun) {
 		t.Fatalf("err = %v", err)
 	}
@@ -100,7 +100,7 @@ func TestLatestRun_none(t *testing.T) {
 func TestListJobs_defaults(t *testing.T) {
 	store := &fakeRuns{}
 	svc := newTestService(store, &fakeStarter{}, time.Now().UTC())
-	if _, err := svc.ListJobs(context.Background(), schema.ListJobsParams{ProfileID: "andrew"}); err != nil {
+	if _, err := svc.ListJobs(context.Background(), schema.ListJobsParams{ProfileID: "software"}); err != nil {
 		t.Fatal(err)
 	}
 	if store.listed.Bucket != schema.BucketTop || store.listed.UserStatus != schema.UserStatusNew {
@@ -118,7 +118,7 @@ func TestListJobs_returnsNonPositiveScores(t *testing.T) {
 	}}
 	svc := newTestService(store, &fakeStarter{}, time.Now().UTC())
 	for _, bucket := range []schema.Bucket{schema.BucketReview, schema.BucketTop} {
-		got, err := svc.ListJobs(context.Background(), schema.ListJobsParams{ProfileID: "andrew", Bucket: bucket})
+		got, err := svc.ListJobs(context.Background(), schema.ListJobsParams{ProfileID: "software", Bucket: bucket})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -133,7 +133,7 @@ func TestListJobs_returnsNonPositiveScores(t *testing.T) {
 
 func TestSetUserStatus_notInScope(t *testing.T) {
 	svc := newTestService(&fakeRuns{}, &fakeStarter{}, time.Now().UTC())
-	_, err := svc.SetUserStatus(context.Background(), "andrew", "job-1", schema.UserStatusHidden)
+	_, err := svc.SetUserStatus(context.Background(), "software", "job-1", schema.UserStatusHidden)
 	if !errors.Is(err, scoring.ErrJobNotInScope) {
 		t.Fatalf("err = %v", err)
 	}
@@ -144,7 +144,7 @@ func TestListJobs_factsStatusOffWhenNilReader(t *testing.T) {
 		Jobs: []schema.ListedJob{{JobID: "a"}, {JobID: "b"}},
 	}}
 	svc := newTestService(store, &fakeStarter{}, time.Now().UTC())
-	got, err := svc.ListJobs(context.Background(), schema.ListJobsParams{ProfileID: "andrew"})
+	got, err := svc.ListJobs(context.Background(), schema.ListJobsParams{ProfileID: "software"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -162,7 +162,7 @@ func TestListJobs_factsStatusFromReader(t *testing.T) {
 		"pending": enrichschema.FactsStatusPending,
 	}}
 	svc := New(fakeProfiles{}, store, nil, &fakeStarter{}, nil, statuses)
-	got, err := svc.ListJobs(context.Background(), schema.ListJobsParams{ProfileID: "andrew"})
+	got, err := svc.ListJobs(context.Background(), schema.ListJobsParams{ProfileID: "software"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -180,7 +180,7 @@ func TestSetUserStatus_fillsFactsStatus(t *testing.T) {
 		"job-1": enrichschema.FactsStatusReady,
 	}}
 	svc := New(fakeProfiles{}, store, nil, &fakeStarter{}, nil, statuses)
-	got, err := svc.SetUserStatus(context.Background(), "andrew", "job-1", schema.UserStatusHidden)
+	got, err := svc.SetUserStatus(context.Background(), "software", "job-1", schema.UserStatusHidden)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -193,7 +193,7 @@ func TestScore(t *testing.T) {
 	started := time.Date(2026, 10, 10, 12, 0, 0, 0, time.UTC)
 	window := time.Duration(schema.ScoreWindowDays) * 24 * time.Hour
 	profile := profileschema.Profile{
-		ID:       "andrew",
+		ID:       "software",
 		Name:     "Andrew",
 		GateRole: []string{"recruiter"},
 		Queries:  []string{"vue"},
@@ -224,7 +224,7 @@ func TestScore(t *testing.T) {
 		FirstSeenAt: started.Add(-24 * time.Hour),
 	}
 	hidden := schema.Match{
-		ProfileID:  "andrew",
+		ProfileID:  "software",
 		JobID:      fresh.ID,
 		Bucket:     schema.BucketReview,
 		Score:      4,
@@ -330,7 +330,7 @@ func TestScore(t *testing.T) {
 			store := &fakeRuns{
 				runs: []schema.Run{{
 					ID:        7,
-					ProfileID: "andrew",
+					ProfileID: "software",
 					Status:    schema.RunStatusRunning,
 					StartedAt: started,
 				}},
@@ -339,7 +339,7 @@ func TestScore(t *testing.T) {
 			}
 			jobs := &fakeJobs{jobs: tt.jobs}
 			svc := New(fakeProfiles{profile: profile}, store, jobs, nil, nil, nil)
-			n, err := svc.Score(context.Background(), "andrew", 7)
+			n, err := svc.Score(context.Background(), "software", 7)
 			if tt.wantErr {
 				if err == nil {
 					t.Fatal("expected error")
@@ -387,7 +387,7 @@ func TestRescoreJobs(t *testing.T) {
 		FirstSeenAt: started.Add(-24 * time.Hour),
 	}
 	profile := profileschema.Profile{
-		ID:      "andrew",
+		ID:      "software",
 		Name:    "Andrew",
 		Buckets: profileschema.Buckets{Top: 1},
 	}
@@ -420,13 +420,13 @@ func TestRescoreJobs(t *testing.T) {
 		store := &fakeRuns{
 			runs: []schema.Run{{
 				ID:        7,
-				ProfileID: "andrew",
+				ProfileID: "software",
 				Status:    schema.RunStatusSucceeded,
 				StartedAt: started,
 			}},
 			matches: []schema.Match{
 				{
-					ProfileID:  "andrew",
+					ProfileID:  "software",
 					JobID:      job.ID,
 					Bucket:     schema.BucketReview,
 					Score:      4,
@@ -434,7 +434,7 @@ func TestRescoreJobs(t *testing.T) {
 					RunID:      7,
 				},
 				{
-					ProfileID:  "lada",
+					ProfileID:  "architecture",
 					JobID:      job.ID,
 					Bucket:     schema.BucketReview,
 					Score:      2,
@@ -456,22 +456,22 @@ func TestRescoreJobs(t *testing.T) {
 		for _, m := range store.matches {
 			byProfile[m.ProfileID] = m
 		}
-		andrew := byProfile["andrew"]
-		if andrew.UserStatus != schema.UserStatusHidden {
-			t.Fatalf("andrew user_status = %s, want HIDDEN", andrew.UserStatus)
+		soft := byProfile["software"]
+		if soft.UserStatus != schema.UserStatusHidden {
+			t.Fatalf("software user_status = %s, want HIDDEN", soft.UserStatus)
 		}
-		if andrew.RunID != 7 {
-			t.Fatalf("andrew run_id = %d, want 7", andrew.RunID)
+		if soft.RunID != 7 {
+			t.Fatalf("software run_id = %d, want 7", soft.RunID)
 		}
-		if !hasLLMSignal(andrew.Signals, "employment_load", "full_time", quote) {
-			t.Fatalf("andrew signals = %#v", andrew.Signals)
+		if !hasLLMSignal(soft.Signals, "employment_load", "full_time", quote) {
+			t.Fatalf("software signals = %#v", soft.Signals)
 		}
-		lada := byProfile["lada"]
-		if lada.UserStatus != schema.UserStatusNew {
-			t.Fatalf("lada user_status = %s, want NEW", lada.UserStatus)
+		arch := byProfile["architecture"]
+		if arch.UserStatus != schema.UserStatusNew {
+			t.Fatalf("architecture user_status = %s, want NEW", arch.UserStatus)
 		}
-		if !hasLLMSignal(lada.Signals, "employment_load", "full_time", quote) {
-			t.Fatalf("lada signals = %#v", lada.Signals)
+		if !hasLLMSignal(arch.Signals, "employment_load", "full_time", quote) {
+			t.Fatalf("architecture signals = %#v", arch.Signals)
 		}
 	})
 }
@@ -553,6 +553,17 @@ func (f *fakeJobs) ListFirstSeenSince(_ context.Context, since time.Time) ([]job
 	out := make([]jobdata.Job, 0, len(f.jobs))
 	for _, job := range f.jobs {
 		if job.FirstSeenAt.UTC().Before(since) {
+			continue
+		}
+		out = append(out, job)
+	}
+	return out, nil
+}
+
+func (f *fakeJobs) ListLastSeenSince(_ context.Context, since time.Time) ([]jobdata.Job, error) {
+	out := make([]jobdata.Job, 0, len(f.jobs))
+	for _, job := range f.jobs {
+		if job.LastSeenAt.UTC().Before(since) {
 			continue
 		}
 		out = append(out, job)

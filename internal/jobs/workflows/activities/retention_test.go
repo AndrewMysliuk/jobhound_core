@@ -29,6 +29,14 @@ func (r *retentionJobsStub) ListFirstSeenSince(context.Context, time.Time) ([]jo
 	return nil, nil
 }
 
+func (r *retentionJobsStub) ListEnrichCandidates(context.Context, time.Time, time.Time) ([]jobdata.Job, error) {
+	return nil, nil
+}
+
+func (r *retentionJobsStub) ListLastSeenSince(context.Context, time.Time) ([]jobdata.Job, error) {
+	return nil, nil
+}
+
 func (r *retentionJobsStub) ListPostedBefore(context.Context, time.Time) ([]jobdata.Job, error) {
 	return nil, nil
 }

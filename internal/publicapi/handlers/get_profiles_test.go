@@ -19,7 +19,7 @@ func TestGetProfilesReturnsListInStoreOrder(t *testing.T) {
 		Logger: zerolog.Nop(),
 		Profiles: fakeProfileStore{list: []profileschema.Profile{
 			{
-				ID:       "andrew",
+				ID:       "software",
 				Name:     "Andrew",
 				Domain:   profileschema.DomainSoftware,
 				Sources:  []string{"himalayas", "wellfound"},
@@ -62,7 +62,7 @@ func TestGetProfilesReturnsListInStoreOrder(t *testing.T) {
 	if len(got.Profiles) != 2 {
 		t.Fatalf("profiles %#v", got.Profiles)
 	}
-	if got.Profiles[0].ID != "andrew" || got.Profiles[0].Name != "Andrew" || got.Profiles[0].Domain != "software" {
+	if got.Profiles[0].ID != "software" || got.Profiles[0].Name != "Andrew" || got.Profiles[0].Domain != "software" {
 		t.Fatalf("first %#v", got.Profiles[0])
 	}
 	if len(got.Profiles[0].Sources) != 2 || got.Profiles[0].Sources[0] != "himalayas" || got.Profiles[0].Sources[1] != "wellfound" {

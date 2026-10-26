@@ -1,0 +1,35 @@
+[
+  {
+    "additional": "",
+    "additionalPlain": "",
+    "categories": {
+      "commitment": "Regular Full Time (Salary)",
+      "department": "Customer Success",
+      "location": "Atlanta, Georgia",
+      "team": "Customer Success Team",
+      "allLocations": [
+        "Atlanta, Georgia"
+      ]
+    },
+    "createdAt": 1788199939703,
+    "descriptionPlain": "Remote product role. Collaboration skills.",
+    "description": "<p>Remote product role.</p>",
+    "id": "ad208490-4052-4f91-a57e-433f2d1e484b",
+    "lists": [],
+    "salaryRange": {
+      "min": 85000,
+      "max": 175000,
+      "currency": "USD",
+      "interval": "per-year-salary"
+    },
+    "text": "Customer Success Manager",
+    "country": "US",
+    "workplaceType": "hybrid",
+    "opening": "open",
+    "openingPlain": "open",
+    "descriptionBody": "body",
+    "descriptionBodyPlain": "body",
+    "hostedUrl": "https://jobs.lever.co/leverdemo/ad208490-4052-4f91-a57e-433f2d1e484b",
+    "applyUrl": "https://jobs.lever.co/leverdemo/ad208490-4052-4f91-a57e-433f2d1e484b/apply"
+  }
+]

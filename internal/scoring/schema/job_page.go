@@ -8,12 +8,14 @@ import (
 
 // ListJobsParams filters API.ListJobs.
 // An empty Bucket means TOP. An empty UserStatus means NEW.
+// IncludeClosed false (default) excludes jobs with closed_at set.
 type ListJobsParams struct {
-	ProfileID  string
-	Bucket     Bucket
-	UserStatus UserStatus
-	Page       int
-	Limit      int
+	ProfileID     string
+	Bucket        Bucket
+	UserStatus    UserStatus
+	Page          int
+	Limit         int
+	IncludeClosed bool
 }
 
 // ListedJob is one scored job on a list page.
@@ -29,6 +31,7 @@ type ListedJob struct {
 	PostedAt    time.Time
 	FirstSeenAt time.Time
 	LastSeenAt  time.Time
+	ClosedAt    *time.Time
 	Bucket      Bucket
 	Score       int
 	Signals     []Signal

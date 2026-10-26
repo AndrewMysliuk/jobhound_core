@@ -9,13 +9,17 @@ COMPOSE_ENV := $(shell test -f $(ENV_FILE) && printf '%s' '--env-file $(ENV_FILE
 
 .PHONY: build build-retention run run-debug run-worker eval test test-integration fmt vet lint tidy migrate-up migrate-down migrate-version \
 	db-dump db-restore docker-up docker-down docker-down-volumes docker-ps docker-logs docker-migrate \
-	start-ipv6-proxy stop-ipv6-proxy docs-stack
+	start-ipv6-proxy stop-ipv6-proxy docs-stack companies-import
 
 # Host CONNECT proxy. Keep the port in sync with JOBHOUND_EUROPE_REMOTELY_PROXY in docker-compose.yml.
 IPV6_PROXY_ADDR ?= 127.0.0.1:18080
 
 # Full Postgres dump for local wipe survival (gitignored under data/local/).
+# Always use the compose postgres:16 client tools — host libpq 17+ injects
+# SET transaction_timeout which PG16 rejects on restore.
 DB_DUMP_PATH ?= data/local/postgres.dump
+DB_DUMP_USER ?= jobhound
+DB_DUMP_DB ?= jobhound
 
 build:
 	go build -o bin/agent ./cmd/agent
@@ -23,8 +27,12 @@ build:
 	go build -o bin/api ./cmd/api
 	go build -o bin/migrate ./cmd/migrate
 	go build -o bin/retention ./cmd/retention
+	go build -o bin/companies-import ./cmd/companies-import
 
 build-retention: build
+
+companies-import: build
+	bash -c 'if [ -f $(ENV_FILE) ]; then set -a && source $(ENV_FILE) && set +a; fi; exec ./bin/companies-import'
 
 run: build
 	bash -c 'if [ -f $(ENV_FILE) ]; then set -a && source $(ENV_FILE) && set +a; fi; exec ./bin/agent'
@@ -60,17 +68,26 @@ migrate-up migrate-down migrate-version: build
 	bash -c 'if [ -f $(ENV_FILE) ]; then set -a && source $(ENV_FILE) && set +a; fi; exec ./bin/migrate $(subst migrate-,,$@)'
 
 db-dump:
-	bash -c 'if [ -f $(ENV_FILE) ]; then set -a && source $(ENV_FILE) && set +a; fi; \
-		if [ -z "$$JOBHOUND_DATABASE_URL" ]; then echo "JOBHOUND_DATABASE_URL is required" >&2; exit 1; fi; \
-		mkdir -p "$$(dirname "$(DB_DUMP_PATH)")"; \
-		pg_dump --dbname="$$JOBHOUND_DATABASE_URL" --format=custom --file="$(DB_DUMP_PATH)"; \
-		echo "wrote $(DB_DUMP_PATH)"'
+	@mkdir -p "$(dir $(DB_DUMP_PATH))"
+	$(COMPOSE) $(COMPOSE_ENV) exec -T postgres \
+		pg_dump -U $(DB_DUMP_USER) -d $(DB_DUMP_DB) --format=custom > "$(DB_DUMP_PATH)"
+	@echo "wrote $(DB_DUMP_PATH)"
 
 db-restore: build
 	bash -c 'if [ -f $(ENV_FILE) ]; then set -a && source $(ENV_FILE) && set +a; fi; \
-		if [ -z "$$JOBHOUND_DATABASE_URL" ]; then echo "JOBHOUND_DATABASE_URL is required" >&2; exit 1; fi; \
+		if [ -z "$$JOBHOUND_DATABASE_URL" ]; then echo "JOBHOUND_DATABASE_URL is required (for migrate)" >&2; exit 1; fi; \
 		if [ ! -f "$(DB_DUMP_PATH)" ]; then echo "dump not found: $(DB_DUMP_PATH) (run make db-dump first)" >&2; exit 1; fi; \
-		pg_restore --dbname="$$JOBHOUND_DATABASE_URL" --clean --if-exists --no-owner --no-acl "$(DB_DUMP_PATH)"; \
+		set -o pipefail; \
+		if $(COMPOSE) $(COMPOSE_ENV) exec -T -i postgres pg_restore --list > /dev/null < "$(DB_DUMP_PATH)"; then \
+			$(COMPOSE) $(COMPOSE_ENV) exec -T -i postgres \
+				pg_restore -U $(DB_DUMP_USER) -d $(DB_DUMP_DB) --clean --if-exists --no-owner --no-acl < "$(DB_DUMP_PATH)"; \
+		else \
+			echo "dump needs host pg_restore (pg17 archive → pg16); stripping transaction_timeout" >&2; \
+			pg_restore --clean --if-exists --no-owner --no-acl --file=- "$(DB_DUMP_PATH)" \
+				| sed "/^SET transaction_timeout = 0;$$/d" \
+				| $(COMPOSE) $(COMPOSE_ENV) exec -T -i postgres \
+					psql -U $(DB_DUMP_USER) -d $(DB_DUMP_DB) -v ON_ERROR_STOP=1; \
+		fi; \
 		echo "restored $(DB_DUMP_PATH)"; \
 		exec ./bin/migrate up'
 

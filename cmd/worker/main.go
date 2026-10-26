@@ -1,4 +1,4 @@
-// Command worker runs the Temporal worker: registers ingest, job retention, profile runs, and enrich.
+// Command worker runs the Temporal worker: registers ingest, job retention, profile runs, enrich, and companies.
 package main
 
 import (
@@ -10,6 +10,9 @@ import (
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/archgee"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/archinect"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/ats/ashby"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/ats/greenhouse"
+	"github.com/andrewmysliuk/jobhound_core/internal/collectors/ats/lever"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/baunetz"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/bdla"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/bestjobs"
@@ -32,6 +35,10 @@ import (
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/weworkremotely"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/workingnomads"
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors/worldarchitects"
+	"github.com/andrewmysliuk/jobhound_core/internal/companies"
+	companiesimpl "github.com/andrewmysliuk/jobhound_core/internal/companies/impl"
+	companiesstorage "github.com/andrewmysliuk/jobhound_core/internal/companies/storage"
+	companies_workflows "github.com/andrewmysliuk/jobhound_core/internal/companies/workflows"
 	"github.com/andrewmysliuk/jobhound_core/internal/config"
 	enrichimpl "github.com/andrewmysliuk/jobhound_core/internal/enrich/impl"
 	enrichstorage "github.com/andrewmysliuk/jobhound_core/internal/enrich/storage"
@@ -84,7 +91,9 @@ func main() {
 
 	var (
 		jobsRepo              jobs.JobRepository
+		jobsStore             *jobsstorage.Repository
 		scoringRuns           *scoringstorage.Repository
+		companiesSvc          *companiesimpl.Service
 		enrichSvc             *enrichimpl.Service
 		enrichRescore         enrich_activities.Rescorer
 		ingestRedis           *ingest.RedisCoordinator
@@ -101,8 +110,26 @@ func main() {
 			os.Exit(1)
 		}
 		getter := pgsql.NewGetter(gdb)
-		jobsRepo = jobsstorage.NewRepository(getter)
+		jobsStore = jobsstorage.NewRepository(getter)
+		jobsRepo = jobsStore
 		scoringRuns = scoringstorage.NewRepository(getter)
+
+		blocklist, err := companiesimpl.LoadBlocklist(appCfg.Companies.Dir)
+		if err != nil {
+			log.Error().Err(err).Str("dir", appCfg.Companies.Dir).Msg("companies blocklist")
+			os.Exit(1)
+		}
+		companiesSvc = companiesimpl.New(
+			companiesstorage.NewRepository(getter),
+			jobsStore,
+			blocklist,
+			[]companies.CompanyBoardFetcher{
+				&greenhouse.Client{},
+				&lever.Client{},
+				&ashby.Client{},
+			},
+			appCfg.Companies,
+		)
 
 		if appCfg.Enrich.Enabled {
 			enrichSvc = enrichimpl.New(
@@ -111,6 +138,7 @@ func main() {
 				&enrichimpl.BatchesClient{APIKey: appCfg.Enrich.APIKey, Model: appCfg.Enrich.Model},
 				appCfg.Enrich.Model,
 				appCfg.Enrich.MinDescriptionChars,
+				appCfg.Enrich.WindowDays,
 			)
 			enrichRescore = scoringimpl.New(
 				profilesimpl.NewFileStore(appCfg.ProfilesDir, sourceids.KnownSourceIDs()),
@@ -171,6 +199,12 @@ func main() {
 		Enrich:  enrichSvc,
 		Rescore: enrichRescore,
 		Log:     log,
+	})
+	companies_workflows.New(w, companies_workflows.Deps{
+		Companies: companiesSvc,
+		Jobs:      jobsRepo,
+		Runs:      scoringRuns,
+		Log:       log,
 	})
 
 	if jobsRepo != nil && config.LoadJobRetentionScheduleUpsertFromEnv() {

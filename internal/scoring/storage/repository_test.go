@@ -44,6 +44,8 @@ func testScoringDB(t *testing.T) *gorm.DB {
 			position TEXT,
 			first_seen_at TIMESTAMP NOT NULL,
 			last_seen_at TIMESTAMP NOT NULL,
+			closed_at TIMESTAMP,
+			closed_by TEXT NOT NULL DEFAULT '',
 			created_at TIMESTAMP NOT NULL,
 			updated_at TIMESTAMP NOT NULL
 		)`,
@@ -55,7 +57,18 @@ func testScoringDB(t *testing.T) *gorm.DB {
 			finished_at TIMESTAMP,
 			jobs_scored INTEGER NOT NULL DEFAULT 0,
 			sources_skipped INTEGER NOT NULL DEFAULT 0,
-			idempotency_key TEXT NOT NULL UNIQUE
+			idempotency_key TEXT NOT NULL UNIQUE,
+			companies_discovered INTEGER NOT NULL DEFAULT 0,
+			companies_merged INTEGER NOT NULL DEFAULT 0,
+			companies_blocked INTEGER NOT NULL DEFAULT 0,
+			companies_resolved INTEGER NOT NULL DEFAULT 0,
+			companies_unsupported INTEGER NOT NULL DEFAULT 0,
+			companies_polled INTEGER NOT NULL DEFAULT 0,
+			polls_not_modified INTEGER NOT NULL DEFAULT 0,
+			polls_partial INTEGER NOT NULL DEFAULT 0,
+			poll_failures INTEGER NOT NULL DEFAULT 0,
+			jobs_upserted_ats INTEGER NOT NULL DEFAULT 0,
+			jobs_closed INTEGER NOT NULL DEFAULT 0
 		)`,
 		`CREATE TABLE profile_matches (
 			profile_id TEXT NOT NULL,
@@ -108,7 +121,7 @@ func TestRepository_ListMatchesByJobIDs(t *testing.T) {
 	insertJob(t, db, "job-2", "Designer", seen)
 
 	run, err := repo.CreateRun(ctx, schema.Run{
-		ProfileID:      "andrew",
+		ProfileID:      "software",
 		Status:         schema.RunStatusRunning,
 		StartedAt:      seen,
 		IdempotencyKey: uuid.New(),
@@ -117,9 +130,9 @@ func TestRepository_ListMatchesByJobIDs(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, m := range []schema.Match{
-		{ProfileID: "andrew", JobID: "job-1", Bucket: schema.BucketReview, Score: 1, RunID: run.ID},
-		{ProfileID: "lada", JobID: "job-1", Bucket: schema.BucketTop, Score: 3, RunID: run.ID},
-		{ProfileID: "andrew", JobID: "job-2", Bucket: schema.BucketReview, Score: 2, RunID: run.ID},
+		{ProfileID: "software", JobID: "job-1", Bucket: schema.BucketReview, Score: 1, RunID: run.ID},
+		{ProfileID: "architecture", JobID: "job-1", Bucket: schema.BucketTop, Score: 3, RunID: run.ID},
+		{ProfileID: "software", JobID: "job-2", Bucket: schema.BucketReview, Score: 2, RunID: run.ID},
 	} {
 		if err := repo.UpsertMatch(ctx, m); err != nil {
 			t.Fatal(err)
@@ -143,11 +156,11 @@ func TestRepository_ListMatchesByJobIDs(t *testing.T) {
 		}
 		seenProfiles[m.ProfileID] = m.RunID
 	}
-	if _, ok := seenProfiles["andrew"]; !ok {
-		t.Fatal("missing andrew")
+	if _, ok := seenProfiles["software"]; !ok {
+		t.Fatal("missing software")
 	}
-	if _, ok := seenProfiles["lada"]; !ok {
-		t.Fatal("missing lada")
+	if _, ok := seenProfiles["architecture"]; !ok {
+		t.Fatal("missing architecture")
 	}
 
 	empty, err := repo.ListMatchesByJobIDs(ctx, nil)
@@ -167,7 +180,7 @@ func TestRepository_UpsertMatch_overwritesScoreKeepsHidden(t *testing.T) {
 	insertJob(t, db, "job-1", "Engineer", seen)
 
 	firstRun, err := repo.CreateRun(ctx, schema.Run{
-		ProfileID:      "andrew",
+		ProfileID:      "software",
 		Status:         schema.RunStatusRunning,
 		StartedAt:      seen,
 		IdempotencyKey: uuid.New(),
@@ -176,7 +189,7 @@ func TestRepository_UpsertMatch_overwritesScoreKeepsHidden(t *testing.T) {
 		t.Fatal(err)
 	}
 	secondRun, err := repo.CreateRun(ctx, schema.Run{
-		ProfileID:      "andrew",
+		ProfileID:      "software",
 		Status:         schema.RunStatusSucceeded,
 		StartedAt:      seen.Add(time.Hour),
 		JobsScored:     1,
@@ -187,7 +200,7 @@ func TestRepository_UpsertMatch_overwritesScoreKeepsHidden(t *testing.T) {
 	}
 
 	err = repo.UpsertMatch(ctx, schema.Match{
-		ProfileID:  "andrew",
+		ProfileID:  "software",
 		JobID:      "job-1",
 		Bucket:     schema.Bucket("REVIEW"),
 		Score:      4,
@@ -200,7 +213,7 @@ func TestRepository_UpsertMatch_overwritesScoreKeepsHidden(t *testing.T) {
 	}
 
 	err = repo.UpsertMatch(ctx, schema.Match{
-		ProfileID:  "andrew",
+		ProfileID:  "software",
 		JobID:      "job-1",
 		Bucket:     schema.BucketRejected,
 		Score:      0,
@@ -213,7 +226,7 @@ func TestRepository_UpsertMatch_overwritesScoreKeepsHidden(t *testing.T) {
 	}
 
 	var row ProfileMatch
-	if err := db.Where("profile_id = ? AND job_id = ?", "andrew", "job-1").First(&row).Error; err != nil {
+	if err := db.Where("profile_id = ? AND job_id = ?", "software", "job-1").First(&row).Error; err != nil {
 		t.Fatal(err)
 	}
 	if row.Score != 0 {
@@ -237,6 +250,55 @@ func TestRepository_UpsertMatch_overwritesScoreKeepsHidden(t *testing.T) {
 	}
 }
 
+func TestRepository_AddATSCounters(t *testing.T) {
+	ctx := context.Background()
+	db := testScoringDB(t)
+	repo := NewRepository(pgsql.NewGetter(db))
+
+	run, err := repo.CreateRun(ctx, schema.Run{
+		ProfileID:      "software",
+		Status:         schema.RunStatusRunning,
+		StartedAt:      time.Date(2026, 10, 25, 12, 0, 0, 0, time.UTC),
+		IdempotencyKey: uuid.New(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := repo.AddATSCounters(ctx, run.ID, schema.RunATSCounters{
+		CompaniesDiscovered: 2,
+		CompaniesMerged:     1,
+		CompaniesBlocked:    3,
+		CompaniesPolled:     4,
+		PollsNotModified:    1,
+		PollsPartial:        1,
+		JobsUpsertedATS:     10,
+		JobsClosed:          2,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.AddATSCounters(ctx, run.ID, schema.RunATSCounters{
+		CompaniesDiscovered: 1,
+		JobsClosed:          1,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := repo.GetRun(ctx, run.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.CompaniesDiscovered != 3 || got.CompaniesMerged != 1 || got.CompaniesBlocked != 3 {
+		t.Fatalf("discover/merge/block = %d/%d/%d", got.CompaniesDiscovered, got.CompaniesMerged, got.CompaniesBlocked)
+	}
+	if got.CompaniesPolled != 4 || got.PollsNotModified != 1 || got.PollsPartial != 1 {
+		t.Fatalf("poll counters polled=%d not_mod=%d partial=%d", got.CompaniesPolled, got.PollsNotModified, got.PollsPartial)
+	}
+	if got.JobsUpsertedATS != 10 || got.JobsClosed != 3 {
+		t.Fatalf("jobs upserted=%d closed=%d", got.JobsUpsertedATS, got.JobsClosed)
+	}
+}
+
 func TestRepository_CreateRun_uniqueIdempotencyKey(t *testing.T) {
 	ctx := context.Background()
 	db := testScoringDB(t)
@@ -245,7 +307,7 @@ func TestRepository_CreateRun_uniqueIdempotencyKey(t *testing.T) {
 	started := time.Date(2026, 4, 1, 12, 0, 0, 0, time.UTC)
 
 	got, err := repo.CreateRun(ctx, schema.Run{
-		ProfileID:      "andrew",
+		ProfileID:      "software",
 		Status:         schema.RunStatusRunning,
 		StartedAt:      started,
 		JobsScored:     3,
@@ -291,7 +353,7 @@ func TestRepository_List_filtersAndSorts(t *testing.T) {
 	db := testScoringDB(t)
 	repo := NewRepository(pgsql.NewGetter(db))
 	run, err := repo.CreateRun(ctx, schema.Run{
-		ProfileID:      "andrew",
+		ProfileID:      "software",
 		Status:         schema.RunStatusSucceeded,
 		StartedAt:      time.Date(2026, 3, 2, 0, 0, 0, 0, time.UTC),
 		IdempotencyKey: uuid.New(),
@@ -319,19 +381,19 @@ func TestRepository_List_filtersAndSorts(t *testing.T) {
 	insertJob(t, db, "job-other", "Other", latest)
 
 	seeds := []schema.Match{
-		{ProfileID: "andrew", JobID: "job-high", Bucket: schema.Bucket("REVIEW"), Score: 9, UserStatus: schema.UserStatusNew, RunID: run.ID},
-		{ProfileID: "andrew", JobID: "job-tie-new", Bucket: schema.Bucket("REVIEW"), Score: 5, UserStatus: schema.UserStatusNew, RunID: run.ID},
-		{ProfileID: "andrew", JobID: "job-tie-old", Bucket: schema.Bucket("REVIEW"), Score: 5, UserStatus: schema.UserStatusNew, RunID: run.ID},
-		{ProfileID: "andrew", JobID: "job-zero", Bucket: schema.Bucket("REVIEW"), Score: 0, UserStatus: schema.UserStatusNew, RunID: run.ID},
-		{ProfileID: "andrew", JobID: "job-negative", Bucket: schema.Bucket("REVIEW"), Score: -9, UserStatus: schema.UserStatusNew, RunID: run.ID},
-		{ProfileID: "andrew", JobID: "job-top", Bucket: schema.BucketTop, Score: 7, UserStatus: schema.UserStatusNew, RunID: run.ID},
-		{ProfileID: "andrew", JobID: "job-top-zero", Bucket: schema.BucketTop, Score: 0, UserStatus: schema.UserStatusNew, RunID: run.ID},
-		{ProfileID: "andrew", JobID: "job-top-negative", Bucket: schema.BucketTop, Score: -4, UserStatus: schema.UserStatusNew, RunID: run.ID},
-		{ProfileID: "andrew", JobID: "job-hidden", Bucket: schema.Bucket("REVIEW"), Score: 50, UserStatus: schema.UserStatusHidden, RunID: run.ID},
-		{ProfileID: "andrew", JobID: "job-hidden-zero", Bucket: schema.Bucket("REVIEW"), Score: 0, UserStatus: schema.UserStatusHidden, RunID: run.ID},
-		{ProfileID: "andrew", JobID: "job-rejected", Bucket: schema.BucketRejected, Score: 100, UserStatus: schema.UserStatusNew, RunID: run.ID},
-		{ProfileID: "andrew", JobID: "job-rejected-zero", Bucket: schema.BucketRejected, Score: 0, UserStatus: schema.UserStatusNew, RunID: run.ID},
-		{ProfileID: "andrew", JobID: "job-rejected-hidden", Bucket: schema.BucketRejected, Score: 100, UserStatus: schema.UserStatusHidden, RunID: run.ID},
+		{ProfileID: "software", JobID: "job-high", Bucket: schema.Bucket("REVIEW"), Score: 9, UserStatus: schema.UserStatusNew, RunID: run.ID},
+		{ProfileID: "software", JobID: "job-tie-new", Bucket: schema.Bucket("REVIEW"), Score: 5, UserStatus: schema.UserStatusNew, RunID: run.ID},
+		{ProfileID: "software", JobID: "job-tie-old", Bucket: schema.Bucket("REVIEW"), Score: 5, UserStatus: schema.UserStatusNew, RunID: run.ID},
+		{ProfileID: "software", JobID: "job-zero", Bucket: schema.Bucket("REVIEW"), Score: 0, UserStatus: schema.UserStatusNew, RunID: run.ID},
+		{ProfileID: "software", JobID: "job-negative", Bucket: schema.Bucket("REVIEW"), Score: -9, UserStatus: schema.UserStatusNew, RunID: run.ID},
+		{ProfileID: "software", JobID: "job-top", Bucket: schema.BucketTop, Score: 7, UserStatus: schema.UserStatusNew, RunID: run.ID},
+		{ProfileID: "software", JobID: "job-top-zero", Bucket: schema.BucketTop, Score: 0, UserStatus: schema.UserStatusNew, RunID: run.ID},
+		{ProfileID: "software", JobID: "job-top-negative", Bucket: schema.BucketTop, Score: -4, UserStatus: schema.UserStatusNew, RunID: run.ID},
+		{ProfileID: "software", JobID: "job-hidden", Bucket: schema.Bucket("REVIEW"), Score: 50, UserStatus: schema.UserStatusHidden, RunID: run.ID},
+		{ProfileID: "software", JobID: "job-hidden-zero", Bucket: schema.Bucket("REVIEW"), Score: 0, UserStatus: schema.UserStatusHidden, RunID: run.ID},
+		{ProfileID: "software", JobID: "job-rejected", Bucket: schema.BucketRejected, Score: 100, UserStatus: schema.UserStatusNew, RunID: run.ID},
+		{ProfileID: "software", JobID: "job-rejected-zero", Bucket: schema.BucketRejected, Score: 0, UserStatus: schema.UserStatusNew, RunID: run.ID},
+		{ProfileID: "software", JobID: "job-rejected-hidden", Bucket: schema.BucketRejected, Score: 100, UserStatus: schema.UserStatusHidden, RunID: run.ID},
 		{ProfileID: "other", JobID: "job-other", Bucket: schema.Bucket("REVIEW"), Score: 1000, UserStatus: schema.UserStatusNew, RunID: run.ID},
 	}
 	for _, m := range seeds {
@@ -340,7 +402,7 @@ func TestRepository_List_filtersAndSorts(t *testing.T) {
 		}
 	}
 
-	topPage, err := repo.List(ctx, schema.ListJobsParams{ProfileID: "andrew", Page: 1, Limit: 10})
+	topPage, err := repo.List(ctx, schema.ListJobsParams{ProfileID: "software", Page: 1, Limit: 10})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -354,7 +416,7 @@ func TestRepository_List_filtersAndSorts(t *testing.T) {
 			t.Fatalf("top order = %v, want %v", topIDs, wantTop)
 		}
 	}
-	explicitTop, err := repo.List(ctx, schema.ListJobsParams{ProfileID: "andrew", Bucket: schema.BucketTop, Page: 1, Limit: 10})
+	explicitTop, err := repo.List(ctx, schema.ListJobsParams{ProfileID: "software", Bucket: schema.BucketTop, Page: 1, Limit: 10})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -367,7 +429,7 @@ func TestRepository_List_filtersAndSorts(t *testing.T) {
 		}
 	}
 
-	defaultPage, err := repo.List(ctx, schema.ListJobsParams{ProfileID: "andrew", Bucket: schema.Bucket("REVIEW"), Page: 1, Limit: 10})
+	defaultPage, err := repo.List(ctx, schema.ListJobsParams{ProfileID: "software", Bucket: schema.Bucket("REVIEW"), Page: 1, Limit: 10})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -393,7 +455,7 @@ func TestRepository_List_filtersAndSorts(t *testing.T) {
 	}
 
 	rejected, err := repo.List(ctx, schema.ListJobsParams{
-		ProfileID: "andrew",
+		ProfileID: "software",
 		Bucket:    schema.BucketRejected,
 		Page:      1,
 		Limit:     10,
@@ -406,7 +468,7 @@ func TestRepository_List_filtersAndSorts(t *testing.T) {
 	}
 
 	hidden, err := repo.List(ctx, schema.ListJobsParams{
-		ProfileID:  "andrew",
+		ProfileID:  "software",
 		Bucket:     schema.Bucket("REVIEW"),
 		UserStatus: schema.UserStatusHidden,
 		Page:       1,
@@ -419,14 +481,14 @@ func TestRepository_List_filtersAndSorts(t *testing.T) {
 		t.Fatalf("hidden = %#v", hidden.Jobs)
 	}
 
-	page1, err := repo.List(ctx, schema.ListJobsParams{ProfileID: "andrew", Bucket: schema.Bucket("REVIEW"), Page: 1, Limit: 2})
+	page1, err := repo.List(ctx, schema.ListJobsParams{ProfileID: "software", Bucket: schema.Bucket("REVIEW"), Page: 1, Limit: 2})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if page1.Total != 5 || len(page1.Jobs) != 2 || page1.Jobs[0].JobID != "job-high" || page1.Jobs[1].JobID != "job-tie-new" {
 		t.Fatalf("page1 = %#v total %d", page1.Jobs, page1.Total)
 	}
-	page2, err := repo.List(ctx, schema.ListJobsParams{ProfileID: "andrew", Bucket: schema.Bucket("REVIEW"), Page: 2, Limit: 2})
+	page2, err := repo.List(ctx, schema.ListJobsParams{ProfileID: "software", Bucket: schema.Bucket("REVIEW"), Page: 2, Limit: 2})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -445,7 +507,7 @@ func TestRepository_RunLookupAndSetUserStatus(t *testing.T) {
 	olderKey := uuid.New()
 	newerKey := uuid.New()
 	older, err := repo.CreateRun(ctx, schema.Run{
-		ProfileID:      "andrew",
+		ProfileID:      "software",
 		Status:         schema.RunStatusSucceeded,
 		StartedAt:      seen,
 		IdempotencyKey: olderKey,
@@ -457,7 +519,7 @@ func TestRepository_RunLookupAndSetUserStatus(t *testing.T) {
 		t.Fatal(err)
 	}
 	newer, err := repo.CreateRun(ctx, schema.Run{
-		ProfileID:      "andrew",
+		ProfileID:      "software",
 		Status:         schema.RunStatusRunning,
 		StartedAt:      seen.Add(2 * time.Hour),
 		IdempotencyKey: newerKey,
@@ -466,7 +528,7 @@ func TestRepository_RunLookupAndSetUserStatus(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := repo.UpsertMatch(ctx, schema.Match{
-		ProfileID:  "andrew",
+		ProfileID:  "software",
 		JobID:      "job-1",
 		Bucket:     schema.Bucket("REVIEW"),
 		Score:      2,
@@ -476,14 +538,14 @@ func TestRepository_RunLookupAndSetUserStatus(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	latest, err := repo.LatestRun(ctx, "andrew")
+	latest, err := repo.LatestRun(ctx, "software")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if latest.ID != newer.ID {
 		t.Fatalf("latest id = %d, want %d", latest.ID, newer.ID)
 	}
-	open, err := repo.RunningRun(ctx, "andrew")
+	open, err := repo.RunningRun(ctx, "software")
 	if err != nil || open.ID != newer.ID {
 		t.Fatalf("running = %#v err=%v", open, err)
 	}
@@ -495,14 +557,14 @@ func TestRepository_RunLookupAndSetUserStatus(t *testing.T) {
 		t.Fatalf("missing latest err = %v", err)
 	}
 
-	updated, err := repo.SetUserStatus(ctx, "andrew", "job-1", schema.UserStatusHidden)
+	updated, err := repo.SetUserStatus(ctx, "software", "job-1", schema.UserStatusHidden)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if updated.UserStatus != schema.UserStatusHidden || updated.Score != 2 {
 		t.Fatalf("updated = %#v", updated)
 	}
-	if _, err := repo.SetUserStatus(ctx, "andrew", "missing", schema.UserStatusHidden); !errors.Is(err, ErrMatchNotFound) {
+	if _, err := repo.SetUserStatus(ctx, "software", "missing", schema.UserStatusHidden); !errors.Is(err, ErrMatchNotFound) {
 		t.Fatalf("missing match err = %v", err)
 	}
 }
@@ -522,7 +584,7 @@ func TestRepository_List_decodesOpenings(t *testing.T) {
 		t.Fatal(err)
 	}
 	run, err := repo.CreateRun(ctx, schema.Run{
-		ProfileID:      "andrew",
+		ProfileID:      "software",
 		Status:         schema.RunStatusSucceeded,
 		StartedAt:      seen,
 		IdempotencyKey: uuid.New(),
@@ -531,15 +593,15 @@ func TestRepository_List_decodesOpenings(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, m := range []schema.Match{
-		{ProfileID: "andrew", JobID: "job-two", Bucket: schema.Bucket("REVIEW"), Score: 4, UserStatus: schema.UserStatusNew, RunID: run.ID},
-		{ProfileID: "andrew", JobID: "job-empty", Bucket: schema.Bucket("REVIEW"), Score: 1, UserStatus: schema.UserStatusNew, RunID: run.ID},
+		{ProfileID: "software", JobID: "job-two", Bucket: schema.Bucket("REVIEW"), Score: 4, UserStatus: schema.UserStatusNew, RunID: run.ID},
+		{ProfileID: "software", JobID: "job-empty", Bucket: schema.Bucket("REVIEW"), Score: 1, UserStatus: schema.UserStatusNew, RunID: run.ID},
 	} {
 		if err := repo.UpsertMatch(ctx, m); err != nil {
 			t.Fatal(err)
 		}
 	}
 
-	page, err := repo.List(ctx, schema.ListJobsParams{ProfileID: "andrew", Bucket: schema.Bucket("REVIEW"), Page: 1, Limit: 10})
+	page, err := repo.List(ctx, schema.ListJobsParams{ProfileID: "software", Bucket: schema.Bucket("REVIEW"), Page: 1, Limit: 10})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -562,7 +624,7 @@ func TestRepository_List_decodesOpenings(t *testing.T) {
 		t.Fatalf("empty = %#v", page.Jobs[1].Openings)
 	}
 
-	updated, err := repo.SetUserStatus(ctx, "andrew", "job-two", schema.UserStatusHidden)
+	updated, err := repo.SetUserStatus(ctx, "software", "job-two", schema.UserStatusHidden)
 	if err != nil {
 		t.Fatal(err)
 	}

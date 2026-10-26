@@ -1,6 +1,8 @@
-id: lada
+id: architecture
 name: Lada
 domain: architecture
+# Missing ats_polling defaults to false (aggregators only); set true to enable companies/ATS.
+ats_polling: false
 
 queries:
   - arhitect proiectant

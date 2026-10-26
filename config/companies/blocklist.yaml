@@ -1,0 +1,116 @@
+# Company blocklist — staffing agencies, outsourcers, anonymous posts.
+#
+# A blocked name never becomes a `companies` row, so it is never resolved and
+# never polled. Its vacancies are still stored in `jobs` with whatever the
+# aggregator gave. The point is not to hide the vacancy — it is to keep an
+# agency's own (real, large) Greenhouse board out of the poller, because
+# polling it imports hundreds of other people's jobs.
+#
+# Drafted 2026-10-25 from the live DB: 857 distinct company_key values, token
+# scan plus a staff-augmentation brand scan. See docs/02-companies-and-ats/rnd-findings.md (M4).
+#
+# Matching:
+#   `exact`     — compared against the normalized company key (lowercased,
+#                 Inc/GmbH/Ltd/LLC/SRL stripped). Exact equality only, never
+#                 fuzzy: `lemon.io` is an agency, `lemon.markets` is a real
+#                 company, and `cloudbees` / `cloudbeds` are two companies.
+#   `anonymous` — placeholder names that identify no company at all.
+#   `review`    — substring patterns that do NOT block. They flag a company for
+#                 manual review after its first poll. Too many real product
+#                 companies contain "solutions" or "services" to auto-block on
+#                 a token, but a flagged company that turns out to post 200
+#                 vacancies across 15 stacks belongs in `exact`.
+#
+# Andrew: cross out anything here that you actually want polled. Everything
+# below is in the DB today; the job count is this corpus, not the agency's
+# real board size.
+
+version: 1
+
+exact:
+  # --- staff augmentation / outstaffing platforms (vacancies are client work) ---
+  - lemon.io                            # 9 jobs — not to be confused with lemon.markets
+  - proxify                             # 7 jobs
+  - proxify ab                          # 2 jobs — second form of the same company
+  - toptal                              # 1 job
+
+  # --- outsourcers / software houses ---
+  - pradeepit consulting services pvt   # 18 jobs — largest agency footprint in the corpus
+  - sigma software                      # 3 jobs
+  - n-ix                                # 3 jobs
+  - ciklum                              # 2 jobs
+  - avenga                              # 1 job
+  - binariks                            # 1 job
+  - sombra                              # 1 job
+  - symphony solutions                  # 1 job
+  - bluelight consulting                # 4 jobs
+  - humanit digital consulting          # 3 jobs
+  - b3 consulting poland                # 1 job
+  - b&a consulting                      # 1 job
+  - george bernard consulting           # 1 job
+  - tarini consulting                   # 1 job
+  - iscale solutions                    # 1 job
+  - infotree global solutions           # 1 job
+  - io tech solutions limited           # 2 jobs
+  - marktine technology solutions pvt   # 1 job
+  - rajyug it solutions pvt             # 1 job
+  - northbay solutions                  # 1 job
+  - m9 solutions                        # 1 job
+
+  # --- recruitment agencies / headhunters ---
+  - aida recruitment                    # 5 jobs
+  - bullfinch recruitment               # 1 job
+  - genty recruitment                   # 1 job
+  - people profilers                    # 2 jobs
+  - people profilers vietnam            # 2 jobs — second entity, same group
+  - people's growth hr solutions        # 1 job
+  - talentcross                         # 2 jobs
+  - talent hackers                      # 1 job
+  - talent hunts indonesia              # 1 job
+  - talent insider                      # 1 job
+  - talentuch                           # 1 job
+  - talentwelove                        # 1 job
+  - m2talents                           # 1 job
+  - rev agency                          # 1 job
+
+anonymous:
+  - confidential company                # 3 jobs
+  - confidential
+  - anonymous
+  - undisclosed
+  - not disclosed
+  - stealth startup
+
+# Substring patterns, case-insensitive, over the normalized name.
+# These do NOT block. A match sends the company to manual review after its
+# first poll, because a token alone is a weak signal: `continental finance
+# company`, `the better money company` and `rda company` all match a naive
+# "company" rule and are not agencies, and the high-volume end of the corpus
+# (canonical 46, stripe 31, grafana labs 31) is all product companies.
+review:
+  - recruit
+  - staffing
+  - headhunt
+  - outsourc
+  - resourcing
+  - manpower
+  - workforce
+  - placement
+  - nearshore
+  - offshore
+  - talent
+  - hr solution
+  - hr service
+  - people profiler
+  - consultancy
+  - consulting services
+  - it solutions
+  - software house
+  - body shop
+
+# Review threshold hints for the poller (not hard rules — the slice reads these
+# only to decide what to flag, never to block automatically):
+#   - a company whose completed poll returns an unusually large board, or
+#   - a board whose vacancies span many unrelated stacks,
+# goes to review even when its name matches nothing above. M4 could not
+# measure the real magnitude, because it only shows up once a board is polled.

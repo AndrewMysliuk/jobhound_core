@@ -16,6 +16,9 @@ import (
 // ErrNotFound is returned when Verdict has no row for the exact key.
 var ErrNotFound = errors.New("verdict not found")
 
+// verdictsByHashesChunkSize caps IN (?) size; Postgres degrades on multi-thousand lists.
+const verdictsByHashesChunkSize = 1000
+
 // Repository persists job_verdicts rows.
 type Repository struct {
 	get pgsql.GormGetter
@@ -82,6 +85,53 @@ func (r *Repository) Verdict(ctx context.Context, jobID, model string, promptVer
 		return schema.Verdict{}, err
 	}
 	return row.toDomain()
+}
+
+// VerdictsByHashes loads full verdicts for jobs whose stored input_hash matches
+// currentHashes. Omitted job ids are pending (no matching row). Queries run in
+// chunks of verdictsByHashesChunkSize.
+func (r *Repository) VerdictsByHashes(ctx context.Context, model string, promptVersion int, currentHashes map[string]string) (map[string]schema.Verdict, error) {
+	out := make(map[string]schema.Verdict, len(currentHashes))
+	if len(currentHashes) == 0 {
+		return out, nil
+	}
+
+	jobIDs := make([]string, 0, len(currentHashes))
+	for jobID, hash := range currentHashes {
+		if jobID == "" || hash == "" {
+			return nil, fmt.Errorf("job id and input hash are required")
+		}
+		jobIDs = append(jobIDs, jobID)
+	}
+
+	for start := 0; start < len(jobIDs); start += verdictsByHashesChunkSize {
+		end := start + verdictsByHashesChunkSize
+		if end > len(jobIDs) {
+			end = len(jobIDs)
+		}
+		chunk := jobIDs[start:end]
+
+		var rows []JobVerdict
+		err := r.get().WithContext(ctx).
+			Where("prompt_version = ? AND model = ?", promptVersion, model).
+			Where("job_id IN ?", chunk).
+			Find(&rows).Error
+		if err != nil {
+			return nil, err
+		}
+		for _, row := range rows {
+			want, ok := currentHashes[row.JobID]
+			if !ok || row.InputHash != want {
+				continue
+			}
+			v, err := row.toDomain()
+			if err != nil {
+				return nil, err
+			}
+			out[row.JobID] = v
+		}
+	}
+	return out, nil
 }
 
 // MissingIDs returns job ids from currentHashes that have no row for this

@@ -43,8 +43,9 @@ type Activities struct {
 	Log     zerolog.Logger
 }
 
-// ListMissing returns every job id with no row for the given prompt version and model.
+// ListMissing returns job ids with no row for the given prompt version and model.
 // Empty input Model or PromptVersion uses the enrich service defaults.
+// Limit > 0 caps the result (Temporal payload budget); 0 means no cap.
 func (a *Activities) ListMissing(ctx context.Context, in schema.ListMissingInput) (schema.ListMissingResult, error) {
 	if a == nil || a.Enrich == nil {
 		return schema.ListMissingResult{}, fmt.Errorf("enrich activity: enrich service is required")
@@ -62,7 +63,10 @@ func (a *Activities) ListMissing(ctx context.Context, in schema.ListMissingInput
 	if err != nil {
 		return schema.ListMissingResult{}, err
 	}
-	log.Debug().Int("missing", len(ids)).Str("model", model).Msg("list missing done")
+	if in.Limit > 0 && len(ids) > in.Limit {
+		ids = ids[:in.Limit]
+	}
+	log.Debug().Int("missing", len(ids)).Int("limit", in.Limit).Str("model", model).Msg("list missing done")
 	return schema.ListMissingResult{
 		JobIDs:        ids,
 		PromptVersion: promptVersion,
@@ -70,7 +74,8 @@ func (a *Activities) ListMissing(ctx context.Context, in schema.ListMissingInput
 	}, nil
 }
 
-// SubmitBatch creates a Message Batch for EnrichBatchInput.JobIDs that still lack a row.
+// SubmitBatch creates one Message Batch for EnrichBatchInput.JobIDs that still lack a row.
+// Pass at most schema.MaxJobsPerSubmit ids.
 func (a *Activities) SubmitBatch(ctx context.Context, in schema.EnrichBatchInput) (schema.SubmitBatchResult, error) {
 	if a == nil || a.Enrich == nil {
 		return schema.SubmitBatchResult{}, fmt.Errorf("enrich activity: enrich service is required")

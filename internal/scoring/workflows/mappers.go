@@ -1,28 +1,20 @@
 package scoring_workflows
 
 import (
-	"errors"
 	"strings"
 
-	"github.com/andrewmysliuk/jobhound_core/internal/collectors"
 	"github.com/andrewmysliuk/jobhound_core/internal/ingest"
 	ingestschema "github.com/andrewmysliuk/jobhound_core/internal/ingest/schema"
 	profileschema "github.com/andrewmysliuk/jobhound_core/internal/profiles/schema"
 )
 
 const (
-	sourceWellfound         = "wellfound"
-	sourceWeWorkRemotely    = "we_work_remotely"
-	sourceVueJobs           = "vue_jobs"
-	sourceGolangCafe        = "golang_cafe"
-	sourceBuiltin           = "builtin"
-	sourceEjobs             = "ejobs"
-	sourceWorldArchitects   = "world_architects"
-	sourceDezeenJobs        = "dezeen_jobs"
-	browserLane             = "browser"
-	architectureBrowserLane = "architecture-browser"
-	considerSourcePrefix    = "consider_"
-	catalogChildSlug        = "catalog"
+	sourceWellfound      = "wellfound"
+	sourceWeWorkRemotely = "we_work_remotely"
+	sourceVueJobs        = "vue_jobs"
+	sourceGolangCafe     = "golang_cafe"
+	considerSourcePrefix = "consider_"
+	catalogChildSlug     = "catalog"
 )
 
 // WorkflowID is the Temporal id for one profile. A second start while it is open is rejected.
@@ -91,20 +83,19 @@ func childrenInputs(sourceID string, slugs []string) []ingestschema.IngestSource
 	return out
 }
 
-// IngestLane is one resource that cannot be fetched concurrently with itself.
-// Builtin and Golang Cafe share Chromium. ejobs, dezeen_jobs, and world_architects share architecture-browser.
-// Every other source is its own lane.
+// IngestLane is one source id. Different sources start together; queries of the same source stay in order.
+// Shared Chromium (builtin / golang_cafe / architecture rod boards) serializes inside browserfetch, not here.
 type IngestLane struct {
 	Name     string
 	Children []ingestschema.IngestSourceInput
 }
 
-// IngestLanes groups children so different resources run together and one resource stays in order.
+// IngestLanes groups children by source id so every board starts at once and one board stays in order.
 func IngestLanes(profile profileschema.Profile) []IngestLane {
 	var lanes []IngestLane
 	index := map[string]int{}
 	for _, child := range IngestChildren(profile) {
-		name := resourceLane(child.SourceID)
+		name := child.SourceID
 		i, ok := index[name]
 		if !ok {
 			index[name] = len(lanes)
@@ -128,17 +119,6 @@ func IngestChildWorkflowID(in ingestschema.IngestSourceInput) string {
 	return "ingest-" + source + "-" + segment
 }
 
-func resourceLane(sourceID string) string {
-	switch sourceID {
-	case sourceBuiltin, sourceGolangCafe:
-		return browserLane
-	case sourceEjobs, sourceDezeenJobs, sourceWorldArchitects:
-		return architectureBrowserLane
-	default:
-		return sourceID
-	}
-}
-
 func catalogSource(id string) bool {
 	switch id {
 	case sourceWeWorkRemotely, sourceVueJobs, sourceGolangCafe:
@@ -148,32 +128,3 @@ func catalogSource(id string) bool {
 	}
 }
 
-// ChildSkipped reports a child that must not fail the profile run:
-// lock held, cooldown, rate limit, a dead tenant, or a source this worker did not build.
-func ChildSkipped(err error) bool {
-	if err == nil {
-		return false
-	}
-	if errors.Is(err, ingest.ErrLockHeld) || errors.Is(err, ingest.ErrCooldownActive) {
-		return true
-	}
-	if errors.Is(err, collectors.ErrTenantUnavailable) {
-		return true
-	}
-	msg := strings.ToLower(err.Error())
-	if strings.Contains(msg, strings.ToLower(ingest.ErrLockHeld.Error())) {
-		return true
-	}
-	if strings.Contains(msg, strings.ToLower(ingest.ErrCooldownActive.Error())) {
-		return true
-	}
-	if strings.Contains(msg, strings.ToLower(collectors.ErrTenantUnavailable.Error())) {
-		return true
-	}
-	if strings.Contains(msg, "unknown source_id") {
-		return true
-	}
-	return strings.Contains(msg, "429") ||
-		strings.Contains(msg, "too many requests") ||
-		strings.Contains(msg, "rate limit")
-}

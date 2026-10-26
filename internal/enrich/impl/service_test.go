@@ -37,16 +37,39 @@ func (m memJobs) GetByID(_ context.Context, id string) (jobdata.Job, error) {
 	return job, nil
 }
 
-func (m memJobs) ListFirstSeenSince(_ context.Context, _ time.Time) ([]jobdata.Job, error) {
+func (m memJobs) ListEnrichCandidates(_ context.Context, since, postedAfter time.Time) ([]jobdata.Job, error) {
 	out := make([]jobdata.Job, 0, len(m))
 	for _, job := range m {
+		if job.ClosedAt != nil {
+			continue
+		}
+		if job.FirstSeenAt.UTC().Before(since) {
+			continue
+		}
+		if !job.PostedAt.IsZero() && job.PostedAt.UTC().Before(postedAfter) {
+			continue
+		}
 		out = append(out, job)
 	}
 	return out, nil
 }
 
+func recentSeen() time.Time {
+	return time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)
+}
+
+func withRecentSeen(job jobdata.Job) jobdata.Job {
+	if job.FirstSeenAt.IsZero() {
+		job.FirstSeenAt = recentSeen()
+	}
+	return job
+}
+
 func testStoreService(t *testing.T, jobs memJobs) *Service {
 	t.Helper()
+	for id, job := range jobs {
+		jobs[id] = withRecentSeen(job)
+	}
 	memName := strings.ReplaceAll(t.Name(), "/", "_")
 	db, err := gorm.Open(sqlite.Open("file:"+memName+"?mode=memory&cache=private"), &gorm.Config{})
 	if err != nil {
@@ -91,8 +114,8 @@ func testStoreService(t *testing.T, jobs memJobs) *Service {
 			t.Fatal(err)
 		}
 	}
-	seen := time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC)
 	for id, job := range jobs {
+		seen := job.FirstSeenAt
 		if err := db.Exec(`
 			INSERT INTO jobs (
 				id, sources, title, company, url, description, location, tags,
@@ -112,7 +135,9 @@ func testStoreService(t *testing.T, jobs memJobs) *Service {
 		}
 	}
 	repo := storage.NewRepository(pgsql.NewGetter(db))
-	return New(repo, jobs, nil, "claude-test", 0)
+	svc := New(repo, jobs, nil, "claude-test", 0, schema.WindowDays)
+	svc.now = func() time.Time { return time.Date(2026, 10, 25, 12, 0, 0, 0, time.UTC) }
+	return svc
 }
 
 func testServiceWithMinChars(t *testing.T, jobs memJobs, minChars int) *Service {
@@ -186,6 +211,167 @@ func TestMissingIDs_zeroMinDisablesFilter(t *testing.T) {
 	}
 }
 
+func TestMissingIDs_skipsClosed(t *testing.T) {
+	t.Parallel()
+
+	const (
+		openID   = "job-open"
+		closedID = "job-closed"
+		model    = "claude-test"
+	)
+	closedAt := recentSeen()
+	jobs := memJobs{
+		openID: {
+			ID:          openID,
+			Title:       "Engineer",
+			Description: longDescription(schema.MinDescriptionChars),
+			Location:    jobdata.Location{Raw: "Remote"},
+		},
+		closedID: {
+			ID:          closedID,
+			Title:       "Engineer",
+			Description: longDescription(schema.MinDescriptionChars),
+			Location:    jobdata.Location{Raw: "Remote"},
+			ClosedAt:    &closedAt,
+		},
+	}
+	svc := testServiceWithMinChars(t, jobs, schema.MinDescriptionChars)
+	got, err := svc.MissingIDs(context.Background(), model, schema.PromptVersion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0] != openID {
+		t.Fatalf("MissingIDs = %v, want only open %q", got, openID)
+	}
+}
+
+func TestMissingIDs_skipsOutsideWindow(t *testing.T) {
+	t.Parallel()
+
+	const (
+		freshID = "job-fresh"
+		oldID   = "job-old"
+		model   = "claude-test"
+	)
+	jobs := memJobs{
+		freshID: {
+			ID:          freshID,
+			Title:       "Engineer",
+			Description: longDescription(schema.MinDescriptionChars),
+			Location:    jobdata.Location{Raw: "Remote"},
+			FirstSeenAt: recentSeen(),
+		},
+		oldID: {
+			ID:          oldID,
+			Title:       "Engineer",
+			Description: longDescription(schema.MinDescriptionChars),
+			Location:    jobdata.Location{Raw: "Remote"},
+			FirstSeenAt: time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC),
+		},
+	}
+	svc := testServiceWithMinChars(t, jobs, schema.MinDescriptionChars)
+	got, err := svc.MissingIDs(context.Background(), model, schema.PromptVersion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0] != freshID {
+		t.Fatalf("MissingIDs = %v, want only fresh %q", got, freshID)
+	}
+}
+
+func TestMissingIDs_zeroWindowUsesDefault(t *testing.T) {
+	t.Parallel()
+
+	const jobID = "job-in-default-window"
+	jobs := memJobs{
+		jobID: {
+			ID:          jobID,
+			Title:       "Engineer",
+			Description: "short",
+			Location:    jobdata.Location{Raw: "Remote"},
+			FirstSeenAt: recentSeen(),
+		},
+	}
+	svc := testStoreService(t, jobs)
+	svc.windowDays = 0
+	got, err := svc.MissingIDs(context.Background(), "claude-test", schema.PromptVersion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0] != jobID {
+		t.Fatalf("MissingIDs = %v, want %q when windowDays=0 (default)", got, jobID)
+	}
+}
+
+func TestMissingIDs_afterStoreVerdictsNewHashNotMissing(t *testing.T) {
+	t.Parallel()
+
+	const (
+		jobID = "job-rehash"
+		model = "claude-test"
+	)
+	jobs := memJobs{
+		jobID: {
+			ID:          jobID,
+			Title:       "Engineer",
+			Description: "Remote worldwide first text",
+			Location:    jobdata.Location{Raw: "Remote"},
+		},
+	}
+	svc := testStoreService(t, jobs)
+	ctx := context.Background()
+
+	missing, err := svc.MissingIDs(ctx, model, schema.PromptVersion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(missing) != 1 || missing[0] != jobID {
+		t.Fatalf("before store MissingIDs = %v, want %q", missing, jobID)
+	}
+
+	if _, err := svc.StoreVerdicts(ctx, schema.StoreVerdictsInput{
+		Texts:         map[string]string{jobID: validUnknownReplyJSON},
+		PromptVersion: schema.PromptVersion,
+		Model:         model,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	missing, err = svc.MissingIDs(ctx, model, schema.PromptVersion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(missing) != 0 {
+		t.Fatalf("after first store MissingIDs = %v, want empty", missing)
+	}
+
+	updated := jobs[jobID]
+	updated.Description = "Remote worldwide rewritten board text that changes the input hash"
+	jobs[jobID] = updated
+
+	missing, err = svc.MissingIDs(ctx, model, schema.PromptVersion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(missing) != 1 || missing[0] != jobID {
+		t.Fatalf("after description change MissingIDs = %v, want %q", missing, jobID)
+	}
+
+	if _, err := svc.StoreVerdicts(ctx, schema.StoreVerdictsInput{
+		Texts:         map[string]string{jobID: validUnknownReplyJSON},
+		PromptVersion: schema.PromptVersion,
+		Model:         model,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	missing, err = svc.MissingIDs(ctx, model, schema.PromptVersion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(missing) != 0 {
+		t.Fatalf("after store with new input_hash MissingIDs = %v, want empty", missing)
+	}
+}
+
 func TestStatuses_shortDescriptionOff(t *testing.T) {
 	t.Parallel()
 
@@ -239,6 +425,127 @@ func TestStatuses_zeroMinDisablesFilter(t *testing.T) {
 	}
 	if got[shortID] != schema.FactsStatusPending {
 		t.Fatalf("status = %q, want pending when min=0", got[shortID])
+	}
+}
+
+func TestStatuses_closedWithoutVerdictOff(t *testing.T) {
+	t.Parallel()
+
+	const closedID = "job-closed"
+	closedAt := recentSeen()
+	jobs := memJobs{
+		closedID: {
+			ID:          closedID,
+			Title:       "Engineer",
+			Description: longDescription(schema.MinDescriptionChars),
+			Location:    jobdata.Location{Raw: "Remote"},
+			ClosedAt:    &closedAt,
+		},
+	}
+	svc := testServiceWithMinChars(t, jobs, schema.MinDescriptionChars)
+	got, err := svc.Statuses(context.Background(), []string{closedID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got[closedID] != schema.FactsStatusOff {
+		t.Fatalf("status = %q, want off for closed without verdict", got[closedID])
+	}
+}
+
+func TestStatuses_closedWithVerdictReady(t *testing.T) {
+	t.Parallel()
+
+	const (
+		closedID = "job-closed-ready"
+		model    = "claude-test"
+	)
+	closedAt := recentSeen()
+	jobs := memJobs{
+		closedID: {
+			ID:          closedID,
+			Title:       "Engineer",
+			Description: longDescription(schema.MinDescriptionChars),
+			Location:    jobdata.Location{Raw: "Remote"},
+			ClosedAt:    &closedAt,
+		},
+	}
+	svc := testServiceWithMinChars(t, jobs, schema.MinDescriptionChars)
+	ctx := context.Background()
+	if _, err := svc.StoreVerdicts(ctx, schema.StoreVerdictsInput{
+		Texts:         map[string]string{closedID: validUnknownReplyJSON},
+		PromptVersion: schema.PromptVersion,
+		Model:         model,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := svc.Statuses(ctx, []string{closedID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got[closedID] != schema.FactsStatusReady {
+		t.Fatalf("status = %q, want ready for closed with current-hash verdict", got[closedID])
+	}
+}
+
+func TestStatuses_stalePostedAt(t *testing.T) {
+	t.Parallel()
+
+	const (
+		staleID = "job-stale-posted"
+		freshID = "job-fresh-posted"
+		readyID = "job-stale-ready"
+		model   = "claude-test"
+	)
+	// svc.now is 2026-10-25; PostedAtMaxAgeDays=30 → postedAfter 2026-09-25.
+	now := time.Date(2026, 10, 25, 12, 0, 0, 0, time.UTC)
+	stalePosted := now.Add(-60 * 24 * time.Hour)
+	freshPosted := now.Add(-10 * 24 * time.Hour)
+
+	jobs := memJobs{
+		staleID: {
+			ID:          staleID,
+			Title:       "Engineer",
+			Description: longDescription(schema.MinDescriptionChars),
+			Location:    jobdata.Location{Raw: "Remote"},
+			PostedAt:    stalePosted,
+		},
+		freshID: {
+			ID:          freshID,
+			Title:       "Engineer",
+			Description: longDescription(schema.MinDescriptionChars),
+			Location:    jobdata.Location{Raw: "Remote"},
+			PostedAt:    freshPosted,
+		},
+		readyID: {
+			ID:          readyID,
+			Title:       "Engineer",
+			Description: longDescription(schema.MinDescriptionChars),
+			Location:    jobdata.Location{Raw: "Remote"},
+			PostedAt:    stalePosted,
+		},
+	}
+	svc := testServiceWithMinChars(t, jobs, schema.MinDescriptionChars)
+	ctx := context.Background()
+	if _, err := svc.StoreVerdicts(ctx, schema.StoreVerdictsInput{
+		Texts:         map[string]string{readyID: validUnknownReplyJSON},
+		PromptVersion: schema.PromptVersion,
+		Model:         model,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := svc.Statuses(ctx, []string{staleID, freshID, readyID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got[staleID] != schema.FactsStatusOff {
+		t.Fatalf("stale without verdict = %q, want off", got[staleID])
+	}
+	if got[freshID] != schema.FactsStatusPending {
+		t.Fatalf("fresh without verdict = %q, want pending", got[freshID])
+	}
+	if got[readyID] != schema.FactsStatusReady {
+		t.Fatalf("stale with ready verdict = %q, want ready", got[readyID])
 	}
 }
 
@@ -317,5 +624,67 @@ func TestStoreVerdictsSchemaInvalidRetriesThenUnknown(t *testing.T) {
 	}
 	if !got.Facts.Office.Unknown || got.Facts.HiringScope.Value != unknownAnswer {
 		t.Fatalf("schema-invalid after retries must be all-unknown, got %#v", got.Facts)
+	}
+}
+
+func TestReadyByJobs(t *testing.T) {
+	t.Parallel()
+
+	const (
+		readyID = "job-ready"
+		staleID = "job-stale"
+		model   = "claude-test"
+	)
+	jobs := memJobs{
+		readyID: {
+			ID:          readyID,
+			Title:       "Ready Eng",
+			Description: "Remote worldwide ready",
+			Location:    jobdata.Location{Raw: "Remote"},
+		},
+		staleID: {
+			ID:          staleID,
+			Title:       "Stale Eng",
+			Description: "Remote worldwide stale",
+			Location:    jobdata.Location{Raw: "Remote"},
+		},
+	}
+	svc := testStoreService(t, jobs)
+	ctx := context.Background()
+
+	if _, err := svc.StoreVerdicts(ctx, schema.StoreVerdictsInput{
+		Texts:         map[string]string{readyID: validUnknownReplyJSON},
+		PromptVersion: schema.PromptVersion,
+		Model:         model,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	staleHash := InputHash("old-title", jobs[staleID].Description, jobs[staleID].Location.Raw, "")
+	if err := svc.repo.Insert(ctx, schema.Verdict{
+		JobID:         staleID,
+		PromptVersion: schema.PromptVersion,
+		Model:         model,
+		InputHash:     staleHash,
+		Facts:         unknownModelReply(),
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := svc.ReadyByJobs(ctx, []jobdata.Job{
+		jobs[readyID],
+		jobs[staleID],
+		{ID: "", Title: "skip"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("len(got) = %d, want 1", len(got))
+	}
+	if got[readyID].JobID != readyID {
+		t.Fatalf("ready missing: %#v", got)
+	}
+	if _, ok := got[staleID]; ok {
+		t.Fatal("stale hash must be omitted (pending)")
 	}
 }

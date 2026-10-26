@@ -3,6 +3,7 @@ package scoring_workflows
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -19,6 +20,9 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/andrewmysliuk/jobhound_core/internal/collectors"
+	companiesschema "github.com/andrewmysliuk/jobhound_core/internal/companies/schema"
+	companies_workflows "github.com/andrewmysliuk/jobhound_core/internal/companies/workflows"
+	companies_activities "github.com/andrewmysliuk/jobhound_core/internal/companies/workflows/activities"
 	jobdata "github.com/andrewmysliuk/jobhound_core/internal/domain/schema"
 	enrichschema "github.com/andrewmysliuk/jobhound_core/internal/enrich/schema"
 	enrich_workflows "github.com/andrewmysliuk/jobhound_core/internal/enrich/workflows"
@@ -33,6 +37,7 @@ import (
 	profileschema "github.com/andrewmysliuk/jobhound_core/internal/profiles/schema"
 	scoringschema "github.com/andrewmysliuk/jobhound_core/internal/scoring/schema"
 	scoringstorage "github.com/andrewmysliuk/jobhound_core/internal/scoring/storage"
+	scoring_activities "github.com/andrewmysliuk/jobhound_core/internal/scoring/workflows/activities"
 )
 
 func TestProfileRunWorkflow_scoresKeepsHiddenAndSkipsMissingSource(t *testing.T) {
@@ -64,7 +69,7 @@ func TestProfileRunWorkflow_scoresKeepsHiddenAndSkipsMissingSource(t *testing.T)
 		Location:    jobdata.Location{Type: jobdata.LocationRemote, Raw: "Berlin"},
 	}
 	profile := profileschema.Profile{
-		ID:             "andrew",
+		ID:             "software",
 		Name:           "Andrew",
 		Domain:         profileschema.DomainSoftware,
 		Sources:        []string{"himalayas", "wellfound", "builtin"},
@@ -134,7 +139,7 @@ func TestProfileRunWorkflow_enrichEmptyMissingStartsNoChild(t *testing.T) {
 	})
 
 	env.ExecuteWorkflow(ProfileRunWorkflow, scoringschema.ProfileRunInput{
-		ProfileID: "andrew",
+		ProfileID: "software",
 		RunID:     runID,
 	})
 	if !env.IsWorkflowCompleted() {
@@ -148,21 +153,199 @@ func TestProfileRunWorkflow_enrichEmptyMissingStartsNoChild(t *testing.T) {
 	}
 }
 
+func TestProfileRunWorkflow_failedIngestChildLeavesParentSucceeded(t *testing.T) {
+	db := testRunDB(t)
+	getter := pgsql.NewGetter(db)
+	jobsRepo := jobsstorage.NewRepository(getter)
+	runs := scoringstorage.NewRepository(getter)
+
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	t.Cleanup(func() { _ = rdb.Close() })
+
+	vueJob := jobdata.Job{
+		ID:          "job-vue",
+		Source:      "himalayas",
+		Title:       "Vue Engineer",
+		Company:     "Acme",
+		URL:         "https://example.test/vue",
+		Description: "frontend-engineer builds vue",
+		Location:    jobdata.Location{Type: jobdata.LocationRemote, Raw: "Berlin"},
+	}
+	profile := profileschema.Profile{
+		ID:             "software",
+		Name:           "Andrew",
+		Domain:         profileschema.DomainSoftware,
+		Sources:        []string{"himalayas", "wellfound"},
+		Queries:        []string{"vue"},
+		WellfoundRoles: []string{"frontend-engineer"},
+		SignalsPlus: profileschema.SignalsPlus{
+			Title: map[string]int{"vue": 1},
+		},
+		Buckets: profileschema.Buckets{Top: 1},
+	}
+	deps := Deps{
+		Profiles: staticProfiles{profile: profile},
+		Runs:     runs,
+		Jobs:     jobsRepo,
+		Log:      logging.Nop(),
+	}
+	ing := &ingest_activities.IngestActivities{
+		Redis:      ingest.NewRedisCoordinator(rdb),
+		Jobs:       jobsRepo,
+		Watermarks: ingest.NewGormWatermarkStore(getter),
+		Collectors: map[string]collectors.Collector{
+			"himalayas": stubCollector{jobs: []jobdata.Job{vueJob}},
+			"wellfound": failingCollector{err: errors.New("search: HTTP 500")},
+		},
+		Log: logging.Nop(),
+	}
+
+	run := createRunning(t, runs, profile.ID)
+	env := newProfileRunEnv(t, deps, ing)
+	var scoreCalls, counterCalls int
+	env.SetOnActivityStartedListener(func(info *activity.Info, _ context.Context, _ converter.EncodedValues) {
+		switch info.ActivityType.Name {
+		case scoring_activities.ScoreProfileActivityName:
+			scoreCalls++
+		case scoring_activities.SetRunCountersActivityName:
+			counterCalls++
+		}
+	})
+	env.ExecuteWorkflow(ProfileRunWorkflow, scoringschema.ProfileRunInput{
+		ProfileID: "software",
+		RunID:     run.ID,
+	})
+	if !env.IsWorkflowCompleted() {
+		t.Fatal("workflow did not complete")
+	}
+	if err := env.GetWorkflowError(); err != nil {
+		t.Fatal(err)
+	}
+	// himalayas wrote; wellfound failed after activity retries → sources_skipped=1 via SetRunCounters;
+	// ScoreProfile runs once after companies stages.
+	if scoreCalls != 1 {
+		t.Fatalf("ScoreProfile calls = %d, want 1", scoreCalls)
+	}
+	if counterCalls < 1 {
+		t.Fatalf("SetRunCounters calls = %d, want >= 1 (sources_skipped publish)", counterCalls)
+	}
+	assertRun(t, db, run.ID, string(scoringschema.RunStatusSucceeded), 1, 1)
+	assertMatch(t, db, vueJob.ID, string(scoringschema.BucketTop), 1, string(scoringschema.UserStatusNew), scoringschema.SignalPlus, "vue")
+}
+
+func TestProfileRunWorkflow_failedResolveChildLeavesParentSucceeded(t *testing.T) {
+	deps, ing, runID := profileRunFixture(t)
+	env := newProfileRunEnv(t, deps, ing)
+
+	env.OnActivity(companies_activities.UpsertCompaniesFromJobsActivityName, mock.Anything, mock.Anything).
+		Return(companiesschema.UpsertCompaniesFromJobsResult{}, nil)
+	env.OnActivity(companies_activities.ListPendingResolveActivityName, mock.Anything, mock.Anything).
+		Return(companiesschema.ListPendingResolveResult{CompanyKeys: []string{"broken"}}, nil)
+	env.OnActivity(scoring_activities.AddATSCountersActivityName, mock.Anything, mock.Anything).Return(nil)
+	env.OnWorkflow(companies_workflows.ResolveCompanyWorkflow, mock.Anything, mock.Anything).Return(
+		func(ctx workflow.Context, _ companiesschema.ResolveCompanyPayload) (companiesschema.ResolveCompanyResult, error) {
+			return companiesschema.ResolveCompanyResult{}, errors.New("resolve boom")
+		},
+	)
+	env.OnWorkflow(companies_workflows.PollCompaniesWorkflow, mock.Anything, mock.Anything).Return(
+		companiesschema.PollCompaniesResult{}, nil,
+	)
+
+	wantID := companies_workflows.ResolveWorkflowID("broken")
+	var resolveIDs []string
+	env.SetOnChildWorkflowStartedListener(func(info *workflow.Info, _ workflow.Context, _ converter.EncodedValues) {
+		if info.WorkflowType.Name == companies_workflows.ResolveCompanyWorkflowName {
+			resolveIDs = append(resolveIDs, info.WorkflowExecution.ID)
+		}
+	})
+
+	env.ExecuteWorkflow(ProfileRunWorkflow, scoringschema.ProfileRunInput{
+		ProfileID: "software",
+		RunID:     runID,
+	})
+	if !env.IsWorkflowCompleted() {
+		t.Fatal("workflow did not complete")
+	}
+	if err := env.GetWorkflowError(); err != nil {
+		t.Fatalf("parent must succeed: %v", err)
+	}
+	if len(resolveIDs) != 1 || resolveIDs[0] != wantID {
+		t.Fatalf("resolve ids=%v want %q", resolveIDs, wantID)
+	}
+}
+
+func TestProfileRunWorkflow_atsPollingFalseSkipsCompaniesStages(t *testing.T) {
+	deps, ing, runID := profileRunFixture(t)
+	profile, err := deps.Profiles.Get(context.Background(), "software")
+	if err != nil {
+		t.Fatal(err)
+	}
+	profile.ATSPolling = false
+	deps.Profiles = staticProfiles{profile: profile}
+	env := newProfileRunEnv(t, deps, ing)
+
+	var upsertCalls, listPendingCalls, scoreCalls int
+	var pollStarts int
+	env.SetOnActivityStartedListener(func(info *activity.Info, _ context.Context, _ converter.EncodedValues) {
+		switch info.ActivityType.Name {
+		case companies_activities.UpsertCompaniesFromJobsActivityName:
+			upsertCalls++
+		case companies_activities.ListPendingResolveActivityName:
+			listPendingCalls++
+		case scoring_activities.ScoreProfileActivityName:
+			scoreCalls++
+		}
+	})
+	env.SetOnChildWorkflowStartedListener(func(info *workflow.Info, _ workflow.Context, _ converter.EncodedValues) {
+		if info.WorkflowType.Name == companies_workflows.PollCompaniesWorkflowName {
+			pollStarts++
+		}
+	})
+
+	env.ExecuteWorkflow(ProfileRunWorkflow, scoringschema.ProfileRunInput{
+		ProfileID: "software",
+		RunID:     runID,
+	})
+	if !env.IsWorkflowCompleted() {
+		t.Fatal("workflow did not complete")
+	}
+	if err := env.GetWorkflowError(); err != nil {
+		t.Fatal(err)
+	}
+	if upsertCalls != 0 {
+		t.Fatalf("UpsertCompaniesFromJobs calls = %d, want 0", upsertCalls)
+	}
+	if listPendingCalls != 0 {
+		t.Fatalf("ListPendingResolve calls = %d, want 0", listPendingCalls)
+	}
+	if pollStarts != 0 {
+		t.Fatalf("PollCompaniesWorkflow starts = %d, want 0", pollStarts)
+	}
+	if scoreCalls != 1 {
+		t.Fatalf("ScoreProfile calls = %d, want 1", scoreCalls)
+	}
+	run, err := deps.Runs.GetRun(context.Background(), runID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if run.Status != scoringschema.RunStatusSucceeded {
+		t.Fatalf("status = %s, want SUCCEEDED", run.Status)
+	}
+}
+
 func TestProfileRunWorkflow_enrichChildStableIDAndParentDoesNotWait(t *testing.T) {
 	deps, ing, runID := profileRunFixture(t)
 	env := newProfileRunEnv(t, deps, ing)
 
-	missing := enrichschema.ListMissingResult{
-		JobIDs:        []string{"job-b", "job-a"},
+	probe := enrichschema.ListMissingResult{
+		JobIDs:        []string{"job-a"},
 		PromptVersion: enrichschema.PromptVersion,
 		Model:         "claude-test",
 	}
-	wantID := enrich_workflows.WorkflowID(missing.PromptVersion, missing.Model, missing.JobIDs)
-	if got := enrich_workflows.WorkflowID(missing.PromptVersion, missing.Model, []string{"job-a", "job-b"}); got != wantID {
-		t.Fatalf("WorkflowID not stable for same sorted ids: %q vs %q", wantID, got)
-	}
+	wantID := enrich_workflows.DrainWorkflowID(probe.PromptVersion, probe.Model)
 
-	env.OnActivity(enrich_activities.ListMissingActivityName, mock.Anything, mock.Anything).Return(missing, nil)
+	env.OnActivity(enrich_activities.ListMissingActivityName, mock.Anything, mock.Anything).Return(probe, nil)
 	// Long sleep: parent must finish without waiting for the enrich child.
 	env.OnWorkflow(enrich_workflows.EnrichBatchWorkflow, mock.Anything, mock.Anything).Return(
 		func(ctx workflow.Context, _ enrichschema.EnrichBatchInput) error {
@@ -179,7 +362,7 @@ func TestProfileRunWorkflow_enrichChildStableIDAndParentDoesNotWait(t *testing.T
 	})
 
 	env.ExecuteWorkflow(ProfileRunWorkflow, scoringschema.ProfileRunInput{
-		ProfileID: "andrew",
+		ProfileID: "software",
 		RunID:     runID,
 	})
 	if !env.IsWorkflowCompleted() {
@@ -217,9 +400,10 @@ func profileRunFixture(t *testing.T) (Deps, *ingest_activities.IngestActivities,
 		Location:    jobdata.Location{Type: jobdata.LocationRemote, Raw: "Berlin"},
 	}
 	profile := profileschema.Profile{
-		ID:             "andrew",
+		ID:             "software",
 		Name:           "Andrew",
 		Domain:         profileschema.DomainSoftware,
+		ATSPolling:     true,
 		Sources:        []string{"himalayas"},
 		Queries:        []string{"vue"},
 		WellfoundRoles: []string{"frontend-engineer"},
@@ -255,6 +439,8 @@ func newProfileRunEnv(t *testing.T, deps Deps, ing *ingest_activities.IngestActi
 	New(env, deps)
 	// Default ListMissing stub returns an empty list (enrich disabled).
 	enrich_workflows.New(env, enrich_workflows.Deps{Log: logging.Nop()})
+	// Companies stubs: empty discover / resolve / poll so existing tests stay green.
+	companies_workflows.New(env, companies_workflows.Deps{Log: logging.Nop()})
 	env.RegisterActivityWithOptions(ing.RunIngestSource, activity.RegisterOptions{
 		Name: ingest_activities.RunIngestSourceActivityName,
 	})
@@ -267,8 +453,14 @@ func newProfileRunEnv(t *testing.T, deps Deps, ing *ingest_activities.IngestActi
 func runWorkflow(t *testing.T, deps Deps, ing *ingest_activities.IngestActivities, runID int64) {
 	t.Helper()
 	env := newProfileRunEnv(t, deps, ing)
+	var scoreCalls int
+	env.SetOnActivityStartedListener(func(info *activity.Info, _ context.Context, _ converter.EncodedValues) {
+		if info.ActivityType.Name == scoring_activities.ScoreProfileActivityName {
+			scoreCalls++
+		}
+	})
 	env.ExecuteWorkflow(ProfileRunWorkflow, scoringschema.ProfileRunInput{
-		ProfileID: "andrew",
+		ProfileID: "software",
 		RunID:     runID,
 	})
 	if !env.IsWorkflowCompleted() {
@@ -276,6 +468,9 @@ func runWorkflow(t *testing.T, deps Deps, ing *ingest_activities.IngestActivitie
 	}
 	if err := env.GetWorkflowError(); err != nil {
 		t.Fatal(err)
+	}
+	if scoreCalls != 1 {
+		t.Fatalf("ScoreProfile calls = %d, want 1", scoreCalls)
 	}
 }
 
@@ -354,6 +549,20 @@ func (s stubCollector) FetchWithQuery(context.Context, string) ([]jobdata.Job, e
 	return s.jobs, nil
 }
 
+type failingCollector struct {
+	err error
+}
+
+func (failingCollector) Name() string { return "failing" }
+
+func (f failingCollector) Fetch(context.Context) ([]jobdata.Job, error) {
+	return nil, f.err
+}
+
+func (f failingCollector) FetchWithQuery(context.Context, string) ([]jobdata.Job, error) {
+	return nil, f.err
+}
+
 func testRunDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	memName := strings.ReplaceAll(t.Name(), "/", "_")
@@ -376,6 +585,7 @@ func testRunDB(t *testing.T) *gorm.DB {
 			title TEXT NOT NULL DEFAULT '',
 			company TEXT NOT NULL DEFAULT '',
 			company_key TEXT NOT NULL DEFAULT '',
+			company_key_ref TEXT,
 			company_website TEXT NOT NULL DEFAULT '',
 			url TEXT NOT NULL DEFAULT '',
 			apply_url TEXT,
@@ -386,6 +596,9 @@ func testRunDB(t *testing.T) *gorm.DB {
 			salary_raw TEXT NOT NULL DEFAULT '',
 			tags TEXT NOT NULL DEFAULT '[]',
 			position TEXT,
+			closed_at TIMESTAMP,
+			closed_by TEXT NOT NULL DEFAULT '',
+			board_seen_at TIMESTAMP,
 			first_seen_at TIMESTAMP NOT NULL,
 			last_seen_at TIMESTAMP NOT NULL,
 			created_at TIMESTAMP NOT NULL,
@@ -399,7 +612,18 @@ func testRunDB(t *testing.T) *gorm.DB {
 			finished_at TIMESTAMP,
 			jobs_scored INTEGER NOT NULL DEFAULT 0,
 			sources_skipped INTEGER NOT NULL DEFAULT 0,
-			idempotency_key TEXT NOT NULL UNIQUE
+			idempotency_key TEXT NOT NULL UNIQUE,
+			companies_discovered INTEGER NOT NULL DEFAULT 0,
+			companies_merged INTEGER NOT NULL DEFAULT 0,
+			companies_blocked INTEGER NOT NULL DEFAULT 0,
+			companies_resolved INTEGER NOT NULL DEFAULT 0,
+			companies_unsupported INTEGER NOT NULL DEFAULT 0,
+			companies_polled INTEGER NOT NULL DEFAULT 0,
+			polls_not_modified INTEGER NOT NULL DEFAULT 0,
+			polls_partial INTEGER NOT NULL DEFAULT 0,
+			poll_failures INTEGER NOT NULL DEFAULT 0,
+			jobs_upserted_ats INTEGER NOT NULL DEFAULT 0,
+			jobs_closed INTEGER NOT NULL DEFAULT 0
 		)`,
 		`CREATE TABLE profile_matches (
 			profile_id TEXT NOT NULL,

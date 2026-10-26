@@ -316,6 +316,7 @@ func writeSection3(b *bytes.Buffer, goVer, dockerfileGo string, requires [][2]st
 	w("| Profiles | `gopkg.in/yaml.v3` **%s**. Directory from `JOBHOUND_PROFILES_DIR` (empty → `config/profiles`). |\n", req(requires, "gopkg.in/yaml.v3"))
 	w("| Scoring | In-process rules in `internal/scoring/impl` (phrase gates + fact signals from ready verdicts). |\n")
 	w("| Enrich | `internal/enrich`: Anthropic Message Batches over stdlib `net/http` (no Anthropic SDK). Model reply JSON Schema embedded under `enrich/schema/json_schema/`. |\n")
+	w("| Companies / ATS | `internal/companies` + `internal/collectors/ats/{greenhouse,lever,ashby}`; seed xlsx via `excelize` **%s** (`cmd/companies-import`). |\n", req(requires, "github.com/xuri/excelize/v2"))
 	w("| Text / currency | `golang.org/x/text` **%s** (NFC for enrich hashes; currency/language helpers in coerce). |\n", req(requires, "golang.org/x/text"))
 	w("| Logging | `github.com/rs/zerolog` **%s** |\n", req(requires, "github.com/rs/zerolog"))
 	w("| JSON Schema | `github.com/santhosh-tekuri/jsonschema/v6` **%s** (product API bodies + enrich model reply) |\n", req(requires, "github.com/santhosh-tekuri/jsonschema/v6"))
@@ -360,9 +361,9 @@ func writeSection5(b *bytes.Buffer, targets []string) {
 	w("| File | What is configured |\n")
 	w("|------|----------------|\n")
 	w("| `go.mod` | module path, Go version, direct deps, `replace` pins |\n")
-	w("| `Makefile` | `build` five app binaries to `bin/` (agent, worker, api, migrate, retention); `bin/ipv6proxy` is a separate target used by `start-ipv6-proxy`; `eval` runs `go run ./cmd/eval`; `run` / `run-debug` / `run-worker`; `test` / `test-integration`; `fmt` / `vet` / `lint` (`golangci-lint run`) / `tidy`; migrate; `db-dump` / `db-restore` (full Postgres dump under gitignored `data/local/`, restore then migrate); `docker-up` starts the host proxy, then Compose `build --no-cache` + `up -d --force-recreate --pull always`; `docker-down` stops the proxy; `docs-stack` regenerates `docs/STACK.md` |\n")
-	w("| `docker-compose.yml` | postgres 16, migrate one-shot, redis 7, temporal + UI + temporal-ready, agent :3001, worker, api :3000. Worker and agent get `JOBHOUND_EUROPE_REMOTELY_PROXY=http://host.docker.internal:18080`. `api` and `worker` get `JOBHOUND_PROFILES_DIR=/app/config/profiles` and optional `JOBHOUND_ANTHROPIC_API_KEY` / `JOBHOUND_ENRICH_MODEL`. The proxy process itself is not a Compose service |\n")
-	w("| `Dockerfile` | multi-stage; CGO_ENABLED=0; debian-slim + chromium + `data/` + `config/profiles` |\n")
+	w("| `Makefile` | `build` six app binaries to `bin/` (agent, worker, api, migrate, retention, companies-import); `bin/ipv6proxy` is a separate target used by `start-ipv6-proxy`; `companies-import` runs the seed CLI; `eval` runs `go run ./cmd/eval`; `run` / `run-debug` / `run-worker`; `test` / `test-integration`; `fmt` / `vet` / `lint` (`golangci-lint run`) / `tidy`; migrate; `db-dump` / `db-restore` (full Postgres dump under gitignored `data/local/`, restore then migrate); `docker-up` starts the host proxy, then Compose `build --no-cache` + `up -d --force-recreate --pull always`; `docker-down` stops the proxy; `docs-stack` regenerates `docs/STACK.md` |\n")
+	w("| `docker-compose.yml` | postgres 16, migrate one-shot, redis 7, temporal + UI + temporal-ready, agent :3001, worker, api :3000. Worker and agent get `JOBHOUND_EUROPE_REMOTELY_PROXY=http://host.docker.internal:18080`. `api` and `worker` get `JOBHOUND_PROFILES_DIR=/app/config/profiles`, `JOBHOUND_COMPANIES_DIR=/app/config/companies`, and optional `JOBHOUND_ANTHROPIC_API_KEY` / `JOBHOUND_ENRICH_MODEL`. The proxy process itself is not a Compose service |\n")
+	w("| `Dockerfile` | multi-stage; CGO_ENABLED=0; debian-slim + chromium + `data/` + `config/profiles` + `config/companies` |\n")
 	w("| `Dockerfile.migrate` | migrate binary + `migrations/` |\n")
 	w("| `.dockerignore` | `.git`, `bin/`, `.cursor`, `*.md`, `.env*` |\n")
 	w("| `.gitignore` | `.env`, `.env.*`, `/bin/`, `vendor/`, sqlite, `cookies.txt`, dump path under `data/local/` |\n")
@@ -382,11 +383,12 @@ func writeSection10(b *bytes.Buffer, targets []string, testCount int, lintVer st
 	w := func(format string, args ...any) { fmt.Fprintf(b, format, args...) }
 
 	purpose := map[string]string{
-		"build":              "`bin/agent`, `bin/worker`, `bin/api`, `bin/migrate`, `bin/retention` (`bin/ipv6proxy` and `cmd/eval` are not part of `build`)",
+		"build":              "`bin/agent`, `bin/worker`, `bin/api`, `bin/migrate`, `bin/retention`, `bin/companies-import` (`bin/ipv6proxy` and `cmd/eval` are not part of `build`)",
 		"run":                "build + run agent (loads `.env` if present)",
 		"run-debug":          "agent with `JOBHOUND_DEBUG_HTTP_ADDR=127.0.0.1:3001`",
 		"run-worker":         "Temporal worker",
 		"eval":               "`go run ./cmd/eval` (default `testdata/enrich/gold.jsonl` + `predictions.jsonl`)",
+		"companies-import":   "build + run `bin/companies-import` (seed `companies` from xlsx under `JOBHOUND_COMPANIES_DIR`)",
 		"test":               "`go test ./...` (excludes `integration` tag)",
 		"test-integration":   "`go test -tags=integration ./...`",
 		"fmt":                "`go fmt ./...`",
@@ -416,7 +418,7 @@ func writeSection10(b *bytes.Buffer, targets []string, testCount int, lintVer st
 	w("|--------|---------|\n")
 	// Stable display order for the main table; append any unknown phony at the end.
 	order := []string{
-		"build", "run", "run-debug", "run-worker", "eval",
+		"build", "run", "run-debug", "run-worker", "eval", "companies-import",
 		"test", "test-integration", "fmt", "vet", "lint", "tidy",
 		"migrate-up", "migrate-down", "migrate-version",
 		"db-dump", "db-restore",
@@ -459,7 +461,7 @@ func writeSection10(b *bytes.Buffer, targets []string, testCount int, lintVer st
 
 	w("### Tests\n\n")
 	w("- **Runner:** `go test`. **%s** `*_test.go` files.\n", strconv.Itoa(testCount))
-	w("- **Unit (default):** handlers (`httptest`) for the five profile routes, `profiles/impl` YAML load (including `lada.yaml`, `children`, and `facts`), `scoring/impl` phrase + fact tables, `scoring/storage` / `jobs/storage` / `enrich/storage` (often sqlite), enrich batches/coerce/decode/eval, collector parse fixtures (software and architecture boards), ingest coordinator (miniredis).\n")
+	w("- **Unit (default):** handlers (`httptest`) for the five profile routes plus `GET /companies`, `profiles/impl` YAML load (including `architecture.yaml`, `children`, `facts`, `ats_polling`), `scoring/impl` phrase + fact tables, `scoring/storage` / `jobs/storage` / `enrich/storage` / `companies/storage` (often sqlite), companies impl + ATS fetcher fixtures (Greenhouse / Lever / Ashby), enrich batches/coerce/decode/eval, collector parse fixtures (software and architecture boards), ingest coordinator (miniredis).\n")
 	w("- **Integration (`//go:build integration`):** `internal/platform/pgsql/migrations_integration_test.go`; `internal/ingest/coordinator_integration_test.go`; `internal/collectors/browserfetch/rod_integration_test.go`. Need env / Compose (`JOBHOUND_DATABASE_URL`, Chromium as applicable).\n")
 	w("- **`tests/`:** empty directory (constitution allows optional `tests/integration/`). Offline enrich fixtures live under `testdata/enrich/`.\n")
 	w("- **Frontend unit tests:** live in `jobhound_frontend` (`pnpm test:unit`), not in this repo.\n\n")
@@ -475,7 +477,7 @@ func writeSection11(b *bytes.Buffer, envRows [][2]string, images map[string]stri
 	w("## 11. Deploy\n\n")
 	w("- **Production target (constitution):** GCP runtime + secrets. **No** Cloud Run workflow, Dockerfile deploy target, or Artifact Registry config is in this repo yet.\n")
 	w("- **Local / current runtime:** Docker Compose on a laptop (`make docker-up`). Published ports: **5432** Postgres, **6379** Redis, **7233** Temporal gRPC, **8088** Temporal UI, **3000** API, **3001** agent debug HTTP. Host proxy **127.0.0.1:18080** is not a Compose port.\n")
-	w("- **Images:** `jobhound-core:local` (agent/worker/api); migrate uses `Dockerfile.migrate`. Chromium in the app image for Built In, Golang Cafe, and the architecture rod boards `ejobs`, `dezeen_jobs`, and `world_architects` (`JOBHOUND_BROWSER_NO_SANDBOX=1` as root). `config/profiles` is in the app image.\n")
+	w("- **Images:** `jobhound-core:local` (agent/worker/api); migrate uses `Dockerfile.migrate`. Chromium in the app image for Built In, Golang Cafe, and the architecture rod boards `ejobs`, `dezeen_jobs`, and `world_architects` (`JOBHOUND_BROWSER_NO_SANDBOX=1` as root). `config/profiles` and `config/companies` are in the app image.\n")
 	w("- **CORS defaults:** `http://localhost:5173`, `http://localhost:3002` (frontend dev servers — not the API listen address).\n\n")
 
 	w("### Environment variable names\n\n")

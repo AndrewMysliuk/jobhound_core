@@ -40,6 +40,7 @@ type fileProfile struct {
 	ID             string                      `yaml:"id"`
 	Name           string                      `yaml:"name"`
 	Domain         string                      `yaml:"domain"`
+	ATSPolling     bool                        `yaml:"ats_polling"`
 	Sources        []string                    `yaml:"sources"`
 	Queries        []string                    `yaml:"queries"`
 	Children       map[string][]string         `yaml:"children"`
@@ -222,6 +223,7 @@ func (s *FileStore) load(path, wantID string) (schema.Profile, error) {
 		ID:             raw.ID,
 		Name:           raw.Name,
 		Domain:         domain,
+		ATSPolling:     raw.ATSPolling,
 		Sources:        raw.Sources,
 		Queries:        raw.Queries,
 		Children:       raw.Children,

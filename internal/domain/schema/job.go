@@ -45,6 +45,7 @@ type Job struct {
 	SalaryRaw      string
 	Tags           []string
 	Position       *string
+	ClosedAt       *time.Time
 	FirstSeenAt    time.Time
 	LastSeenAt     time.Time
 }

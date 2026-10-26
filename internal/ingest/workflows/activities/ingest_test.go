@@ -40,6 +40,14 @@ func (m *memJobs) ListFirstSeenSince(context.Context, time.Time) ([]schema.Job, 
 	return nil, nil
 }
 
+func (m *memJobs) ListEnrichCandidates(context.Context, time.Time, time.Time) ([]schema.Job, error) {
+	return nil, nil
+}
+
+func (m *memJobs) ListLastSeenSince(context.Context, time.Time) ([]schema.Job, error) {
+	return nil, nil
+}
+
 func (m *memJobs) ListPostedBefore(context.Context, time.Time) ([]schema.Job, error) {
 	return nil, nil
 }
@@ -170,6 +178,7 @@ func TestRunIngestSource_persistsJob(t *testing.T) {
 			title TEXT NOT NULL DEFAULT '',
 			company TEXT NOT NULL DEFAULT '',
 			company_key TEXT NOT NULL DEFAULT '',
+			company_key_ref TEXT,
 			company_website TEXT NOT NULL DEFAULT '',
 			url TEXT NOT NULL DEFAULT '',
 			apply_url TEXT,
@@ -180,6 +189,9 @@ func TestRunIngestSource_persistsJob(t *testing.T) {
 			salary_raw TEXT NOT NULL DEFAULT '',
 			tags TEXT NOT NULL DEFAULT '[]',
 			position TEXT,
+			closed_at TIMESTAMP,
+			closed_by TEXT NOT NULL DEFAULT '',
+			board_seen_at TIMESTAMP,
 			first_seen_at TIMESTAMP NOT NULL,
 			last_seen_at TIMESTAMP NOT NULL,
 			created_at TIMESTAMP NOT NULL,

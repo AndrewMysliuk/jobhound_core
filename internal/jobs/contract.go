@@ -18,6 +18,14 @@ type JobRepository interface {
 	GetByID(ctx context.Context, id string) (jobdata.Job, error)
 	// ListFirstSeenSince returns jobs whose first_seen_at is at or after since (UTC).
 	ListFirstSeenSince(ctx context.Context, since time.Time) ([]jobdata.Job, error)
+	// ListEnrichCandidates returns open jobs (closed_at IS NULL) whose first_seen_at
+	// is at or after since (UTC) and whose posted_at is unknown (NULL) or at or after
+	// postedAfter (UTC). Used by vacancy enrich; scoring keeps ListFirstSeenSince.
+	// The posted_at cutoff policy lives in enrich; storage only applies the cutoff.
+	ListEnrichCandidates(ctx context.Context, since, postedAfter time.Time) ([]jobdata.Job, error)
+	// ListLastSeenSince returns jobs whose last_seen_at is at or after since (UTC).
+	// Used by company discover after an ingest pass.
+	ListLastSeenSince(ctx context.Context, since time.Time) ([]jobdata.Job, error)
 	// ListPostedBefore returns jobs whose posted_at is set and strictly before cutoff (UTC).
 	ListPostedBefore(ctx context.Context, cutoff time.Time) ([]jobdata.Job, error)
 	// DeleteJobsLastSeenBeforeUTC hard-deletes jobs with last_seen_at strictly before cutoff (UTC).

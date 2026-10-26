@@ -25,3 +25,9 @@ type RunCountersInput struct {
 	JobsScored     int
 	SourcesSkipped int
 }
+
+// AddATSCountersInput applies a delta to the companies/ATS counters on a run.
+type AddATSCountersInput struct {
+	RunID int64
+	Delta RunATSCounters
+}

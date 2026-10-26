@@ -6,8 +6,8 @@
 # Local CV material for search calibration
 /config/cv/
 
-# Local company lists (applied + target Excels) — not indexed
-/config/companies/
+# Local company seed / tracker Excels — not indexed. blocklist.yaml is tracked.
+/config/companies/*.xlsx
 
 # Go
 /bin/
@@ -36,3 +36,6 @@ cookies.txt
 *.iml
 .vscode/
 .DS_Store
+
+# Local build artifact (go build -o worker)
+/worker

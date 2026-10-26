@@ -15,9 +15,3 @@ var architectureSourceIDs = map[string]struct{}{
 	"bdla":                {},
 	"world_architects":    {},
 }
-
-// IsArchitectureSource reports whether sourceID is one of the architecture-board ids.
-func IsArchitectureSource(sourceID string) bool {
-	_, ok := architectureSourceIDs[NormalizeSourceID(sourceID)]
-	return ok
-}

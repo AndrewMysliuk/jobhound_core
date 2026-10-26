@@ -28,7 +28,7 @@ type sentinelCode struct {
 	code schema.APIErrorCode
 }
 
-// sentinelCodes maps domain sentinels for POST /api/v1/profiles/{profile_id}/runs.
+// sentinelCodes maps domain sentinels to registry codes.
 var sentinelCodes = []sentinelCode{
 	{profiles.ErrProfileNotFound, schema.APIErrorCodeProfileNotFound},
 	{profiles.ErrProfileInvalid, schema.APIErrorCodeProfileInvalidDefinition},

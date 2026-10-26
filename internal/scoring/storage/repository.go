@@ -160,6 +160,43 @@ func (r *Repository) SetRunCounters(ctx context.Context, id int64, jobsScored, s
 	return nil
 }
 
+// AddATSCounters increments the companies/ATS counters on a profile_runs row.
+// Zero fields in delta are no-ops. The row need not be RUNNING.
+func (r *Repository) AddATSCounters(ctx context.Context, id int64, delta schema.RunATSCounters) error {
+	if id == 0 {
+		return fmt.Errorf("run id is required")
+	}
+	updates := map[string]any{}
+	add := func(col string, n int) {
+		if n == 0 {
+			return
+		}
+		updates[col] = gorm.Expr(col+" + ?", n)
+	}
+	add("companies_discovered", delta.CompaniesDiscovered)
+	add("companies_merged", delta.CompaniesMerged)
+	add("companies_blocked", delta.CompaniesBlocked)
+	add("companies_resolved", delta.CompaniesResolved)
+	add("companies_unsupported", delta.CompaniesUnsupported)
+	add("companies_polled", delta.CompaniesPolled)
+	add("polls_not_modified", delta.PollsNotModified)
+	add("polls_partial", delta.PollsPartial)
+	add("poll_failures", delta.PollFailures)
+	add("jobs_upserted_ats", delta.JobsUpsertedATS)
+	add("jobs_closed", delta.JobsClosed)
+	if len(updates) == 0 {
+		return nil
+	}
+	res := r.get().WithContext(ctx).Model(&ProfileRun{}).Where("id = ?", id).Updates(updates)
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return ErrRunNotFound
+	}
+	return nil
+}
+
 // ListMatchesByJobIDs returns every match whose job_id is in jobIDs.
 // Only ProfileID, JobID, and RunID are populated; empty jobIDs returns nil.
 func (r *Repository) ListMatchesByJobIDs(ctx context.Context, jobIDs []string) ([]schema.Match, error) {
@@ -244,17 +281,17 @@ func (r *Repository) List(ctx context.Context, p schema.ListJobsParams) (schema.
 		limit = maxListLimit
 	}
 
-	base := r.listQuery(ctx, p.ProfileID, string(bucket), string(status))
+	base := r.listQuery(ctx, p.ProfileID, string(bucket), string(status), p.IncludeClosed)
 	var total int64
 	if err := base.Count(&total).Error; err != nil {
 		return schema.JobPage{}, err
 	}
 
 	var rows []listRow
-	err := r.listQuery(ctx, p.ProfileID, string(bucket), string(status)).
+	err := r.listQuery(ctx, p.ProfileID, string(bucket), string(status), p.IncludeClosed).
 		Select(`profile_matches.job_id, jobs.title, jobs.company, jobs.url, jobs.apply_url,
 			jobs.location, jobs.openings, jobs.sources, jobs.posted_at, jobs.first_seen_at, jobs.last_seen_at,
-			profile_matches.bucket, profile_matches.score, profile_matches.signals, profile_matches.user_status`).
+			jobs.closed_at, profile_matches.bucket, profile_matches.score, profile_matches.signals, profile_matches.user_status`).
 		Order("profile_matches.score DESC, jobs.first_seen_at DESC").
 		Offset((page - 1) * limit).
 		Limit(limit).
@@ -279,13 +316,16 @@ func (r *Repository) List(ctx context.Context, p schema.ListJobsParams) (schema.
 	}, nil
 }
 
-func (r *Repository) listQuery(ctx context.Context, profileID, bucket, status string) *gorm.DB {
+func (r *Repository) listQuery(ctx context.Context, profileID, bucket, status string, includeClosed bool) *gorm.DB {
 	q := r.get().WithContext(ctx).
 		Table("profile_matches").
 		Joins("JOIN jobs ON jobs.id = profile_matches.job_id").
 		Where("profile_matches.profile_id = ?", profileID).
 		Where("profile_matches.bucket = ?", bucket).
 		Where("profile_matches.user_status = ?", status)
+	if !includeClosed {
+		q = q.Where("jobs.closed_at IS NULL")
+	}
 	return q
 }
 
@@ -301,6 +341,7 @@ type listRow struct {
 	PostedAt    *time.Time `gorm:"column:posted_at"`
 	FirstSeenAt time.Time  `gorm:"column:first_seen_at"`
 	LastSeenAt  time.Time  `gorm:"column:last_seen_at"`
+	ClosedAt    *time.Time `gorm:"column:closed_at"`
 	Bucket      string     `gorm:"column:bucket"`
 	Score       int        `gorm:"column:score"`
 	Signals     []byte     `gorm:"column:signals"`
@@ -334,6 +375,7 @@ func (row listRow) toListedJob() (schema.ListedJob, error) {
 		Sources:     sources,
 		FirstSeenAt: row.FirstSeenAt,
 		LastSeenAt:  row.LastSeenAt,
+		ClosedAt:    row.ClosedAt,
 		Bucket:      schema.Bucket(row.Bucket),
 		Score:       row.Score,
 		Signals:     signals,
@@ -382,7 +424,7 @@ func (r *Repository) listedJob(ctx context.Context, profileID, jobID string) (sc
 		Joins("JOIN jobs ON jobs.id = profile_matches.job_id").
 		Select(`profile_matches.job_id, jobs.title, jobs.company, jobs.url, jobs.apply_url,
 			jobs.location, jobs.openings, jobs.sources, jobs.posted_at, jobs.first_seen_at, jobs.last_seen_at,
-			profile_matches.bucket, profile_matches.score, profile_matches.signals, profile_matches.user_status`).
+			jobs.closed_at, profile_matches.bucket, profile_matches.score, profile_matches.signals, profile_matches.user_status`).
 		Where("profile_matches.profile_id = ? AND profile_matches.job_id = ?", profileID, jobID).
 		Take(&row).Error
 	if err != nil {

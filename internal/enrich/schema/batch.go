@@ -1,6 +1,7 @@
 package schema
 
 // EnrichBatchInput is the Temporal child workflow payload.
+// Empty JobIDs means drain mode: the workflow pages ListMissing until none remain.
 // Activities re-read title, description, raw location, and raw salary; the payload does not carry the text.
 type EnrichBatchInput struct {
 	JobIDs        []string
@@ -10,20 +11,22 @@ type EnrichBatchInput struct {
 
 // ListMissingInput is the ListMissing activity payload.
 // Empty Model or PromptVersion means the activity uses the service defaults.
+// Limit > 0 caps how many ids are returned (Temporal payload budget).
 type ListMissingInput struct {
 	PromptVersion int
 	Model         string
+	Limit         int
 }
 
 // ListMissingResult is the missing-id list plus the prompt/model used to compute it.
-// The parent starts EnrichBatchWorkflow with these values.
 type ListMissingResult struct {
 	JobIDs        []string
 	PromptVersion int
 	Model         string
 }
 
-// SubmitBatchResult is returned by SubmitBatch after creating an Anthropic Message Batch.
+// SubmitBatchResult is returned by SubmitBatch after creating one Anthropic Message Batch.
+// Callers must pass at most MaxJobsPerSubmit ids so CustomToJob fits Temporal limits.
 type SubmitBatchResult struct {
 	BatchID      string
 	CustomToJob  map[string]string

@@ -23,7 +23,7 @@ func TestPostProfileRun(t *testing.T) {
 	started := time.Date(2026, 10, 10, 12, 0, 0, 0, time.UTC)
 	run := scoringschema.Run{
 		ID:        9,
-		ProfileID: "andrew",
+		ProfileID: "software",
 		Status:    scoringschema.RunStatusRunning,
 		StartedAt: started,
 	}
@@ -77,7 +77,7 @@ func TestPostProfileRun(t *testing.T) {
 				return
 			}
 			assertProfileRun(t, rec.Body.Bytes(), run, started)
-			if api.calls != 1 || api.profileID != "andrew" || api.key.String() != key {
+			if api.calls != 1 || api.profileID != "software" || api.key.String() != key {
 				t.Fatalf("StartRun calls %d profile %q key %s", api.calls, api.profileID, api.key)
 			}
 			if !tt.replay {
@@ -116,9 +116,9 @@ func postProfileRunReq(h *HTTPHandler, key string, omitKey bool, body string) *h
 	}
 	var req *http.Request
 	if reader == nil {
-		req = httptest.NewRequest(http.MethodPost, "/api/v1/profiles/andrew/runs", nil)
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/profiles/software/runs", nil)
 	} else {
-		req = httptest.NewRequest(http.MethodPost, "/api/v1/profiles/andrew/runs", reader)
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/profiles/software/runs", reader)
 	}
 	if !omitKey {
 		req.Header.Set("Idempotency-Key", key)

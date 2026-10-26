@@ -21,6 +21,12 @@ const (
 	// maxTokensModelReply fits one ModelReply JSON object with headroom.
 	maxTokensModelReply = 4096
 	defaultHTTPTimeout  = 60 * time.Second
+	// maxBatchBodyBytes stays under Anthropic's 256 MiB Message Batches POST limit.
+	maxBatchBodyBytes = 200 * 1024 * 1024
+	// maxBatchRequests is Anthropic's per-batch request count cap.
+	maxBatchRequests = 100_000
+	// batchCreateEnvelope is len(`{"requests":[]}`) for size accounting.
+	batchCreateEnvelope = 14
 )
 
 // VacancyBatchItem is one vacancy to include in a Message Batch request.
@@ -51,6 +57,8 @@ func JobCustomID(jobID string) string {
 
 // Create submits POST /v1/messages/batches. It returns the batch id and a map
 // from custom_id back to job id. No tools and no streaming.
+// Callers must pass a chunk that fits Anthropic size/count limits; use
+// firstBatchChunk to split a large item list.
 func (c *BatchesClient) Create(ctx context.Context, items []VacancyBatchItem) (batchID string, customToJob map[string]string, err error) {
 	if len(items) == 0 {
 		return "", nil, fmt.Errorf("batches create: empty requests")
@@ -58,24 +66,15 @@ func (c *BatchesClient) Create(ctx context.Context, items []VacancyBatchItem) (b
 	customToJob = make(map[string]string, len(items))
 	reqs := make([]batchWireRequest, 0, len(items))
 	system := PromptSystem()
+	model := c.model()
+	maxTokens := c.maxTokens()
 	for _, item := range items {
 		cid := JobCustomID(item.JobID)
 		if prev, ok := customToJob[cid]; ok && prev != item.JobID {
 			return "", nil, fmt.Errorf("batches create: custom_id collision for job %q and %q", prev, item.JobID)
 		}
 		customToJob[cid] = item.JobID
-		reqs = append(reqs, batchWireRequest{
-			CustomID: cid,
-			Params: batchWireParams{
-				Model:     c.model(),
-				MaxTokens: c.maxTokens(),
-				System:    system,
-				Messages: []batchWireMessage{{
-					Role:    "user",
-					Content: PromptUser(item.Title, item.Description, item.LocationRaw, item.SalaryRaw),
-				}},
-			},
-		})
+		reqs = append(reqs, wireRequest(item, system, model, maxTokens))
 	}
 	body, err := json.Marshal(batchCreateBody{Requests: reqs})
 	if err != nil {
@@ -89,6 +88,53 @@ func (c *BatchesClient) Create(ctx context.Context, items []VacancyBatchItem) (b
 		return "", nil, fmt.Errorf("batches create: empty batch id")
 	}
 	return resp.ID, customToJob, nil
+}
+
+// firstBatchChunk returns the leading items that fit in one Message Batches POST
+// and the remainder. A single oversize item is still returned alone in first.
+func firstBatchChunk(items []VacancyBatchItem, model string, maxTokens, maxBytes, maxReqs int) (first, rest []VacancyBatchItem, err error) {
+	if len(items) == 0 {
+		return nil, nil, nil
+	}
+	if maxBytes <= 0 {
+		maxBytes = maxBatchBodyBytes
+	}
+	if maxReqs <= 0 {
+		maxReqs = maxBatchRequests
+	}
+	system := PromptSystem()
+	size := batchCreateEnvelope
+	for i, item := range items {
+		raw, err := json.Marshal(wireRequest(item, system, model, maxTokens))
+		if err != nil {
+			return nil, nil, fmt.Errorf("batches chunk encode: %w", err)
+		}
+		need := len(raw)
+		if len(first) > 0 {
+			need++ // comma between array elements
+		}
+		if len(first) > 0 && (size+need > maxBytes || len(first) >= maxReqs) {
+			return first, items[i:], nil
+		}
+		first = append(first, item)
+		size += need
+	}
+	return first, nil, nil
+}
+
+func wireRequest(item VacancyBatchItem, system, model string, maxTokens int) batchWireRequest {
+	return batchWireRequest{
+		CustomID: JobCustomID(item.JobID),
+		Params: batchWireParams{
+			Model:     model,
+			MaxTokens: maxTokens,
+			System:    system,
+			Messages: []batchWireMessage{{
+				Role:    "user",
+				Content: PromptUser(item.Title, item.Description, item.LocationRaw, item.SalaryRaw),
+			}},
+		},
+	}
 }
 
 // Status returns processing_status from GET /v1/messages/batches/{id}.

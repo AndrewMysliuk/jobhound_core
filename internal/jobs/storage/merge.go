@@ -37,6 +37,18 @@ func mergeIngestJob(existing, incoming schema.Job, now time.Time) schema.Job {
 	return out
 }
 
+// mergeBoardJob is mergeIngestJob plus board text preference (description/title).
+func mergeBoardJob(existing, incoming schema.Job, now time.Time) schema.Job {
+	out := mergeIngestJob(existing, incoming, now)
+	if strings.TrimSpace(incoming.Description) != "" {
+		out.Description = incoming.Description
+	}
+	if strings.TrimSpace(incoming.Title) != "" {
+		out.Title = incoming.Title
+	}
+	return out
+}
+
 func fillCompanyWebsite(existing, incoming string) string {
 	if strings.TrimSpace(existing) == "" && strings.TrimSpace(incoming) != "" {
 		return strings.TrimSpace(incoming)
