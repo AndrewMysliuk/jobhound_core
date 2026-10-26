@@ -2,6 +2,7 @@ package impl
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -133,7 +134,12 @@ func TestImportFromSeed_fixtureSheet(t *testing.T) {
 }
 
 func TestReadSeedXLSX_realTemplateHeaders(t *testing.T) {
-	rows, err := ReadSeedXLSX("../../../config/companies/companies_template.xlsx")
+	// companies_template.xlsx is gitignored (/config/companies/*.xlsx); CI has no copy.
+	path := filepath.Join("..", "..", "..", "config", "companies", "companies_template.xlsx")
+	if _, err := os.Stat(path); err != nil {
+		t.Skip("local seed xlsx not present (gitignored)")
+	}
+	rows, err := ReadSeedXLSX(path)
 	if err != nil {
 		t.Fatal(err)
 	}
