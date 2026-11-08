@@ -14,7 +14,26 @@ import (
 const EnrichBatchWorkflowName = "EnrichBatchWorkflow"
 
 // DefaultPollInterval is how long the workflow sleeps between PollBatch checks.
-const DefaultPollInterval = 30 * time.Second
+// Message Batches take minutes to hours, and every poll costs history events,
+// so this stays coarse on purpose.
+const DefaultPollInterval = 60 * time.Second
+
+// continueAsNewHistoryLength and continueAsNewHistorySize are the thresholds for
+// rolling the run between chunks. Temporal terminates a workflow at 51200 events
+// or 50MB of history; a drain spans many batches and can run for days, so the
+// run is rolled well before either limit.
+const (
+	continueAsNewHistoryLength = 10_000
+	continueAsNewHistorySize   = 10 << 20
+)
+
+// shouldContinueAsNew is true once this run's history is large enough that the
+// remaining chunks belong in a fresh run.
+func shouldContinueAsNew(ctx workflow.Context) bool {
+	info := workflow.GetInfo(ctx)
+	return info.GetCurrentHistoryLength() >= continueAsNewHistoryLength ||
+		info.GetCurrentHistorySize() >= continueAsNewHistorySize
+}
 
 // EnrichBatchWorkflow submits Message Batches in Temporal-safe pages, polls each
 // until it ends, stores verdicts, and rescores matches.
@@ -39,6 +58,10 @@ func EnrichBatchWorkflow(ctx workflow.Context, in schema.EnrichBatchInput) error
 	})
 	pollCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
 		StartToCloseTimeout: 2 * time.Minute,
+		RetryPolicy:         transportRetry,
+	})
+	fetchCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
+		StartToCloseTimeout: 10 * time.Minute,
 		RetryPolicy:         transportRetry,
 	})
 	storeCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
@@ -72,11 +95,23 @@ func EnrichBatchWorkflow(ctx workflow.Context, in schema.EnrichBatchInput) error
 				break
 			}
 			chunk++
-			stored, err := enrichOneChunk(ctx, actCtx, pollCtx, storeCtx, in, page.JobIDs, chunk)
+			stored, err := enrichOneChunk(ctx, actCtx, pollCtx, fetchCtx, storeCtx, in, page.JobIDs, chunk)
 			if err != nil {
 				return err
 			}
 			totalStored += stored
+			if shouldContinueAsNew(ctx) {
+				logger.Info("enrich batch continue as new",
+					"chunks", chunk,
+					"stored", in.StoredSoFar+totalStored,
+					"history_length", workflow.GetInfo(ctx).GetCurrentHistoryLength(),
+				)
+				return workflow.NewContinueAsNewError(ctx, EnrichBatchWorkflow, schema.EnrichBatchInput{
+					PromptVersion: in.PromptVersion,
+					Model:         in.Model,
+					StoredSoFar:   in.StoredSoFar + totalStored,
+				})
+			}
 		}
 	} else {
 		for offset := 0; offset < len(in.JobIDs); offset += schema.MaxJobsPerSubmit {
@@ -85,20 +120,34 @@ func EnrichBatchWorkflow(ctx workflow.Context, in schema.EnrichBatchInput) error
 				end = len(in.JobIDs)
 			}
 			chunk++
-			stored, err := enrichOneChunk(ctx, actCtx, pollCtx, storeCtx, in, in.JobIDs[offset:end], chunk)
+			stored, err := enrichOneChunk(ctx, actCtx, pollCtx, fetchCtx, storeCtx, in, in.JobIDs[offset:end], chunk)
 			if err != nil {
 				return err
 			}
 			totalStored += stored
+			if end < len(in.JobIDs) && shouldContinueAsNew(ctx) {
+				logger.Info("enrich batch continue as new",
+					"chunks", chunk,
+					"stored", in.StoredSoFar+totalStored,
+					"remaining", len(in.JobIDs)-end,
+					"history_length", workflow.GetInfo(ctx).GetCurrentHistoryLength(),
+				)
+				return workflow.NewContinueAsNewError(ctx, EnrichBatchWorkflow, schema.EnrichBatchInput{
+					JobIDs:        in.JobIDs[end:],
+					PromptVersion: in.PromptVersion,
+					Model:         in.Model,
+					StoredSoFar:   in.StoredSoFar + totalStored,
+				})
+			}
 		}
 	}
 
-	logger.Info("enrich batch done", "chunks", chunk, "stored", totalStored)
+	logger.Info("enrich batch done", "chunks", chunk, "stored", in.StoredSoFar+totalStored)
 	return nil
 }
 
 func enrichOneChunk(
-	ctx, actCtx, pollCtx, storeCtx workflow.Context,
+	ctx, actCtx, pollCtx, fetchCtx, storeCtx workflow.Context,
 	in schema.EnrichBatchInput,
 	jobIDs []string,
 	chunk int,
@@ -118,14 +167,32 @@ func enrichOneChunk(
 		return 0, nil
 	}
 
+	// Poll carries the batch id only: this activity repeats for as long as the
+	// batch runs and each input lands in history. Results are fetched once below.
 	var poll schema.PollBatchResult
+	// lastDone suppresses the progress line while the counts stand still: a
+	// drain polls once a minute for hours and only movement is worth a log.
+	lastDone := -1
 	for {
 		if err := workflow.ExecuteActivity(pollCtx, enrich_activities.PollBatchActivityName, schema.PollBatchInput{
-			BatchID:     submitted.BatchID,
-			CustomToJob: submitted.CustomToJob,
+			BatchID: submitted.BatchID,
 		}).Get(ctx, &poll); err != nil {
 			logger.Error("poll batch failed", "chunk", chunk, "batch_id", submitted.BatchID, "error", err.Error())
 			return 0, err
+		}
+		if done := poll.Counts.Done(); done != lastDone {
+			logger.Info("enrich batch progress",
+				"chunk", chunk,
+				"batch_id", submitted.BatchID,
+				"status", poll.Status,
+				"total", poll.Counts.Total(),
+				"processing", poll.Counts.Processing,
+				"succeeded", poll.Counts.Succeeded,
+				"errored", poll.Counts.Errored,
+				"canceled", poll.Counts.Canceled,
+				"expired", poll.Counts.Expired,
+			)
+			lastDone = done
 		}
 		if poll.Ended {
 			break
@@ -135,9 +202,18 @@ func enrichOneChunk(
 		}
 	}
 
+	var fetched schema.FetchResultsResult
+	if err := workflow.ExecuteActivity(fetchCtx, enrich_activities.FetchResultsActivityName, schema.FetchResultsInput{
+		BatchID: submitted.BatchID,
+		JobIDs:  submitted.SubmittedIDs,
+	}).Get(ctx, &fetched); err != nil {
+		logger.Error("fetch results failed", "chunk", chunk, "batch_id", submitted.BatchID, "error", err.Error())
+		return 0, err
+	}
+
 	var stored schema.StoreVerdictsResult
 	if err := workflow.ExecuteActivity(storeCtx, enrich_activities.StoreVerdictsActivityName, schema.StoreVerdictsInput{
-		Texts:         poll.Texts,
+		Texts:         fetched.Texts,
 		PromptVersion: in.PromptVersion,
 		Model:         in.Model,
 	}).Get(ctx, &stored); err != nil {

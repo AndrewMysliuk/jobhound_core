@@ -18,8 +18,10 @@ const (
 	ListMissingActivityName = "ListMissing"
 	// SubmitBatchActivityName creates an Anthropic Message Batch for missing jobs.
 	SubmitBatchActivityName = "SubmitBatch"
-	// PollBatchActivityName checks batch status once and loads results when ended.
+	// PollBatchActivityName checks batch status once. It loads no results.
 	PollBatchActivityName = "PollBatch"
+	// FetchResultsActivityName loads the JSONL results of an ended batch once.
+	FetchResultsActivityName = "FetchResults"
 	// StoreVerdictsActivityName coerces and inserts succeeded model replies.
 	StoreVerdictsActivityName = "StoreVerdicts"
 	// RescoreJobsActivityName re-evaluates matches after verdicts are stored.
@@ -92,12 +94,32 @@ func (a *Activities) SubmitBatch(ctx context.Context, in schema.EnrichBatchInput
 	return out, nil
 }
 
-// PollBatch checks processing_status once. When ended, Texts holds succeeded model replies.
+// PollBatch checks processing_status once. The workflow repeats it until Ended,
+// so its input and result stay batch-id sized: no per-job data in history.
 func (a *Activities) PollBatch(ctx context.Context, in schema.PollBatchInput) (schema.PollBatchResult, error) {
 	if a == nil || a.Enrich == nil {
 		return schema.PollBatchResult{}, fmt.Errorf("enrich activity: enrich service is required")
 	}
 	return a.Enrich.PollBatch(ctx, in)
+}
+
+// FetchResults loads succeeded model texts for an ended batch. It runs once per
+// batch, after PollBatch reports Ended.
+func (a *Activities) FetchResults(ctx context.Context, in schema.FetchResultsInput) (schema.FetchResultsResult, error) {
+	if a == nil || a.Enrich == nil {
+		return schema.FetchResultsResult{}, fmt.Errorf("enrich activity: enrich service is required")
+	}
+	log := logging.EnrichWithContext(ctx, logging.LoggerWithActivity(ctx, a.Log, FetchResultsActivityName))
+	out, err := a.Enrich.FetchResults(ctx, in)
+	if err != nil {
+		return schema.FetchResultsResult{}, err
+	}
+	log.Debug().
+		Str("batch_id", in.BatchID).
+		Int("submitted", len(in.JobIDs)).
+		Int("succeeded", len(out.Texts)).
+		Msg("fetch results done")
+	return out, nil
 }
 
 // StoreVerdicts coerces and inserts succeeded model texts.

@@ -104,7 +104,11 @@ func (s *Service) SubmitMissing(ctx context.Context, jobIDs []string) error {
 		if err := s.client.WaitEnded(ctx, submitted.BatchID, time.Second); err != nil {
 			return err
 		}
-		texts, err := s.client.Results(ctx, submitted.BatchID, submitted.CustomToJob)
+		customToJob, err := CustomToJob(submitted.SubmittedIDs)
+		if err != nil {
+			return err
+		}
+		texts, err := s.client.Results(ctx, submitted.BatchID, customToJob)
 		if err != nil {
 			return err
 		}
@@ -230,7 +234,7 @@ func (s *Service) SubmitBatch(ctx context.Context, jobIDs []string, model string
 	if len(rest) > 0 {
 		return schema.SubmitBatchResult{}, fmt.Errorf("enrich: %d jobs still exceed Message Batches size after capping to %d; shrink descriptions or MaxJobsPerSubmit", len(rest), schema.MaxJobsPerSubmit)
 	}
-	batchID, customToJob, err := s.client.Create(ctx, first)
+	batchID, _, err := s.client.Create(ctx, first)
 	if err != nil {
 		return schema.SubmitBatchResult{}, err
 	}
@@ -240,12 +244,12 @@ func (s *Service) SubmitBatch(ctx context.Context, jobIDs []string, model string
 	}
 	return schema.SubmitBatchResult{
 		BatchID:      batchID,
-		CustomToJob:  customToJob,
 		SubmittedIDs: submitted,
 	}, nil
 }
 
-// PollBatch checks processing_status once. When ended, it loads JSONL results.
+// PollBatch checks processing_status once. It never loads results: the caller
+// polls this until Ended and then calls FetchResults exactly once.
 func (s *Service) PollBatch(ctx context.Context, in schema.PollBatchInput) (schema.PollBatchResult, error) {
 	if s == nil || s.client == nil {
 		return schema.PollBatchResult{}, errors.New("enrich: batches client is required")
@@ -253,18 +257,35 @@ func (s *Service) PollBatch(ctx context.Context, in schema.PollBatchInput) (sche
 	if in.BatchID == "" {
 		return schema.PollBatchResult{}, fmt.Errorf("enrich: batch id is required")
 	}
-	status, err := s.client.Status(ctx, in.BatchID)
+	status, counts, err := s.client.Status(ctx, in.BatchID)
 	if err != nil {
 		return schema.PollBatchResult{}, err
 	}
-	if status != "ended" {
-		return schema.PollBatchResult{Ended: false}, nil
+	return schema.PollBatchResult{
+		Ended:  status == "ended",
+		Status: status,
+		Counts: counts,
+	}, nil
+}
+
+// FetchResults loads the JSONL results of an ended batch. The custom_id to job
+// id map is rebuilt from in.JobIDs, so it is not carried in the call payload.
+func (s *Service) FetchResults(ctx context.Context, in schema.FetchResultsInput) (schema.FetchResultsResult, error) {
+	if s == nil || s.client == nil {
+		return schema.FetchResultsResult{}, errors.New("enrich: batches client is required")
 	}
-	texts, err := s.client.Results(ctx, in.BatchID, in.CustomToJob)
+	if in.BatchID == "" {
+		return schema.FetchResultsResult{}, fmt.Errorf("enrich: batch id is required")
+	}
+	customToJob, err := CustomToJob(in.JobIDs)
 	if err != nil {
-		return schema.PollBatchResult{}, err
+		return schema.FetchResultsResult{}, err
 	}
-	return schema.PollBatchResult{Ended: true, Texts: texts}, nil
+	texts, err := s.client.Results(ctx, in.BatchID, customToJob)
+	if err != nil {
+		return schema.FetchResultsResult{}, err
+	}
+	return schema.FetchResultsResult{Texts: texts}, nil
 }
 
 // StoreVerdicts decodes, coerces, and inserts each succeeded model text.

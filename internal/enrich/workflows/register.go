@@ -53,6 +53,9 @@ func New(w Registrar, deps Deps) {
 	w.RegisterActivityWithOptions(acts.PollBatch, activity.RegisterOptions{
 		Name: enrich_activities.PollBatchActivityName,
 	})
+	w.RegisterActivityWithOptions(acts.FetchResults, activity.RegisterOptions{
+		Name: enrich_activities.FetchResultsActivityName,
+	})
 	w.RegisterActivityWithOptions(acts.StoreVerdicts, activity.RegisterOptions{
 		Name: enrich_activities.StoreVerdictsActivityName,
 	})

@@ -12,6 +12,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/andrewmysliuk/jobhound_core/internal/enrich/schema"
 )
 
 const (
@@ -55,6 +57,23 @@ func JobCustomID(jobID string) string {
 	return hex.EncodeToString(sum[:])
 }
 
+// CustomToJob rebuilds the custom_id to job id map for an already submitted
+// batch. Keeping this derivable means Temporal payloads carry only the id list.
+func CustomToJob(jobIDs []string) (map[string]string, error) {
+	out := make(map[string]string, len(jobIDs))
+	for _, jobID := range jobIDs {
+		if jobID == "" {
+			continue
+		}
+		cid := JobCustomID(jobID)
+		if prev, ok := out[cid]; ok && prev != jobID {
+			return nil, fmt.Errorf("batches: custom_id collision for job %q and %q", prev, jobID)
+		}
+		out[cid] = jobID
+	}
+	return out, nil
+}
+
 // Create submits POST /v1/messages/batches. It returns the batch id and a map
 // from custom_id back to job id. No tools and no streaming.
 // Callers must pass a chunk that fits Anthropic size/count limits; use
@@ -63,18 +82,18 @@ func (c *BatchesClient) Create(ctx context.Context, items []VacancyBatchItem) (b
 	if len(items) == 0 {
 		return "", nil, fmt.Errorf("batches create: empty requests")
 	}
-	customToJob = make(map[string]string, len(items))
+	jobIDs := make([]string, 0, len(items))
 	reqs := make([]batchWireRequest, 0, len(items))
 	system := PromptSystem()
 	model := c.model()
 	maxTokens := c.maxTokens()
 	for _, item := range items {
-		cid := JobCustomID(item.JobID)
-		if prev, ok := customToJob[cid]; ok && prev != item.JobID {
-			return "", nil, fmt.Errorf("batches create: custom_id collision for job %q and %q", prev, item.JobID)
-		}
-		customToJob[cid] = item.JobID
+		jobIDs = append(jobIDs, item.JobID)
 		reqs = append(reqs, wireRequest(item, system, model, maxTokens))
+	}
+	customToJob, err = CustomToJob(jobIDs)
+	if err != nil {
+		return "", nil, fmt.Errorf("batches create: %w", err)
 	}
 	body, err := json.Marshal(batchCreateBody{Requests: reqs})
 	if err != nil {
@@ -137,20 +156,29 @@ func wireRequest(item VacancyBatchItem, system, model string, maxTokens int) bat
 	}
 }
 
-// Status returns processing_status from GET /v1/messages/batches/{id}.
-func (c *BatchesClient) Status(ctx context.Context, batchID string) (string, error) {
+// Status returns processing_status and request_counts from
+// GET /v1/messages/batches/{id}. The counts let a caller report progress while
+// the batch is still running instead of only "ended" or "not ended".
+func (c *BatchesClient) Status(ctx context.Context, batchID string) (string, schema.BatchCounts, error) {
 	if batchID == "" {
-		return "", fmt.Errorf("batches status: empty batch id")
+		return "", schema.BatchCounts{}, fmt.Errorf("batches status: empty batch id")
 	}
 	var resp batchWire
 	path := "/v1/messages/batches/" + batchID
 	if err := c.doJSON(ctx, http.MethodGet, path, nil, &resp); err != nil {
-		return "", err
+		return "", schema.BatchCounts{}, err
 	}
 	if resp.ProcessingStatus == "" {
-		return "", fmt.Errorf("batches status: empty processing_status")
+		return "", schema.BatchCounts{}, fmt.Errorf("batches status: empty processing_status")
 	}
-	return resp.ProcessingStatus, nil
+	counts := schema.BatchCounts{
+		Processing: resp.RequestCounts.Processing,
+		Succeeded:  resp.RequestCounts.Succeeded,
+		Errored:    resp.RequestCounts.Errored,
+		Canceled:   resp.RequestCounts.Canceled,
+		Expired:    resp.RequestCounts.Expired,
+	}
+	return resp.ProcessingStatus, counts, nil
 }
 
 // WaitEnded polls Status until processing_status is "ended" or ctx is done.
@@ -159,7 +187,7 @@ func (c *BatchesClient) WaitEnded(ctx context.Context, batchID string, interval 
 		interval = time.Second
 	}
 	for {
-		status, err := c.Status(ctx, batchID)
+		status, _, err := c.Status(ctx, batchID)
 		if err != nil {
 			return err
 		}
@@ -326,8 +354,17 @@ type batchWireMessage struct {
 }
 
 type batchWire struct {
-	ID               string `json:"id"`
-	ProcessingStatus string `json:"processing_status"`
+	ID               string          `json:"id"`
+	ProcessingStatus string          `json:"processing_status"`
+	RequestCounts    batchCountsWire `json:"request_counts"`
+}
+
+type batchCountsWire struct {
+	Processing int `json:"processing"`
+	Succeeded  int `json:"succeeded"`
+	Errored    int `json:"errored"`
+	Canceled   int `json:"canceled"`
+	Expired    int `json:"expired"`
 }
 
 type batchResultLine struct {
