@@ -225,7 +225,7 @@ func (s *Service) applyJobs(ctx context.Context, companyKey string, result schem
 	// Drop known posted_at older than PostedAtRejectDays before upsert and seen.
 	// UpsertBoardJobs applies the same rule; filtering here keeps stale ids out of
 	// CloseAbsent / ReopenPresent so COMPLETE polls close existing board_seen rows.
-	now := time.Now().UTC()
+	now := s.now()
 	cutoff := now.Add(-time.Duration(scoringschema.PostedAtRejectDays) * 24 * time.Hour)
 	fresh := make([]jobdata.Job, 0, len(result.Jobs))
 	skippedStale := 0
